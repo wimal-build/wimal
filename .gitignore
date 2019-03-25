@@ -40,3 +40,10 @@ out/
 !/llvm/lib/Target/AArch64/**
 !/llvm/lib/Target/ARM/**
 !/llvm/lib/Target/**/LLVMBuild.txt
+
+# Clang tests
+/clang/test/
+/clang/unittests/
+
+# Clang docs
+/clang/docs

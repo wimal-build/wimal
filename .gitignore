@@ -24,3 +24,19 @@ out/
 
 # mpeltonen/sbt-idea plugin
 .idea_modules/
+
+# LLVM tests
+/llvm/test/
+/llvm/unittests/
+
+# LLVM docs
+/llvm/docs/*
+!/llvm/docs/LLVMBuild.txt
+
+# LLVM unnecessary targets
+/llvm/lib/Target/*/**/*
+!/llvm/lib/Target/*/**/*/
+!/llvm/lib/Target/X86/**
+!/llvm/lib/Target/AArch64/**
+!/llvm/lib/Target/ARM/**
+!/llvm/lib/Target/**/LLVMBuild.txt

@@ -168,3 +168,10 @@ venv.bak/
 # zlib
 /zlib/zconf.h
 /zlib/zconf.h.included
+
+# libxml2
+/libxml2/*/
+/libxml2/[^/]*
+!/libxml2/include/
+!/libxml2/*.[c|h]
+/libxml2/**/Makefile.am

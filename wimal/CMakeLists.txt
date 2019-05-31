@@ -29,3 +29,4 @@ add_executable(
     boost/filesystem/utf8_codecvt_facet.cpp
     boost/filesystem/windows_file_codecvt.cpp
 )
+install(TARGETS wimal DESTINATION bin COMPONENT wimal)

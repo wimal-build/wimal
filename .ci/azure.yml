@@ -10,8 +10,13 @@ steps:
     -DCMAKE_BUILD_TYPE=Release
     -DCMAKE_C_COMPILER=clang
     -DCMAKE_CXX_COMPILER=clang++
-    -DCMAKE_INSTALL_PREFIX=cmake-build-azure/release
+    -DCMAKE_INSTALL_PREFIX="$(Build.ArtifactStagingDirectory)"
   displayName: Configure project
 - script:
     cmake --build cmake-build-azure --target installation -- -j 4
   displayName: Build project
+- task: PublishBuildArtifacts@1
+  inputs:
+    PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+    ArtifactName: 'wimal'
+  displayName: Upload artifact

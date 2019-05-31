@@ -1,0 +1,17 @@
+pool:
+  vmImage: 'Ubuntu-latest'
+
+steps:
+- script:
+    cmake -E make_directory cmake-build-azure
+  displayName: Prepare
+- script:
+    cmake -E chdir cmake-build-azure cmake ..
+    -DCMAKE_BUILD_TYPE=Release
+    -DCMAKE_C_COMPILER=clang
+    -DCMAKE_CXX_COMPILER=clang++
+    -DCMAKE_INSTALL_PREFIX=cmake-build-azure/release
+  displayName: Configure project
+- script:
+    cmake --build cmake-build-azure --target installation -- -j 4
+  displayName: Build project

@@ -27,6 +27,7 @@ set(
     llvm-objdump
     llvm-ranlib
     llvm-readelf
+    llvm-readobj
     llvm-strip
     CACHE STRING
     LLVM_TOOLCHAIN_TOOLS
@@ -59,4 +60,11 @@ add_llvm_install_targets(install-wimal COMPONENT wimal DEPENDS wimal)
 add_custom_target(
     installation DEPENDS
     install-wimal-stripped
+    install-llvm-ar-stripped
+    install-llvm-nm-stripped
+    install-llvm-objcopy-stripped
+    install-llvm-objdump-stripped
+    install-llvm-ranlib-stripped
+    install-llvm-readelf-stripped
+    install-llvm-strip-stripped
 )

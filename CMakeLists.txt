@@ -34,7 +34,13 @@ set(
 )
 
 # Include external projects
-set(LLVM_EXTERNAL_PROJECTS wimal CACHE STRING LLVM_EXTERNAL_PROJECTS)
+set(LLVM_EXTERNAL_PROJECTS
+    wimal clang
+    CACHE STRING
+    LLVM_EXTERNAL_PROJECTS
+)
+
+# Enable wimal
 set(
     LLVM_EXTERNAL_WIMAL_SOURCE_DIR
     "${CMAKE_CURRENT_SOURCE_DIR}/wimal"
@@ -42,12 +48,20 @@ set(
     LLVM_EXTERNAL_WIMAL_SOURCE_DIR
 )
 
+# Enable clang
+set(LLVM_TOOL_CLANG_BUILD ON CACHE BOOL "")
+set(
+    LLVM_EXTERNAL_CLANG_SOURCE_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/clang"
+    CACHE STRING
+    LLVM_EXTERNAL_CLANG_SOURCE_DIR
+)
+
 # Skip unnecessary components
 set(CLANG_INCLUDE_TESTS OFF CACHE BOOL "")
 set(CLANG_INCLUDE_DOCS OFF CACHE BOOL "")
 
 # Skip unnecessary builds
-set(CLANG_BUILD_TOOLS OFF CACHE BOOL "")
 set(CLANG_BUILD_EXAMPLES OFF CACHE BOOL "")
 
 # Add LLVM
@@ -59,7 +73,9 @@ add_llvm_install_targets(install-wimal COMPONENT wimal DEPENDS wimal)
 # Add all install targets
 add_custom_target(
     installation DEPENDS
+
     install-wimal-stripped
+
     install-llvm-ar-stripped
     install-llvm-nm-stripped
     install-llvm-objcopy-stripped
@@ -67,4 +83,6 @@ add_custom_target(
     install-llvm-ranlib-stripped
     install-llvm-readelf-stripped
     install-llvm-strip-stripped
+
+    install-clang-stripped
 )

@@ -7,16 +7,13 @@ include_directories(.)
 add_executable(
     wimal
     action.cpp
-    autobuild.cpp
     cc.cpp
-    cmakebuild.cpp
     context.cpp
     export.cpp
     export.cpp
     install.cpp
     invoke.cpp
     main.cpp
-    shell.cpp
 
     boost/system/error_code.cpp
 

@@ -2,13 +2,10 @@
 
 #include <iostream>
 
-#include "autobuild.hpp"
 #include "cc.hpp"
-#include "cmakebuild.hpp"
 #include "context.hpp"
 #include "install.hpp"
 #include "invoke.hpp"
-#include "shell.hpp"
 
 namespace wimal {
 
@@ -24,10 +21,7 @@ const std::unordered_map<std::string, std::shared_ptr<Action>> Action::actions{
     {"objdump", std::make_shared<Invoke>()},
     {"ranlib", std::make_shared<Invoke>()},
     {"strip", std::make_shared<Invoke>()},
-    {"readelf", std::make_shared<Invoke>()},
-    {"cmakebuild", std::make_shared<CmakeBuild>()},
-    {"autobuild", std::make_shared<AutoBuild>()},
-    {"run", std::make_shared<Shell>()}
+    {"readelf", std::make_shared<Invoke>()}
 };
 
 Action::Action() = default;

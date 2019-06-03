@@ -35,7 +35,9 @@ set(
 
 # Include external projects
 set(LLVM_EXTERNAL_PROJECTS
-    wimal clang
+    wimal
+    clang
+    lld
     CACHE STRING
     LLVM_EXTERNAL_PROJECTS
 )
@@ -49,7 +51,7 @@ set(
 )
 
 # Enable clang
-set(LLVM_TOOL_CLANG_BUILD ON CACHE BOOL "")
+set(LLVM_TOOL_CLANG_BUILD ON CACHE BOOL LLVM_TOOL_CLANG_BUILD)
 set(
     LLVM_EXTERNAL_CLANG_SOURCE_DIR
     "${CMAKE_CURRENT_SOURCE_DIR}/clang"
@@ -57,12 +59,21 @@ set(
     LLVM_EXTERNAL_CLANG_SOURCE_DIR
 )
 
+# Enable lld
+set(LLVM_TOOL_LLD_BUILD ON CACHE BOOL LLVM_TOOL_LLD_BUILD)
+set(
+    LLVM_EXTERNAL_LLD_SOURCE_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/lld"
+    CACHE STRING
+    LLVM_EXTERNAL_LLD_SOURCE_DIR
+)
+
 # Skip unnecessary components
-set(CLANG_INCLUDE_TESTS OFF CACHE BOOL "")
-set(CLANG_INCLUDE_DOCS OFF CACHE BOOL "")
+set(CLANG_INCLUDE_TESTS OFF CACHE BOOL CLANG_INCLUDE_TESTS)
+set(CLANG_INCLUDE_DOCS OFF CACHE BOOL CLANG_INCLUDE_DOCS)
 
 # Skip unnecessary builds
-set(CLANG_BUILD_EXAMPLES OFF CACHE BOOL "")
+set(CLANG_BUILD_EXAMPLES OFF CACHE BOOL CLANG_BUILD_EXAMPLES)
 
 # Add LLVM
 add_subdirectory(llvm)
@@ -85,4 +96,6 @@ add_custom_target(
     install-llvm-strip-stripped
 
     install-clang-stripped
+
+    install-lld-stripped
 )

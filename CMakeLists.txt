@@ -12,6 +12,12 @@ set(HAVE_ZLIB_H 1 CACHE INTERNAL HAVE_ZLIB_H)
 include_directories($<TARGET_PROPERTY:zlibstatic,INCLUDE_DIRECTORIES>)
 link_directories($<TARGET_FILE_DIR:zlibstatic>)
 
+# Add libxml2
+add_subdirectory(libxml2)
+
+# Disable libxml2 for llvm
+set(LLVM_ENABLE_LIBXML2 OFF CACHE BOOL LLVM_ENABLE_LIBXML2)
+
 # Add libressl
 add_subdirectory(libressl)
 

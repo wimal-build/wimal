@@ -1,24 +1,72 @@
 jobs:
-- job: linux
-  timeoutInMinutes: 300
-  pool:
-    vmImage: 'Ubuntu-latest'
-  steps:
-  - script:
-      cmake -E make_directory cmake-build-azure
-    displayName: Prepare project
-  - script:
-      cmake -E chdir cmake-build-azure cmake ..
-      -DCMAKE_BUILD_TYPE=Release
-      -DCMAKE_C_COMPILER=clang
-      -DCMAKE_CXX_COMPILER=clang++
-      -DCMAKE_INSTALL_PREFIX="$(Build.ArtifactStagingDirectory)"
-    displayName: Configure project
-  - script:
-      cmake --build cmake-build-azure --target installation -- -j 4
-    displayName: Build project
-  - task: PublishBuildArtifacts@1
-    inputs:
-      PathtoPublish: '$(Build.ArtifactStagingDirectory)'
-      ArtifactName: 'wimal'
-    displayName: Upload artifact
+  - job: sysroot
+    pool:
+      vmImage: 'macOS-latest'
+    steps:
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '3.x'
+          addToPath: true
+          architecture: 'x64'
+      - script: python -m pip install -r $(Build.SourcesDirectory)/sysroot/requirements.txt
+        displayName: Install requirements
+      - task: PythonScript@0
+        inputs:
+          scriptSource: 'filePath'
+          scriptPath: '$(Build.SourcesDirectory)/sysroot/android.py'
+        displayName: Create android sysroot
+      - task: PythonScript@0
+        inputs:
+          scriptSource: 'filePath'
+          scriptPath: '$(Build.SourcesDirectory)/sysroot/linux.py'
+        displayName: Create linux sysroot
+      - task: PythonScript@0
+        inputs:
+          scriptSource: 'filePath'
+          scriptPath: '$(Build.SourcesDirectory)/sysroot/darwin.py'
+        displayName: Create darwin sysroot
+      - task: ArchiveFiles@2
+        inputs:
+          rootFolderOrFile: '$(Build.SourcesDirectory)/sysroot/sysroot'
+          includeRootFolder: true
+          archiveType: 'tar'
+          tarCompression: 'bz2'
+          archiveFile: '$(Build.ArtifactStagingDirectory)/sysroot.tar.bz2'
+          replaceExistingArchive: true
+        displayName: Archive files
+      - task: PublishBuildArtifacts@1
+        inputs:
+          PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+          ArtifactName: 'wimal-sysroot'
+        displayName: Upload artifact
+  - job: linux
+    timeoutInMinutes: 300
+    pool:
+      vmImage: 'Ubuntu-latest'
+    steps:
+      - script:
+          cmake -E make_directory cmake-build-azure
+        displayName: Prepare project
+      - script:
+          cmake -E chdir cmake-build-azure cmake ..
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER=clang
+          -DCMAKE_CXX_COMPILER=clang++
+          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
+        displayName: Configure project
+      - script:
+          cmake --build cmake-build-azure --target installation -- -j 4
+        displayName: Build project
+      - task: ArchiveFiles@2
+        inputs:
+          rootFolderOrFile: '$(Build.BinariesDirectory)/wimal'
+          includeRootFolder: true
+          archiveType: 'tar'
+          tarCompression: 'bz2'
+          archiveFile: '$(Build.ArtifactStagingDirectory)/wimal.tar.bz2'
+          replaceExistingArchive: true
+      - task: PublishBuildArtifacts@1
+        inputs:
+          PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+          ArtifactName: 'wimal-linux'
+        displayName: Upload artifact

@@ -164,3 +164,7 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# zlib
+/zlib/zconf.h
+/zlib/zconf.h.included

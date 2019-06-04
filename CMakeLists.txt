@@ -2,6 +2,16 @@ cmake_minimum_required(VERSION 3.0)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
+# Add zlib
+add_subdirectory(zlib)
+
+# Enable zlib
+set(LLVM_ENABLE_ZLIB ON CACHE BOOL LLVM_ENABLE_ZLIB)
+set(HAVE_LIBZ_Z 1 CACHE INTERNAL HAVE_LIBZ_Z)
+set(HAVE_ZLIB_H 1 CACHE INTERNAL HAVE_ZLIB_H)
+include_directories($<TARGET_PROPERTY:zlibstatic,INCLUDE_DIRECTORIES>)
+link_directories($<TARGET_FILE_DIR:zlibstatic>)
+
 # Skip unnecessary components
 set(LLVM_INCLUDE_BENCHMARKS OFF CACHE BOOL LLVM_INCLUDE_BENCHMARKS)
 set(LLVM_INCLUDE_DOCS OFF CACHE BOOL LLVM_INCLUDE_DOCS)
@@ -88,6 +98,9 @@ set(CLANG_BUILD_EXAMPLES OFF CACHE BOOL CLANG_BUILD_EXAMPLES)
 
 # Add LLVM
 add_subdirectory(llvm)
+
+# Fix dependencies
+add_dependencies(LLVMSupport zlibstatic)
 
 # Add install targets for wimal
 add_llvm_install_targets(install-wimal COMPONENT wimal DEPENDS wimal)

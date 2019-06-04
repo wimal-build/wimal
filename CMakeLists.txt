@@ -21,6 +21,9 @@ set(LLVM_ENABLE_LIBXML2 OFF CACHE BOOL LLVM_ENABLE_LIBXML2)
 # Add libressl
 add_subdirectory(libressl)
 
+# Add xar
+add_subdirectory(xar)
+
 # Skip unnecessary components
 set(LLVM_INCLUDE_BENCHMARKS OFF CACHE BOOL LLVM_INCLUDE_BENCHMARKS)
 set(LLVM_INCLUDE_DOCS OFF CACHE BOOL LLVM_INCLUDE_DOCS)
@@ -118,7 +121,7 @@ add_llvm_install_targets(install-wimal COMPONENT wimal DEPENDS wimal)
 add_custom_target(
     installation DEPENDS
 
-    tapi
+    xar tapi
 
     install-wimal-stripped
 

@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.0)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
 # Skip unnecessary components
 set(LLVM_INCLUDE_BENCHMARKS OFF CACHE BOOL LLVM_INCLUDE_BENCHMARKS)
 set(LLVM_INCLUDE_DOCS OFF CACHE BOOL LLVM_INCLUDE_DOCS)
@@ -38,6 +40,7 @@ set(LLVM_EXTERNAL_PROJECTS
     wimal
     clang
     lld
+    tapi
     CACHE STRING
     LLVM_EXTERNAL_PROJECTS
 )
@@ -68,6 +71,14 @@ set(
     LLVM_EXTERNAL_LLD_SOURCE_DIR
 )
 
+# Enable tapi
+set(
+    LLVM_EXTERNAL_TAPI_SOURCE_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/tapi"
+    CACHE STRING
+    LLVM_EXTERNAL_TAPI_SOURCE_DIR
+)
+
 # Skip unnecessary components
 set(CLANG_INCLUDE_TESTS OFF CACHE BOOL CLANG_INCLUDE_TESTS)
 set(CLANG_INCLUDE_DOCS OFF CACHE BOOL CLANG_INCLUDE_DOCS)
@@ -84,6 +95,8 @@ add_llvm_install_targets(install-wimal COMPONENT wimal DEPENDS wimal)
 # Add all install targets
 add_custom_target(
     installation DEPENDS
+
+    tapi
 
     install-wimal-stripped
 

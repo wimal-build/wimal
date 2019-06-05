@@ -12,6 +12,9 @@ set(HAVE_ZLIB_H 1 CACHE INTERNAL HAVE_ZLIB_H)
 include_directories($<TARGET_PROPERTY:zlibstatic,INCLUDE_DIRECTORIES>)
 link_directories($<TARGET_FILE_DIR:zlibstatic>)
 
+# Add libressl
+add_subdirectory(libressl)
+
 # Skip unnecessary components
 set(LLVM_INCLUDE_BENCHMARKS OFF CACHE BOOL LLVM_INCLUDE_BENCHMARKS)
 set(LLVM_INCLUDE_DOCS OFF CACHE BOOL LLVM_INCLUDE_DOCS)

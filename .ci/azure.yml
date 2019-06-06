@@ -9,36 +9,53 @@ jobs:
           addToPath: true
           architecture: 'x64'
       - script: python -m pip install -r $(Build.SourcesDirectory)/sysroot/requirements.txt
-        displayName: Install requirements
+        displayName: 'Install requirements'
       - task: PythonScript@0
         inputs:
           scriptSource: 'filePath'
           scriptPath: '$(Build.SourcesDirectory)/sysroot/android.py'
-        displayName: Create android sysroot
+        displayName: 'Create android sysroot'
       - task: PythonScript@0
         inputs:
           scriptSource: 'filePath'
           scriptPath: '$(Build.SourcesDirectory)/sysroot/linux.py'
-        displayName: Create linux sysroot
+        displayName: 'Create linux sysroot'
       - task: PythonScript@0
         inputs:
           scriptSource: 'filePath'
           scriptPath: '$(Build.SourcesDirectory)/sysroot/darwin.py'
-        displayName: Create darwin sysroot
+        displayName: 'Create darwin sysroot'
+      - task: ArchiveFiles@2
+        inputs:
+          rootFolderOrFile: '$(Build.SourcesDirectory)/sysroot/sysroot'
+          includeRootFolder: true
+          archiveType: 'tar'
+          archiveFile: '$(Build.ArtifactStagingDirectory)/wimal-sysroot-$(Build.BuildNumber).tar.gz'
+          replaceExistingArchive: true
+        displayName: 'Create wimal-sysroot-$(Build.BuildNumber).tar.gz'
       - task: ArchiveFiles@2
         inputs:
           rootFolderOrFile: '$(Build.SourcesDirectory)/sysroot/sysroot'
           includeRootFolder: true
           archiveType: 'tar'
           tarCompression: 'bz2'
-          archiveFile: '$(Build.ArtifactStagingDirectory)/sysroot.tar.bz2'
+          archiveFile: '$(Build.ArtifactStagingDirectory)/wimal-sysroot-$(Build.BuildNumber).tar.bz2'
           replaceExistingArchive: true
-        displayName: Archive files
+        displayName: 'Create wimal-sysroot-$(Build.BuildNumber).tar.bz2'
+      - task: ArchiveFiles@2
+        inputs:
+          rootFolderOrFile: '$(Build.SourcesDirectory)/sysroot/sysroot'
+          includeRootFolder: true
+          archiveType: 'tar'
+          tarCompression: 'xz'
+          archiveFile: '$(Build.ArtifactStagingDirectory)/wimal-sysroot-$(Build.BuildNumber).tar.xz'
+          replaceExistingArchive: true
+        displayName: 'Create wimal-sysroot-$(Build.BuildNumber).tar.xz'
       - task: PublishBuildArtifacts@1
         inputs:
           PathtoPublish: '$(Build.ArtifactStagingDirectory)'
-          ArtifactName: 'wimal-sysroot'
-        displayName: Upload artifact
+          ArtifactName: 'wimal-sysroot-$(Build.BuildNumber)'
+        displayName: 'Upload artifact'
   - job: linux
     timeoutInMinutes: 300
     pool:
@@ -46,27 +63,45 @@ jobs:
     steps:
       - script:
           cmake -E make_directory cmake-build-azure
-        displayName: Prepare project
+        displayName: 'Prepare project'
       - script:
           cmake -E chdir cmake-build-azure cmake ..
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_C_COMPILER=clang
           -DCMAKE_CXX_COMPILER=clang++
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
-        displayName: Configure project
+        displayName: 'Configure project'
       - script:
           cmake --build cmake-build-azure --target installation -- -j 4
-        displayName: Build project
+        displayName: 'Build project'
+      - task: ArchiveFiles@2
+        inputs:
+          rootFolderOrFile: '$(Build.BinariesDirectory)/wimal'
+          includeRootFolder: true
+          archiveType: 'tar'
+          archiveFile: '$(Build.ArtifactStagingDirectory)/wimal-linux-$(Build.BuildNumber).tar.gz'
+          replaceExistingArchive: true
+        displayName: 'Create wimal-linux-$(Build.BuildNumber).tar.gz'
       - task: ArchiveFiles@2
         inputs:
           rootFolderOrFile: '$(Build.BinariesDirectory)/wimal'
           includeRootFolder: true
           archiveType: 'tar'
           tarCompression: 'bz2'
-          archiveFile: '$(Build.ArtifactStagingDirectory)/wimal.tar.bz2'
+          archiveFile: '$(Build.ArtifactStagingDirectory)/wimal-linux-$(Build.BuildNumber).tar.bz2'
           replaceExistingArchive: true
+        displayName: 'Create wimal-linux-$(Build.BuildNumber).tar.bz2'
+      - task: ArchiveFiles@2
+        inputs:
+          rootFolderOrFile: '$(Build.BinariesDirectory)/wimal'
+          includeRootFolder: true
+          archiveType: 'tar'
+          tarCompression: 'xz'
+          archiveFile: '$(Build.ArtifactStagingDirectory)/wimal-linux-$(Build.BuildNumber).tar.xz'
+          replaceExistingArchive: true
+        displayName: 'Create wimal-linux-$(Build.BuildNumber).tar.xz'
       - task: PublishBuildArtifacts@1
         inputs:
           PathtoPublish: '$(Build.ArtifactStagingDirectory)'
-          ArtifactName: 'wimal-linux'
-        displayName: Upload artifact
+          ArtifactName: 'wimal-linux-$(Build.BuildNumber)'
+        displayName: 'Upload artifact'

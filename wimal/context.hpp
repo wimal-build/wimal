@@ -26,6 +26,8 @@ public:
 
 public:
     static const std::vector<std::string> targets;
+    static const std::vector<std::string> triples;
+    static const std::vector<std::string> hosts;
 
 public:
     Context(int argc, char **argv);
@@ -37,9 +39,7 @@ public:
     boost::filesystem::path wimal;
     boost::filesystem::path clang;
     boost::filesystem::path toolchain;
-    boost::filesystem::path ndk;
     boost::filesystem::path sysroot;
-    boost::filesystem::path gcc;
     Machine machine;
     std::string tool;
     std::string target;

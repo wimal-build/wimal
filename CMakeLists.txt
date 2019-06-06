@@ -30,6 +30,10 @@ add_subdirectory(uuid)
 # Add libobjc2
 add_subdirectory(libobjc2)
 
+# Necessary for ld64
+set(LLVM_ENABLE_EH ON CACHE BOOL LLVM_ENABLE_EH)
+set(LLVM_ENABLE_RTTI ON CACHE BOOL LLVM_ENABLE_RTTI)
+
 # Skip unnecessary components
 set(LLVM_INCLUDE_BENCHMARKS OFF CACHE BOOL LLVM_INCLUDE_BENCHMARKS)
 set(LLVM_INCLUDE_DOCS OFF CACHE BOOL LLVM_INCLUDE_DOCS)
@@ -69,6 +73,7 @@ set(LLVM_EXTERNAL_PROJECTS
     clang
     lld
     tapi
+    ld64
     CACHE STRING
     LLVM_EXTERNAL_PROJECTS
 )
@@ -107,6 +112,14 @@ set(
     LLVM_EXTERNAL_TAPI_SOURCE_DIR
 )
 
+# Enable ld64
+set(
+    LLVM_EXTERNAL_LD64_SOURCE_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/ld64"
+    CACHE STRING
+    LLVM_EXTERNAL_LD64_SOURCE_DIR
+)
+
 # Skip unnecessary components
 set(CLANG_INCLUDE_TESTS OFF CACHE BOOL CLANG_INCLUDE_TESTS)
 set(CLANG_INCLUDE_DOCS OFF CACHE BOOL CLANG_INCLUDE_DOCS)
@@ -123,11 +136,14 @@ add_dependencies(LLVMSupport zlibstatic)
 # Add install targets for wimal
 add_llvm_install_targets(install-wimal COMPONENT wimal DEPENDS wimal)
 
+# Add install targets for ld64
+add_llvm_install_targets(install-ld64 COMPONENT ld64 DEPENDS ld64)
+
 # Add all install targets
 add_custom_target(
     installation DEPENDS
 
-    objc2 uuid xar tapi
+    install-ld64-stripped
 
     install-wimal-stripped
 

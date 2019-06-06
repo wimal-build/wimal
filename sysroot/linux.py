@@ -6,6 +6,7 @@ import re
 import requests
 import sys
 import tarfile
+from distutils import dir_util
 
 if sys.version_info > (3, 0):
     # noinspection PyUnresolvedReferences
@@ -97,10 +98,10 @@ class Apt:
         self.packages = {}
 
     def __update__(self, section):
-        url = '%s/dists/%s/%s/binary-%s/Packages.bz2' % (self.repo, self.dist, section, self.arch)
+        url = '%s/dists/%s/%s/binary-%s/Packages.gz' % (self.repo, self.dist, section, self.arch)
         print('updating: ' + url)
         response = requests.get(url)
-        content = bz2.decompress(response.content).decode('UTF-8')
+        content = gzip.GzipFile(fileobj=io.BytesIO(response.content)).read().decode('UTF-8')
 
         parts = re.split('\n\n+', content, flags=re.MULTILINE)
         for part in parts:
@@ -167,21 +168,32 @@ class Apt:
             self.__install__(package, path)
 
 
-apt = Apt('http://archive.ubuntu.com/ubuntu', 'trusty', 'amd64')
-
-apt.update(('main', 'universe'))
-
 output = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'sysroot')
 output = os.getenv('WIMAL_SYSROOT', output)
 output = os.path.join(output, 'x64-linux')
 
+apt = Apt('http://apt.llvm.org/trusty', 'llvm-toolchain-trusty-8', 'amd64')
+apt.update(['main'])
 apt.install((
+    'libc++-8-dev',
+    'libc++1-8',
+    'libc++abi-8-dev',
+    'libc++abi1-8'
+), output)
+dir_util.copy_tree(
+    os.path.join(output, 'usr', 'lib', 'llvm-8'),
+    os.path.join(output, 'usr')
+)
+dir_util.remove_tree(os.path.join(output, 'usr', 'lib', 'llvm-8'))
+
+apt = Apt('http://archive.ubuntu.com/ubuntu', 'trusty', 'amd64')
+apt.update(('main', 'universe'))
+apt.install((
+    'linux-libc-dev',
     'libc6',
     'libc6-dev',
     'libgcc1',
     'libgcc-4.8-dev',
-    'libc++1',
-    'libc++-dev',
     'libstdc++6',
     'libstdc++-4.8-dev',
 

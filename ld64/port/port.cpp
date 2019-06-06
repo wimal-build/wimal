@@ -100,7 +100,9 @@ int64_t OSAtomicAdd64(int64_t amount, volatile int64_t *address) {
 #else
     static std::mutex mutex;
     std::lock_guard<std::mutex> lock(mutex);
-    return *address += amount;
+    auto result = *address;
+    *address += amount;
+    return result;
 #endif // LD64_ENABLE_ATOMIC
 }
 
@@ -112,7 +114,7 @@ int32_t OSAtomicIncrement32(volatile int32_t *address) {
 #else
     static std::mutex mutex;
     std::lock_guard<std::mutex> lock(mutex);
-    return ++*address;
+    return (*address)++;
 #endif // LD64_ENABLE_ATOMIC
 }
 

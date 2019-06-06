@@ -2,6 +2,7 @@
 #define LD64_MACH_VM_STATISTICS_H_
 
 #include <mach/mach_types.h>
+#include <mach/vm_prot.h>
 
 struct vm_statistics {
     integer_t free_count;

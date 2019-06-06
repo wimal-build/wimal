@@ -2,36 +2,38 @@
 #ifndef LD64_MACHO_STAB_H_
 #define LD64_MACHO_STAB_H_
 
-#define N_GSYM 0x20
-#define N_FNAME 0x22
-#define N_FUN 0x24
-#define N_STSYM 0x26
-#define N_LCSYM 0x28
-#define N_BNSYM 0x2e
-#define N_AST 0x32
-#define N_OPT 0x3c
-#define N_RSYM 0x40
-#define N_SLINE 0x44
-#define N_ENSYM 0x4e
-#define N_SSYM 0x60
-#define N_SO 0x64
-#define N_OSO 0x66
-#define N_LSYM 0x80
-#define N_BINCL 0x82
-#define N_SOL 0x84
-#define N_PARAMS 0x86
-#define N_VERSION 0x88
-#define N_OLEVEL 0x8A
-#define N_PSYM 0xa0
-#define N_EINCL 0xa2
-#define N_ENTRY 0xa4
-#define N_LBRAC 0xc0
-#define N_EXCL 0xc2
-#define N_RBRAC 0xe0
-#define N_BCOMM 0xe2
-#define N_ECOMM 0xe4
-#define N_ECOML 0xe8
-#define N_LENG 0xfe
-#define N_PC 0x30
+#include <llvm/Object/MachO.h>
+
+using llvm::MachO::N_GSYM;
+using llvm::MachO::N_FNAME;
+using llvm::MachO::N_FUN;
+using llvm::MachO::N_STSYM;
+using llvm::MachO::N_LCSYM;
+using llvm::MachO::N_BNSYM;
+using llvm::MachO::N_AST;
+using llvm::MachO::N_OPT;
+using llvm::MachO::N_RSYM;
+using llvm::MachO::N_SLINE;
+using llvm::MachO::N_ENSYM;
+using llvm::MachO::N_SSYM;
+using llvm::MachO::N_SO;
+using llvm::MachO::N_OSO;
+using llvm::MachO::N_LSYM;
+using llvm::MachO::N_BINCL;
+using llvm::MachO::N_SOL;
+using llvm::MachO::N_PARAMS;
+using llvm::MachO::N_VERSION;
+using llvm::MachO::N_OLEVEL;
+using llvm::MachO::N_PSYM;
+using llvm::MachO::N_EINCL;
+using llvm::MachO::N_ENTRY;
+using llvm::MachO::N_LBRAC;
+using llvm::MachO::N_EXCL;
+using llvm::MachO::N_RBRAC;
+using llvm::MachO::N_BCOMM;
+using llvm::MachO::N_ECOMM;
+using llvm::MachO::N_ECOML;
+using llvm::MachO::N_LENG;
+using llvm::MachO::N_PC;
 
 #endif // LD64_MACHO_STAB_H_

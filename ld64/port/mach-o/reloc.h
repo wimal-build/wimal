@@ -2,48 +2,19 @@
 #ifndef LD64_MACHO_RELOC_H_
 #define LD64_MACHO_RELOC_H_
 
-#include <stdint.h>
+#include <llvm/Object/MachO.h>
 
-struct relocation_info {
-    int32_t r_address;
-    uint32_t r_symbolnum:24;
-    uint32_t r_pcrel:1;
-    uint32_t r_length:2;
-    uint32_t r_extern:1;
-    uint32_t r_type:4;
-};
+using llvm::MachO::relocation_info;
+using llvm::MachO::scattered_relocation_info;
 
-#define R_ABS 0
+using llvm::MachO::R_ABS;
+using llvm::MachO::R_SCATTERED;
 
-#define R_SCATTERED 0x80000000
-
-struct scattered_relocation_info {
-#ifdef __BIG_ENDIAN__
-    uint32_t r_scattered: 1;
-    uint32_t r_pcrel: 1;
-    uint32_t r_length: 2;
-    uint32_t r_type: 4;
-    uint32_t r_address: 24;
-    int32_t	r_value;
-#endif // __BIG_ENDIAN__
-
-#ifdef __LITTLE_ENDIAN__
-    uint32_t r_address: 24;
-    uint32_t r_type: 4;
-    uint32_t r_length: 2;
-    uint32_t r_pcrel: 1;
-    uint32_t r_scattered: 1;
-    int32_t r_value;
-#endif // __LITTLE_ENDIAN__
-};
-
-enum reloc_type_generic {
-    GENERIC_RELOC_VANILLA,
-    GENERIC_RELOC_PAIR,
-    GENERIC_RELOC_SECTDIFF,
-    GENERIC_RELOC_PB_LA_PTR,
-    GENERIC_RELOC_LOCAL_SECTDIFF,
-    GENERIC_RELOC_TLV
-};
+using llvm::MachO::GENERIC_RELOC_VANILLA;
+using llvm::MachO::GENERIC_RELOC_PAIR;
+using llvm::MachO::GENERIC_RELOC_SECTDIFF;
+using llvm::MachO::GENERIC_RELOC_PB_LA_PTR;
+using llvm::MachO::GENERIC_RELOC_LOCAL_SECTDIFF;
+using llvm::MachO::GENERIC_RELOC_TLV;
 
 #endif // _MACHO_RELOC_H_

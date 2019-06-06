@@ -75,10 +75,6 @@ add_llvm_executable(
     tapi
     ${LD64_EXTRA_DEPENDS}
 )
-set_property(
-    SOURCE src/ld/ld.cpp
-    PROPERTY COMPILE_DEFINITIONS log2=ld64_log2
-)
 target_link_libraries(
     ld64 PRIVATE
     LLVMTarget

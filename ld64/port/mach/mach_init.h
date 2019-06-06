@@ -1,7 +1,7 @@
 #ifndef LD64_MACH_MACH_INIT_H_
 #define LD64_MACH_MACH_INIT_H_
 
-#include <mach/mach_types.h>
+#include <mach/mach_host.h>
 
 __BEGIN_DECLS
 

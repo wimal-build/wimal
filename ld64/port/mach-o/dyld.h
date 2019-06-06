@@ -6,8 +6,6 @@
 
 __BEGIN_DECLS
 
-typedef void *NSObjectFileImage;
-
 extern int _NSGetExecutablePath(char *buf, uint32_t *bufsize);
 
 __END_DECLS

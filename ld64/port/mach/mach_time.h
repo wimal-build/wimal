@@ -1,8 +1,7 @@
 #ifndef LD64_MACH_MACH_TIME_H_
 #define LD64_MACH_MACH_TIME_H_
 
-#include <stdint.h>
-#include <mach/kern_return.h>
+#include <mach/mach_types.h>
 
 __BEGIN_DECLS
 

@@ -2,17 +2,17 @@
 #ifndef LD64_MACH_O_X86_64_RELOC_H_
 #define LD64_MACH_O_X86_64_RELOC_H_
 
-enum reloc_type_x86_64 {
-    X86_64_RELOC_UNSIGNED,
-    X86_64_RELOC_SIGNED,
-    X86_64_RELOC_BRANCH,
-    X86_64_RELOC_GOT_LOAD,
-    X86_64_RELOC_GOT,
-    X86_64_RELOC_SUBTRACTOR,
-    X86_64_RELOC_SIGNED_1,
-    X86_64_RELOC_SIGNED_2,
-    X86_64_RELOC_SIGNED_4,
-    X86_64_RELOC_TLV,
-};
+#include <llvm/Object/MachO.h>
+
+using llvm::MachO::X86_64_RELOC_UNSIGNED;
+using llvm::MachO::X86_64_RELOC_SIGNED;
+using llvm::MachO::X86_64_RELOC_BRANCH;
+using llvm::MachO::X86_64_RELOC_GOT_LOAD;
+using llvm::MachO::X86_64_RELOC_GOT;
+using llvm::MachO::X86_64_RELOC_SUBTRACTOR;
+using llvm::MachO::X86_64_RELOC_SIGNED_1;
+using llvm::MachO::X86_64_RELOC_SIGNED_2;
+using llvm::MachO::X86_64_RELOC_SIGNED_4;
+using llvm::MachO::X86_64_RELOC_TLV;
 
 #endif // LD64_MACH_O_X86_64_RELOC_H_

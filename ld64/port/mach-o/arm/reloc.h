@@ -2,17 +2,17 @@
 #ifndef LD64_MACH_O_ARM_RELOC_H_
 #define LD64_MACH_O_ARM_RELOC_H_
 
-enum reloc_type_arm {
-    ARM_RELOC_VANILLA,
-    ARM_RELOC_PAIR,
-    ARM_RELOC_SECTDIFF,
-    ARM_RELOC_LOCAL_SECTDIFF,
-    ARM_RELOC_PB_LA_PTR,
-    ARM_RELOC_BR24,
-    ARM_THUMB_RELOC_BR22,
-    ARM_THUMB_32BIT_BRANCH,
-    ARM_RELOC_HALF,
-    ARM_RELOC_HALF_SECTDIFF
-};
+#include <llvm/Object/MachO.h>
+
+using llvm::MachO::ARM_RELOC_VANILLA;
+using llvm::MachO::ARM_RELOC_PAIR;
+using llvm::MachO::ARM_RELOC_SECTDIFF;
+using llvm::MachO::ARM_RELOC_LOCAL_SECTDIFF;
+using llvm::MachO::ARM_RELOC_PB_LA_PTR;
+using llvm::MachO::ARM_RELOC_BR24;
+using llvm::MachO::ARM_THUMB_RELOC_BR22;
+using llvm::MachO::ARM_THUMB_32BIT_BRANCH;
+using llvm::MachO::ARM_RELOC_HALF;
+using llvm::MachO::ARM_RELOC_HALF_SECTDIFF;
 
 #endif // LD64_MACH_O_ARM_RELOC_H_

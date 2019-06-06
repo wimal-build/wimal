@@ -2,24 +2,12 @@
 #ifndef LD64_MACH_O_FAT_H_
 #define LD64_MACH_O_FAT_H_
 
-#include <stdint.h>
-#include <mach/machine.h>
-#include <architecture/byte_order.h>
+#include <llvm/Object/MachO.h>
 
-#define FAT_MAGIC 0xcafebabe
-#define FAT_CIGAM 0xbebafeca
+using llvm::MachO::FAT_MAGIC;
+using llvm::MachO::FAT_CIGAM;
 
-struct fat_header {
-    uint32_t magic;
-    uint32_t nfat_arch;
-};
-
-struct fat_arch {
-    cpu_type_t cputype;
-    cpu_subtype_t cpusubtype;
-    uint32_t offset;
-    uint32_t size;
-    uint32_t align;
-};
+using llvm::MachO::fat_header;
+using llvm::MachO::fat_arch;
 
 #endif // LD64_MACH_O_FAT_H_

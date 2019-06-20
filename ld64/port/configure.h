@@ -51,7 +51,6 @@ typedef char uuid_string_t[37];
 // Fix missing includes
 #include <algorithm>
 #include <mutex>
-
 #endif // __cplusplus
 
 // Fix statfs
@@ -73,16 +72,19 @@ static inline int ld64_statfs(const char *file, ld64_statfs *buf) {
 // Fix qsort_r
 #include <stdlib.h>
 
-static inline void ld64_qsort_r(
+__BEGIN_DECLS
+extern void ld64_qsort_r(
     void *base,
     size_t nmemb,
     size_t size,
-    void *arg,
-    int (*compar)(const void *, const void *, void *)
-) {
-    ::qsort_r(base, nmemb, size, compar, arg);
-}
+    void *thunk,
+    int (*compar)(void *, const void *, const void *)
+);
+__END_DECLS
 
-#define qsort_r ld64_qsort_r;
+#ifdef qsort_r
+#undef qsort_r
+#endif // qsort_r
+#define qsort_r(...) ld64_qsort_r(__VA_ARGS__)
 
 #endif // LD64_CONFIGURE_H_

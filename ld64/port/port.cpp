@@ -365,3 +365,26 @@ extern "C" double ld64_log2(double x) {
 #include "compile_stubs.h"
 
 const char *compile_stubs = "empty";
+
+// qsort_r
+#include "configure.h"
+
+#undef qsort_r
+
+void ld64_qsort_r(
+    void *base,
+    size_t nmemb,
+    size_t size,
+    void *thunk,
+    int (*compar)(void *, const void *, const void *)
+) {
+    struct ld64_qsort_extra {
+        int (*compar)(void *, const void *, const void *);
+        void *arg;
+    };
+    ld64_qsort_extra extra = {compar, thunk};
+    ::qsort_r(base, nmemb, size, [](const void *l, const void *r, void *thunk) {
+        auto *extra = (ld64_qsort_extra *) thunk;
+        return extra->compar(extra->arg, l, r);
+    }, &extra);
+}

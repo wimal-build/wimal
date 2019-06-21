@@ -76,3 +76,7 @@ __pycache__/
 !/libxml2/include/
 !/libxml2/*.[c|h]
 /libxml2/**/Makefile.am
+
+### wimal
+/cmake/.cache
+/cmake/wimal

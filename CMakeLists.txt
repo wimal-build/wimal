@@ -10,7 +10,7 @@ set(LLVM_ENABLE_ZLIB ON CACHE BOOL LLVM_ENABLE_ZLIB)
 set(HAVE_LIBZ_Z 1 CACHE INTERNAL HAVE_LIBZ_Z)
 set(HAVE_ZLIB_H 1 CACHE INTERNAL HAVE_ZLIB_H)
 include_directories($<TARGET_PROPERTY:zlibstatic,INCLUDE_DIRECTORIES>)
-link_directories($<TARGET_FILE_DIR:zlibstatic>)
+link_directories("${CMAKE_CURRENT_BINARY_DIR}/zlib")
 
 # Add libxml2
 add_subdirectory(libxml2)

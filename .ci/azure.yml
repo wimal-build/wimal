@@ -62,13 +62,23 @@ jobs:
       vmImage: 'Ubuntu-latest'
     steps:
       - script:
+          wget -O $(Agent.TempDirectory)/libc++abi.deb
+          http://apt.llvm.org/trusty/pool/main/l/llvm-toolchain-8/libc++abi1-8_8.0.1~svn360950-1~exp1~20190517011409.67_amd64.deb
+        displayName: 'Downloading libc++abi'
+      - script:
+          wget -O $(Agent.TempDirectory)/libc++.deb
+          http://apt.llvm.org/trusty/pool/main/l/llvm-toolchain-8/libc++1-8_8.0.1~svn360950-1~exp1~20190517011409.67_amd64.deb
+        displayName: 'Downloading libc++'
+      - script:
+          sudo dpkg -i $(Agent.TempDirectory)/libc++abi.deb $(Agent.TempDirectory)/libc++.deb
+        displayName: 'Installing libc++'
+      - script:
           cmake -E make_directory cmake-build-azure
         displayName: 'Prepare project'
       - script:
           cmake -E chdir cmake-build-azure cmake ..
-          -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_C_COMPILER=clang
-          -DCMAKE_CXX_COMPILER=clang++
+          -DCMAKE_BUILD_TYPE=MinSizeRel
+          -DCMAKE_TOOLCHAIN_FILE=../cmake/CcToolchain.cmake
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
         displayName: 'Configure project'
       - script:

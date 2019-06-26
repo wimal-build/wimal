@@ -47,6 +47,7 @@ void ScalarEnumerationTraits<Platform>::enumeration(IO &io,
                                                     Platform &platform) {
   io.enumCase(platform, "unknown", Platform::unknown);
   io.enumCase(platform, "macosx", Platform::macOS);
+  io.enumCase(platform, "zippered", Platform::macOS);
   io.enumCase(platform, "ios", Platform::iOS);
   io.enumCase(platform, "ios", Platform::iOSSimulator);
 

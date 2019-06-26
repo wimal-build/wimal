@@ -53,6 +53,12 @@ prefixes = {
     'x86': 'x86-4.9',
     'x64': 'x86_64-4.9'
 }
+triplets = {
+    'arm': 'arm-linux-androideabi',
+    'a64': 'aarch64-linux-android',
+    'x86': 'i686-linux-android',
+    'x64': 'x86_64-linux-android'
+}
 abis = {
     'arm': 'armeabi-v7a',
     'a64': 'arm64-v8a',
@@ -79,11 +85,10 @@ for target in targets:
 
     copy_directory(os.path.join(ndk, 'sysroot', 'usr', 'include'), os.path.join(usr, 'include'))
 
-    if level < 21:
-        copy_directory(
-            os.path.join(ndk, 'sources', 'android', 'support', 'include'),
-            os.path.join(usr, 'local', 'include')
-        )
+    copy_directory(
+        os.path.join(ndk, 'sources', 'android', 'support', 'include'),
+        os.path.join(usr, 'local', 'include')
+    )
 
     copy_file(os.path.join(ndk, 'source.properties'), root)
 
@@ -100,6 +105,16 @@ for target in targets:
     copy_directory(
         os.path.join(ndk, 'toolchains', prefix, 'prebuilt', system + '-x86_64', 'lib', 'gcc'),
         os.path.join(usr, 'lib', 'gcc')
+    )
+
+    triplet = triplets[target]
+    if target == 'a64' or target == 'x64':
+        bits='64'
+    else:
+        bits=''
+    copy_directory(
+        os.path.join(ndk, 'toolchains', prefix, 'prebuilt', system + '-x86_64', triplet, 'lib' + bits),
+        os.path.join(usr, 'lib')
     )
 
     abi = abis[target]

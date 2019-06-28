@@ -73,16 +73,20 @@ jobs:
           sudo dpkg -i $(Agent.TempDirectory)/libc++abi.deb $(Agent.TempDirectory)/libc++.deb
         displayName: 'Installing libc++'
       - script:
+          sudo apt install ninja-build -y
+        displayName: 'Installing Ninja'
+      - script:
           cmake -E make_directory cmake-build-azure
         displayName: 'Prepare project'
       - script:
           cmake -E chdir cmake-build-azure cmake ..
+          -GNinja
           -DCMAKE_BUILD_TYPE=MinSizeRel
           -DCMAKE_TOOLCHAIN_FILE=../cmake/CcToolchain.cmake
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
         displayName: 'Configure project'
       - script:
-          cmake --build cmake-build-azure --target installation -- -j 4
+          cmake --build cmake-build-azure --target installation --
         displayName: 'Build project'
       - task: ArchiveFiles@2
         inputs:

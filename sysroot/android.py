@@ -83,6 +83,12 @@ for target in targets:
     arch = architectures[target]
     copy_directory(os.path.join(platform, 'arch-' + arch, 'usr', 'lib'), os.path.join(usr, 'lib'))
 
+    if target == 'x64':
+        copy_directory(
+            os.path.join(platform, 'arch-' + arch, 'usr', 'lib64'),
+            os.path.join(usr, 'lib64')
+        )
+
     copy_directory(os.path.join(ndk, 'sysroot', 'usr', 'include'), os.path.join(usr, 'include'))
 
     copy_directory(

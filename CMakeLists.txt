@@ -2,6 +2,12 @@ cmake_minimum_required(VERSION 3.0)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
+# Enable PIC
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+# Enable LTO
+set_directory_properties(PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
+
 # Add zlib
 add_subdirectory(zlib)
 
@@ -34,6 +40,10 @@ add_subdirectory(libobjc2)
 set(LLVM_ENABLE_EH ON CACHE BOOL LLVM_ENABLE_EH)
 set(LLVM_ENABLE_RTTI ON CACHE BOOL LLVM_ENABLE_RTTI)
 
+# Enable LLVMgold
+set(LLVM_ENABLE_PIC ON CACHE BOOL LLVM_ENABLE_PIC)
+set(LLVM_BINUTILS_INCDIR "." CACHE PATH LLVM_BINUTILS_INCDIR)
+
 # Skip unnecessary components
 set(LLVM_INCLUDE_BENCHMARKS OFF CACHE BOOL LLVM_INCLUDE_BENCHMARKS)
 set(LLVM_INCLUDE_DOCS OFF CACHE BOOL LLVM_INCLUDE_DOCS)
@@ -43,7 +53,6 @@ set(LLVM_INCLUDE_UTILS OFF CACHE BOOL LLVM_INCLUDE_UTILS)
 
 # Skip unnecessary builds
 set(LLVM_BUILD_EXAMPLES OFF CACHE BOOL LLVM_BUILD_EXAMPLES)
-set(LLVM_INSTALL_TOOLCHAIN_ONLY ON CACHE BOOL LLVM_INSTALL_TOOLCHAIN_ONLY)
 
 # Disable bindings
 set(LLVM_ENABLE_BINDINGS OFF CACHE BOOL LLVM_ENABLE_BINDINGS)
@@ -142,6 +151,8 @@ add_llvm_install_targets(install-ld64 COMPONENT ld64 DEPENDS ld64)
 # Add all install targets
 add_custom_target(
     installation DEPENDS
+
+    install-LLVMgold-stripped
 
     install-ld64-stripped
 

@@ -158,3 +158,7 @@ for target in targets:
     objcopy = os.path.join(ndk, 'toolchains', 'llvm', 'prebuilt', system + '-x86_64', 'bin', 'llvm-objcopy')
     if os.path.isfile(objcopy):
         subprocess.call([objcopy, '--strip-all', os.path.join(usr, 'lib', 'libc++_shared.so')])
+
+    with open(os.path.join(usr, 'lib', 'libpthread.a'), 'w') as file:
+        file.write('INPUT()')
+        file.close()

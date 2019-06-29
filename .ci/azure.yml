@@ -81,7 +81,7 @@ jobs:
       - script:
           cmake -E chdir cmake-build-azure cmake ..
           -GNinja
-          -DCMAKE_BUILD_TYPE=MinSizeRel
+          -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_TOOLCHAIN_FILE=../cmake/CcToolchain.cmake
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
         displayName: 'Configure project'

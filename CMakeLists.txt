@@ -5,8 +5,8 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 # Enable PIC
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Enable LTO
-set_directory_properties(PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
+include(CcChecks)
+cc_check_compile_flag(-pipe)
 
 # Add zlib
 add_subdirectory(zlib)
@@ -39,6 +39,9 @@ add_subdirectory(libobjc2)
 # Necessary for ld64
 set(LLVM_ENABLE_EH ON CACHE BOOL LLVM_ENABLE_EH)
 set(LLVM_ENABLE_RTTI ON CACHE BOOL LLVM_ENABLE_RTTI)
+
+# Build libLLVM.so
+set(LLVM_LINK_LLVM_DYLIB ON CACHE BOOL LLVM_LINK_LLVM_DYLIB)
 
 # Enable LLVMgold
 set(LLVM_ENABLE_PIC ON CACHE BOOL LLVM_ENABLE_PIC)
@@ -152,11 +155,18 @@ add_llvm_install_targets(install-ld64 COMPONENT ld64 DEPENDS ld64)
 add_custom_target(
     installation DEPENDS
 
+    install-LLVM-stripped
+
+    install-LTO-stripped
+
     install-LLVMgold-stripped
 
     install-ld64-stripped
 
     install-wimal-stripped
+
+    install-llvm-lto-stripped
+    install-llvm-lto2-stripped
 
     install-llvm-ar-stripped
     install-llvm-nm-stripped
@@ -165,6 +175,8 @@ add_custom_target(
     install-llvm-ranlib-stripped
     install-llvm-readelf-stripped
     install-llvm-strip-stripped
+    install-llvm-rc-stripped
+    install-llvm-symbolizer-stripped
 
     install-clang-stripped
     install-clang-headers-stripped

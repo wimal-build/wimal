@@ -30,14 +30,22 @@ void Cc::Run(const Context *context, std::vector<std::string> extraArgs) {
         "-Qunused-arguments",
         "-stdlib=libc++"
     };
+    // Fix the compilation error: "_Float16 is not supported on this target".
+    // See: https://clang.llvm.org/docs/LanguageExtensions.html#half-precision-floating-point
     switch (context->machine) {
         case Context::MACHINE_ARM_ANDROID:
-        case Context::MACHINE_X86_ANDROID:
             args.emplace_back("-D__ANDROID_API__=17");
             break;
+        case Context::MACHINE_X86_ANDROID:
+            args.emplace_back("-D__ANDROID_API__=17");
+            args.emplace_back("-U__FLT16_MANT_DIG__");
+            break;
         case Context::MACHINE_A64_ANDROID:
+            args.emplace_back("-D__ANDROID_API__=21");
+            break;
         case Context::MACHINE_X64_ANDROID:
             args.emplace_back("-D__ANDROID_API__=21");
+            args.emplace_back("-U__FLT16_MANT_DIG__");
             break;
         default: {
             break;

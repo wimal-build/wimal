@@ -17,7 +17,7 @@ def copy_file(src, dst):
         file_util.copy_file(src, dst)
 
 
-api = int(os.getenv('ANDROID_PLATFORM', '21'))
+api = int(os.getenv('ANDROID_PLATFORM', '17'))
 
 ndk = os.getenv('ANDROID_NDK', 'android-ndk')
 if not os.path.isdir(ndk):

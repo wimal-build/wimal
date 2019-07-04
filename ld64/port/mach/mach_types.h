@@ -1,6 +1,10 @@
 #ifndef	LD64_MACH_MACH_TYPES_H_
 #define LD64_MACH_MACH_TYPES_H_
 
+#ifdef __APPLE__
+#include_next <mach/mach_types.h>
+#else // !__APPLE__
+
 #include <stdint.h>
 
 // https://developer.apple.com/documentation/kernel/kern_return_t
@@ -47,5 +51,7 @@ typedef struct thread *thread_t;
 
 // https://developer.apple.com/documentation/kernel/thread_port_t
 typedef thread_t thread_port_t;
+
+#endif // __APPLE__
 
 #endif	// LD64_MACH_MACH_TYPES_H_

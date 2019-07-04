@@ -45,13 +45,15 @@
 // https://opensource.apple.com/source/xnu/xnu-4570.41.2/bsd/sys/_types.h
 typedef char uuid_string_t[37];
 
-#define dl_info Dl_info
-
 #ifdef __cplusplus
 // Fix missing includes
 #include <algorithm>
 #include <mutex>
 #endif // __cplusplus
+
+#ifndef __APPLE__
+
+#define dl_info Dl_info
 
 // Fix statfs
 // https://www.manpagez.com/man/2/statfs/
@@ -86,5 +88,7 @@ __END_DECLS
 #undef qsort_r
 #endif // qsort_r
 #define qsort_r(...) ld64_qsort_r(__VA_ARGS__)
+
+#endif // __APPLE__
 
 #endif // LD64_CONFIGURE_H_

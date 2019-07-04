@@ -1,6 +1,10 @@
 #ifndef CCTOOLS_MACH_VM_PROT_H_
 #define CCTOOLS_MACH_VM_PROT_H_
 
+#ifdef __APPLE__
+#include_next <mach/vm_prot.h>
+#else // __APPLE__
+
 // https://developer.apple.com/documentation/kernel/vm_prot_t
 typedef int vm_prot_t;
 
@@ -10,5 +14,7 @@ enum {
     VM_PROT_WRITE = 0x2,
     VM_PROT_EXECUTE = 0x4
 };
+
+#endif // __APPLE__
 
 #endif // CCTOOLS_MACH_VM_PROT_H_

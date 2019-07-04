@@ -1,6 +1,10 @@
 #ifndef LD64_FCNTL_H_
 #define LD64_FCNTL_H_
 
+#ifdef __APPLE__
+#include_next <fcntl.h>
+#else // !__APPLE__
+
 #if !defined(__cplusplus) || defined(F_GETPATH) || defined(LD64_PORT_CPP)
 #include_next <fcntl.h>
 #else
@@ -45,5 +49,7 @@ inline int fcntl(int fd, int cmd, char (&path)[n]) {
 using ld64::fcntl;
 
 #endif // __cplusplus
+
+#endif // __APPLE__
 
 #endif // LD64_FCNTL_H_

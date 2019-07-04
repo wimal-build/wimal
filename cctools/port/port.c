@@ -1,9 +1,11 @@
 #include <mach/mach.h>
 
+const char apple_version[] = "cctools-921";
+
+#ifndef __APPLE__
+
 #define EMULATED_HOST_CPU_TYPE 16777223
 #define EMULATED_HOST_CPU_SUBTYPE 3
-
-const char apple_version[] = "cctools-921";
 
 kern_return_t host_info(
     host_t host,
@@ -53,3 +55,5 @@ kern_return_t vm_deallocate(vm_map_t target_task, vm_address_t address, vm_size_
 kern_return_t mach_port_deallocate(ipc_space_t task, mach_port_name_t name) {
     return 0;
 }
+
+#endif

@@ -1,8 +1,12 @@
 #ifndef CCTOOLS_MACH_MACH_H_
 #define CCTOOLS_MACH_MACH_H_
 
+#ifdef __APPLE__
+#include_next <mach/mach.h>
+#else // !__APPLE__
 #include <fcntl.h>
 #include <limits.h>
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -151,5 +155,6 @@ kern_return_t mach_port_deallocate(
 #define mach_error_string(...) "unknown error"
 
 __END_DECLS
+#endif // __APPLE__
 
 #endif // CCTOOLS_MACH_MACH_H_

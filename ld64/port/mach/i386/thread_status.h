@@ -4,6 +4,10 @@
 
 #include <llvm/Object/MachO.h>
 
+#ifdef __APPLE__
+#include_next <mach/i386/thread_status.h>
+#else // !__APPLE__
+
 using i386_thread_state_t = llvm::MachO::x86_thread_state32_t;
 using llvm::MachO::x86_thread_state64_t;
 
@@ -33,5 +37,7 @@ using llvm::MachO::x86_thread_state64_t;
 #define __r14 r14
 #define __r15 r15
 #define __rip rip
+
+#endif // __APPLE__
 
 #endif // LD64_MACH_I386_THREAD_STATUS_H_

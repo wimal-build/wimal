@@ -1,6 +1,10 @@
 #ifndef LD64_MACH_MACH_HOST_H_
 #define LD64_MACH_MACH_HOST_H_
 
+#ifdef __APPLE__
+#include_next <mach/mach_host.h>
+#else // !__APPLE__
+
 #include <mach/mach_types.h>
 
 __BEGIN_DECLS
@@ -30,5 +34,7 @@ kern_return_t host_statistics(
 );
 
 __END_DECLS
+
+#endif // __APPLE__
 
 #endif // LD64_MACH_MACH_HOST_H_

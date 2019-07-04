@@ -19,7 +19,7 @@ void Invoke::Run(const Context *context, std::vector<std::string> extraArgs) {
         arguments.emplace_back(arg.data());
     }
     arguments.emplace_back(nullptr);
-    execvp(command.string().data(), (char *const *) arguments.data());
+    execvp(command.string().data(), const_cast<char *const *>(arguments.data()));
 }
 
 }

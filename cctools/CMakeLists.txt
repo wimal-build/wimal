@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 3.0)
 
 project(cctools)
 
+include(CcChecks)
+cc_check_compile_flag(-Wno-macro-redefined)
+cc_check_compile_flag(-Wno-incompatible-pointer-types)
+cc_check_compile_flag(-Wno-int-conversion)
+
 include_directories(port include)
 
 add_executable(

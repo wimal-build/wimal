@@ -1,6 +1,10 @@
 #ifndef LD64_MACH_VM_STATISTICS_H_
 #define LD64_MACH_VM_STATISTICS_H_
 
+#ifdef __APPLE__
+#include_next <mach/vm_statistics.h>
+#else // !__APPLE__
+
 #include <mach/mach_types.h>
 #include <mach/vm_prot.h>
 
@@ -22,5 +26,7 @@ struct vm_statistics {
 typedef struct vm_statistics *vm_statistics_t;
 
 typedef struct vm_statistics vm_statistics_data_t;
+
+#endif // __APPLE__
 
 #endif // LD64_MACH_VM_STATISTICS_H_

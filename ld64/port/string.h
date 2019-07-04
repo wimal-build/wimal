@@ -3,6 +3,8 @@
 
 #include_next <string.h>
 
+#ifndef __APPLE__
+
 #include <sys/cdefs.h> // For __BEGIN_DECLS/__END_DECLS
 #include <sys/types.h> // For size_t
 
@@ -13,5 +15,7 @@ size_t strlcpy(char *dst, const char *src, size_t dstsize);
 size_t strlcat(char *dst, const char *src, size_t dstsize);
 
 __END_DECLS
+
+#endif // __APPLE__
 
 #endif // LD64_STRING_H_

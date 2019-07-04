@@ -35,6 +35,7 @@ cc_check_headers(
     sys/xattr.h
 )
 cc_check_funcs(
+    asprintf
     lgetxattr
     lsetxattr
     getxattr

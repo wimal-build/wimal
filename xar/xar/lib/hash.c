@@ -41,7 +41,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <zlib.h>
-#ifdef __APPLE__
+#if 0
 #include <CommonCrypto/CommonDigest.h>
 #include <CommonCrypto/CommonDigestSPI.h>
 #else
@@ -55,6 +55,7 @@
 #include "asprintf.h"
 #endif
 
+#undef __APPLE__
 
 #pragma mark Hash Wrapper Object
 

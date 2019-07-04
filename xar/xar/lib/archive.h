@@ -40,7 +40,7 @@
 #define _XAR_ARCHIVE_H_
 #include <zlib.h>
 #include <libxml/hash.h>
-#ifdef __APPLE__
+#if 0
 #include <CommonCrypto/CommonDigest.h>
 #include <CommonCrypto/CommonDigestSPI.h>
 #else

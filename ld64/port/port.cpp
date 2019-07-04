@@ -1,3 +1,8 @@
+extern "C" const char *compile_stubs = "empty";
+extern "C" const char ldVersionString[] = "";
+
+#ifndef __APPLE__
+
 // fcntl_getpath
 #define LD64_PORT_CPP
 #include <fcntl.h> // for fcntl
@@ -5,8 +10,6 @@
 #include <unistd.h> // for access / readlink
 #include <errno.h> // for EINVAL
 #include <limits.h> // for PATH_MAX
-
-extern "C" const char ldVersionString[] = "";
 
 int (*real_fcntl)(int fd, int cmd, ...) = fcntl;
 
@@ -361,11 +364,6 @@ extern "C" double ld64_log2(double x) {
     return log2(x);
 }
 
-// compile_stubs
-#include "compile_stubs.h"
-
-const char *compile_stubs = "empty";
-
 // qsort_r
 #include "configure.h"
 
@@ -388,3 +386,5 @@ void ld64_qsort_r(
         return extra->compar(extra->arg, l, r);
     }, &extra);
 }
+
+#endif // __APPLE__

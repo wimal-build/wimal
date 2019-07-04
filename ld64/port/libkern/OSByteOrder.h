@@ -1,6 +1,10 @@
 #ifndef LD64_LIBKERN_OSBYTEORDER_H_
 #define LD64_LIBKERN_OSBYTEORDER_H_
 
+#ifdef __APPLE__
+#include_next <libkern/OSByteOrder.h>
+#else // !__APPLE__
+
 // https://github.com/apple/darwin-xnu/blob/master/libkern/libkern/OSByteOrder.h
 // https://github.com/apple/darwin-xnu/blob/master/libkern/libkern/machine/OSByteOrder.h
 #include <llvm/Support/Endian.h>
@@ -88,5 +92,7 @@ static inline uint32_t OSSwapInt32(uint32_t data) {
 static inline uint64_t OSSwapInt64(uint64_t data) {
     return llvm::sys::getSwappedBytes(data);
 }
+
+#endif // __APPLE__
 
 #endif // LD64_LIBKERN_OSBYTEORDER_H_

@@ -4,6 +4,14 @@
 
 #include <llvm/Object/MachO.h>
 
+#ifdef __APPLE__
+#include_next <mach/machine.h>
+
+#ifndef CPU_SUBTYPE_ARM64_E
+#define CPU_SUBTYPE_ARM64_E 2
+#endif // CPU_SUBTYPE_ARM64_E
+#else // !__APPLE__
+
 typedef int cpu_type_t;
 
 typedef int cpu_subtype_t;
@@ -28,5 +36,7 @@ using llvm::MachO::CPU_SUBTYPE_ARM_V6;
 enum : uint32_t {
     CPU_SUBTYPE_ARM64_E = 2
 };
+
+#endif // __APPLE__
 
 #endif // LD64_MACH_MACHINE_H_

@@ -36,9 +36,6 @@ add_subdirectory(xar)
 # Add uuid
 add_subdirectory(uuid)
 
-# Add libobjc2
-add_subdirectory(libobjc2)
-
 # Necessary for ld64
 set(LLVM_ENABLE_EH ON CACHE BOOL LLVM_ENABLE_EH)
 set(LLVM_ENABLE_RTTI ON CACHE BOOL LLVM_ENABLE_RTTI)

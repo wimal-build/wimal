@@ -43,7 +43,6 @@ include_directories(
     src/ld
     $<TARGET_PROPERTY:tapi,INCLUDE_DIRECTORIES>
     $<TARGET_PROPERTY:uuid,INCLUDE_DIRECTORIES>
-    $<TARGET_PROPERTY:objc2,INCLUDE_DIRECTORIES>
     $<TARGET_PROPERTY:xar,INCLUDE_DIRECTORIES>
 )
 
@@ -84,7 +83,7 @@ endif()
 
 add_llvm_executable(
     ld64
-    ${LD64_SRCS} ${LD64_EXTRA_SRCS} port/port.cpp
+    ${LD64_SRCS} ${LD64_EXTRA_SRCS} port/port.cpp port/runtime.c
     DEPENDS
     LLVMLTO
     LLVMSupport
@@ -100,7 +99,6 @@ target_link_libraries(
     ${LD64_LLVM_LIBS}
     clangBasic
     tapi
-    objc2
     uuid
     dl
     xar

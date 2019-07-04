@@ -136,6 +136,11 @@ for target in targets:
     )
 
     copy_file(
+        os.path.join(ndk, 'sources', 'cxx-stl', 'llvm-libc++', 'libs', abi, 'libc++_static.a'),
+        os.path.join(usr, 'lib', 'libc++_static.a')
+    )
+
+    copy_file(
         os.path.join(ndk, 'sources', 'cxx-stl', 'llvm-libc++', 'libs', abi, 'libunwind.a'),
         os.path.join(usr, 'lib', 'libunwind.a')
     )
@@ -147,6 +152,13 @@ for target in targets:
             ),
             os.path.join(usr, 'lib', 'libandroid_support.a')
         )
+
+    copy_file(
+        os.path.join(
+            ndk, 'sources', 'cxx-stl', 'llvm-libc++', 'libs', abi, 'libc++.a.' + str(level)
+        ),
+        os.path.join(usr, 'lib', 'libc++.a')
+    )
 
     copy_file(
         os.path.join(

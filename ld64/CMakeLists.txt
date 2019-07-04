@@ -48,18 +48,36 @@ include_directories(
 option(LD64_LTO_STATIC "Link LTO statically." ON)
 
 if(LD64_LTO_STATIC)
-    foreach(target ${LLVM_TARGETS_TO_BUILD})
-        list(
-            APPEND LD64_EXTRA_DEPENDS
-            LLVM${target}Desc
-            LLVM${target}CodeGen
-            LLVM${target}AsmParser
-            LLVM${target}Disassembler
-        )
-    endforeach()
+    if(NOT LLVM_LINK_LLVM_DYLIB)
+        foreach(target ${LLVM_TARGETS_TO_BUILD})
+            list(
+                APPEND LD64_EXTRA_DEPENDS
+                LLVM${target}Desc
+                LLVM${target}CodeGen
+                LLVM${target}AsmParser
+                LLVM${target}Disassembler
+            )
+        endforeach()
+    endif()
     aux_source_directory(${LLVM_MAIN_SRC_DIR}/tools/lto LD64_EXTRA_SRCS)
 else()
     set(LD64_EXTRA_DEPENDS LTO)
+endif()
+
+if(LLVM_LINK_LLVM_DYLIB)
+    set(
+        LD64_LLVM_LIBS
+        LLVM
+    )
+else()
+    set(
+        LD64_LLVM_LIBS
+        LLVMTarget
+        LLVMLTO
+        LLVMSupport
+        LLVMBinaryFormat
+        LLVMObject
+    )
 endif()
 
 add_llvm_executable(
@@ -77,11 +95,7 @@ add_llvm_executable(
 )
 target_link_libraries(
     ld64 PRIVATE
-    LLVMTarget
-    LLVMLTO
-    LLVMSupport
-    LLVMBinaryFormat
-    LLVMObject
+    ${LD64_LLVM_LIBS}
     clangBasic
     tapi
     objc2

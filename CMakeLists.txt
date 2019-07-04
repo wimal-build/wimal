@@ -157,16 +157,11 @@ add_custom_target(
 
     install-LLVM-stripped
 
-    install-LTO-stripped
-
     install-LLVMgold-stripped
 
     install-ld64-stripped
 
     install-wimal-stripped
-
-    install-llvm-lto-stripped
-    install-llvm-lto2-stripped
 
     install-llvm-ar-stripped
     install-llvm-nm-stripped

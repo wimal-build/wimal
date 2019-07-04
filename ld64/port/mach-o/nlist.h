@@ -6,7 +6,6 @@
 
 struct nlist {
     union {
-        char *n_name;
         uint32_t n_strx;
     } n_un;
     uint8_t n_type;

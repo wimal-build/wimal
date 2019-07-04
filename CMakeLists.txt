@@ -151,9 +151,23 @@ add_llvm_install_targets(install-wimal COMPONENT wimal DEPENDS wimal)
 # Add install targets for ld64
 add_llvm_install_targets(install-ld64 COMPONENT ld64 DEPENDS ld64)
 
+# Add cctools
+add_subdirectory(cctools)
+
+# Add install targets for lipo and install_name_tool
+add_llvm_install_targets(install-lipo COMPONENT lipo DEPENDS lipo)
+add_llvm_install_targets(
+    install-install_name_tool
+    COMPONENT install_name_tool
+    DEPENDS install_name_tool
+)
+
 # Add all install targets
 add_custom_target(
     installation DEPENDS
+
+    install-lipo-stripped
+    install-install_name_tool-stripped
 
     install-LLVM-stripped
 

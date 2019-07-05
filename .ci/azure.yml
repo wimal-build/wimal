@@ -119,3 +119,54 @@ jobs:
           PathtoPublish: '$(Build.ArtifactStagingDirectory)'
           ArtifactName: 'wimal-linux-$(Build.BuildNumber)'
         displayName: 'Upload artifact'
+  - job: macos
+    timeoutInMinutes: 300
+    pool:
+      vmImage: 'macOS-latest'
+    steps:
+      - script:
+          brew install yasm nasm ninja automake libtool
+        displayName: 'Installing dependencies'
+      - script:
+          cmake -E make_directory cmake-build-azure
+        displayName: 'Prepare project'
+      - script:
+          cmake -E chdir cmake-build-azure cmake ..
+          -GNinja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
+        displayName: 'Configure project'
+      - script:
+          cmake --build cmake-build-azure --target installation --
+        displayName: 'Build project'
+      - task: ArchiveFiles@2
+        inputs:
+          rootFolderOrFile: '$(Build.BinariesDirectory)/wimal'
+          includeRootFolder: true
+          archiveType: 'tar'
+          archiveFile: '$(Build.ArtifactStagingDirectory)/wimal-macos-$(Build.BuildNumber).tar.gz'
+          replaceExistingArchive: true
+        displayName: 'Create wimal-macos-$(Build.BuildNumber).tar.gz'
+      - task: ArchiveFiles@2
+        inputs:
+          rootFolderOrFile: '$(Build.BinariesDirectory)/wimal'
+          includeRootFolder: true
+          archiveType: 'tar'
+          tarCompression: 'bz2'
+          archiveFile: '$(Build.ArtifactStagingDirectory)/wimal-macos-$(Build.BuildNumber).tar.bz2'
+          replaceExistingArchive: true
+        displayName: 'Create wimal-macos-$(Build.BuildNumber).tar.bz2'
+      - task: ArchiveFiles@2
+        inputs:
+          rootFolderOrFile: '$(Build.BinariesDirectory)/wimal'
+          includeRootFolder: true
+          archiveType: 'tar'
+          tarCompression: 'xz'
+          archiveFile: '$(Build.ArtifactStagingDirectory)/wimal-macos-$(Build.BuildNumber).tar.xz'
+          replaceExistingArchive: true
+        displayName: 'Create wimal-macos-$(Build.BuildNumber).tar.xz'
+      - task: PublishBuildArtifacts@1
+        inputs:
+          PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+          ArtifactName: 'wimal-macos-$(Build.BuildNumber)'
+        displayName: 'Upload artifact'

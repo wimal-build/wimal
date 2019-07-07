@@ -18,7 +18,7 @@ def copy_sdk(sdk, dst):
     src = os.path.join(toolchain, 'usr', 'include', 'c++')
     dst = os.path.join(dst, 'usr', 'include', 'c++')
     print('    - [' + src + '] -> [' + dst + ']')
-    dir_util.copy_tree(src, os.path.join(dst, 'usr', 'include', 'c++'))
+    dir_util.copy_tree(src, dst)
 
 
 sysroot = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'sysroot')

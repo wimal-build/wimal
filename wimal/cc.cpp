@@ -47,11 +47,11 @@ void Cc::Run(const Context *context, std::vector<std::string> extraArgs) {
             break;
         case Context::MACHINE_ARM_IOS:
         case Context::MACHINE_A64_IOS:
-            args.emplace_back("-miphoneos-version-min=8.0");
+            args.emplace_back("-miphoneos-version-min=9.0");
             break;
         case Context::MACHINE_X86_IOS:
         case Context::MACHINE_X64_IOS:
-            args.emplace_back("-mios-simulator-version-min=8.0");
+            args.emplace_back("-mios-simulator-version-min=9.0");
             break;
         default: {
             break;

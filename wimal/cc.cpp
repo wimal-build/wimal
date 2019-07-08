@@ -19,13 +19,15 @@ static inline std::string CcForAction(const std::string &action) {
 }
 
 void Cc::Run(const Context *context, std::vector<std::string> extraArgs) {
-    auto gcc = context->sysroot / "usr";
     auto cc = context->clang / "bin" / CcForAction(context->action);
     auto filename = cc.filename();
     std::vector<std::string> args = {
         cc.filename().string(),
         "-target", context->triple,
         "--sysroot", context->sysroot.string(),
+        // Avoid clang using system c++ include path.
+        "-nostdinc++",
+        "-cxx-isystem" + (context->sysroot / "usr" / "include" / "c++" / "v1").string(),
         "--prefix", context->toolchain.string(),
         "-Qunused-arguments",
         "-stdlib=libc++"

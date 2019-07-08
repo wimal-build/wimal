@@ -34,6 +34,9 @@ typedef struct ipc_port	*ipc_port_t;
 // https://developer.apple.com/documentation/kernel/mach_port_t
 typedef ipc_port_t mach_port_t;
 
+// https://opensource.apple.com/source/xnu/xnu-4903.221.2/osfmk/mach/port.h
+#define MACH_PORT_NULL 0
+
 // https://developer.apple.com/documentation/kernel/mach_port_name_t
 typedef natural_t mach_port_name_t;
 

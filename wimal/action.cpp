@@ -21,7 +21,8 @@ const std::unordered_map<std::string, std::shared_ptr<Action>> Action::actions{
     {"objdump", std::make_shared<Invoke>()},
     {"ranlib", std::make_shared<Invoke>()},
     {"strip", std::make_shared<Invoke>()},
-    {"readelf", std::make_shared<Invoke>()}
+    {"readelf", std::make_shared<Invoke>()},
+    {"dsymutil", std::make_shared<Invoke>()}
 };
 
 Action::Action() = default;

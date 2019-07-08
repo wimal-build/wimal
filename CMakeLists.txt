@@ -86,6 +86,7 @@ set(LLVM_EXTERNAL_PROJECTS
     lld
     tapi
     ld64
+    cctools
     CACHE STRING
     LLVM_EXTERNAL_PROJECTS
 )
@@ -132,6 +133,14 @@ set(
     LLVM_EXTERNAL_LD64_SOURCE_DIR
 )
 
+# Enable cctools
+set(
+    LLVM_EXTERNAL_CCTOOLS_SOURCE_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/cctools"
+    CACHE STRING
+    LLVM_EXTERNAL_CCTOOLS_SOURCE_DIR
+)
+
 # Skip unnecessary components
 set(CLANG_INCLUDE_TESTS OFF CACHE BOOL CLANG_INCLUDE_TESTS)
 set(CLANG_INCLUDE_DOCS OFF CACHE BOOL CLANG_INCLUDE_DOCS)
@@ -151,23 +160,14 @@ add_llvm_install_targets(install-wimal COMPONENT wimal DEPENDS wimal)
 # Add install targets for ld64
 add_llvm_install_targets(install-ld64 COMPONENT ld64 DEPENDS ld64)
 
-# Add cctools
-add_subdirectory(cctools)
-
-# Add install targets for lipo and install_name_tool
-add_llvm_install_targets(install-lipo COMPONENT lipo DEPENDS lipo)
-add_llvm_install_targets(
-    install-install_name_tool
-    COMPONENT install_name_tool
-    DEPENDS install_name_tool
-)
+# Add install targets for cctools
+add_llvm_install_targets(install-cctools COMPONENT cctools DEPENDS cctools)
 
 # Add all install targets
 add_custom_target(
     installation DEPENDS
 
-    install-lipo-stripped
-    install-install_name_tool-stripped
+    install-cctools-stripped
 
     install-LLVM-stripped
 

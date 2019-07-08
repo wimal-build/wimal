@@ -16,23 +16,34 @@ void Install::Run(const Context *context, std::vector<std::string> extraArgs) {
             boost::filesystem::create_symlink("wimal", dst, ec);
         }
     }
-    static constexpr struct {
+    struct link {
         const char *src;
         const char *dst;
-    } links[] = {
+    };
+    static const std::vector<link> llvm = {
         {"llvm-ar", "-ar"},
-        {"lipo", "-lipo"},
         {"llvm-nm", "-nm"},
         {"llvm-objcopy", "-objcopy"},
         {"llvm-objdump", "-objdump"},
         {"llvm-ranlib", "-ranlib"},
         {"llvm-strip", "-strip"},
-        {"llvm-readelf", "-readelf"}
+        {"llvm-readelf", "-readelf"},
+        {"lld", "-ld"}
+    };
+    static const std::vector<link> cctools = {
+        {"apple-ar", "-ar"},
+        {"apple-nm", "-lipo"},
+        {"apple-ranlib", "-ranlib"},
+        {"apple-strip", "-strip"},
+        {"apple-lipo", "-lipo"},
+        {"ld64", "-ld"},
+        {"dsymutil", "-dsymutil"}
     };
     for (std::size_t i = 0; i < context->targets.size(); ++i) {
         auto &target = context->targets[i];
         auto &triple = context->triples[i];
         auto toolchain = context->wimal / "toolchain";
+        bool apple = target.find("-ios") != target.npos || target.find("-macos") != target.npos;
         if (!boost::filesystem::is_directory(toolchain)) {
             std::cout << "Creating " << toolchain << std::endl;
             boost::filesystem::create_directory(toolchain, ec);
@@ -42,19 +53,13 @@ void Install::Run(const Context *context, std::vector<std::string> extraArgs) {
             std::cout << "Creating " << path << std::endl;
             boost::filesystem::create_directory(path, ec);
         }
+        auto &links = apple ? cctools : llvm;
         for (auto &link : links) {
             auto src = boost::filesystem::relative(context->bin / link.src, path);
             auto dst = path / (triple + link.dst);
             std::cout << "Linking " << dst << " -> " << src << std::endl;
             boost::filesystem::create_symlink(src, path / (triple + link.dst), ec);
         }
-        auto src = boost::filesystem::relative(context->bin / "lld", path);
-        if (target.find("-ios") != target.npos || target.find("-macos") != target.npos) {
-            src = boost::filesystem::relative(context->bin / "ld64", path);
-        }
-        auto dst = path / (triple + "-ld");
-        std::cout << "Linking " << dst << " -> " << src << std::endl;
-        boost::filesystem::create_symlink(src, dst, ec);
     }
 }
 

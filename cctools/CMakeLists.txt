@@ -17,6 +17,15 @@ cc_check_compile_flag(-Wno-sign-compare)
 cc_check_compile_flag(-Wno-unused-variable)
 cc_check_compile_flag(-Wno-visibility)
 
+# Endian check
+include(TestBigEndian)
+test_big_endian(IS_BIG_ENDIAN)
+if(IS_BIG_ENDIAN)
+    add_definitions(-D__BIG_ENDIAN__=1)
+else()
+    add_definitions(-D__LITTLE_ENDIAN__=1)
+endif()
+
 include_directories(port include)
 
 # libstuff

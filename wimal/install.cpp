@@ -36,7 +36,8 @@ void Install::Run(const Context *context, std::vector<std::string> extraArgs) {
         {"apple-ranlib", "-ranlib"},
         {"apple-strip", "-strip"},
         {"apple-lipo", "-lipo"},
-        {"ld64", "-ld"},
+        {"apple-ld", "-ld"},
+        {"apple-install_name_tool", "-install_name_tool"},
         {"dsymutil", "-dsymutil"}
     };
     for (std::size_t i = 0; i < context->targets.size(); ++i) {

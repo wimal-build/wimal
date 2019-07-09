@@ -94,6 +94,7 @@ add_llvm_executable(
     tapi
     ${LD64_EXTRA_DEPENDS}
 )
+set_target_properties(ld64 PROPERTIES OUTPUT_NAME apple-ld)
 target_link_libraries(
     ld64 PRIVATE
     ${LD64_LLVM_LIBS}

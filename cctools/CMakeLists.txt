@@ -26,6 +26,7 @@ add_library(
     libstuff/allocate.c
     libstuff/arch.c
     libstuff/arch_usage.c
+    libstuff/best_arch.c
     libstuff/breakout.c
     libstuff/bytesex.c
     libstuff/checkout.c
@@ -56,6 +57,16 @@ add_library(
     port/port.cpp
 )
 
+set_property(
+    SOURCE libstuff/execute.c
+    PROPERTY COMPILE_DEFINITIONS
+    # Make the prefix contains the prefix in executable names.
+    # i.e. `/usr/bin/apple-ar` is prefixed with `/usr/bin/apple-`.
+    # Remove the default implementation here, reimplement in port.cpp
+    add_execute_list_with_prefix=no_add_execute_list_with_prefix
+    cmd_with_prefix=no_cmd_with_prefix
+)
+
 # ar
 add_executable(
     apple-ar
@@ -70,11 +81,8 @@ add_executable(
     ar/print.c
     ar/replace.c
 )
-target_compile_definitions(
-    apple-ar PRIVATE
-    -Derror=xerror
-    -Dprint=xprint
-)
+# Fix duplicated symbol issue.
+target_compile_definitions(apple-ar PRIVATE -Derror=xerror -Dprint=xprint)
 target_link_libraries(apple-ar stuff)
 
 # lipo
@@ -91,6 +99,8 @@ target_link_libraries(apple-nm stuff)
 
 # ranlib
 add_executable(apple-ranlib misc/libtool.c)
+# Set `cmd_flags.ranlib` to TRUE when the executable ends with `ranlib`.
+target_compile_definitions(apple-ranlib PRIVATE -Dstrncmp=cctools_strncmp)
 target_link_libraries(apple-ranlib stuff)
 
 # install_name_tool
@@ -119,9 +129,9 @@ add_executable(
     otool/print_objc2_64bit.c
     otool/sparc_disasm.c
 )
-target_link_libraries(apple-otool stuff LLVMMCDisassembler)
 target_include_directories(apple-otool BEFORE PRIVATE port)
 target_compile_definitions(apple-otool PRIVATE -DSTATIC_LLVM -D__DYNAMIC__)
+target_link_libraries(apple-otool stuff LLVMMCDisassembler)
 
 # install
 add_custom_target(

@@ -1,5 +1,51 @@
 extern "C" const char apple_version[] = "cctools-921";
 
+#include <errno.h>
+#include <libc.h>
+#include <mach-o/dyld.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+
+__BEGIN_DECLS
+#include <stuff/allocate.h>
+#include <stuff/execute.h>
+__END_DECLS
+#include <sys/file.h>
+#include <sys/param.h>
+#include <vector>
+
+void add_execute_list_with_prefix(char *str) {
+    add_execute_list(cmd_with_prefix(str));
+}
+
+char *cmd_with_prefix(char *str) {
+    std::vector<char> path(MAXPATHLEN);
+    uint32_t size = path.size();
+    if (_NSGetExecutablePath(path.data(), &size) == -1) {
+        path.resize(size);
+        _NSGetExecutablePath(path.data(), &size);
+    }
+    std::vector<char> absolute(PATH_MAX);
+    char *prefix = realpath(path.data(), absolute.data());
+    auto cursor = std::max(rindex(prefix, '/'), rindex(prefix, '-'));
+    if (cursor) {
+        cursor[1] = '\0';
+    }
+    return (makestr(prefix, str, NULL));
+}
+
+extern "C" int cctools_strncmp(const char *s1, const char *s2, size_t n) {
+    static const char *STR_RANLIB = "ranlib";
+    if (s2 == STR_RANLIB) {
+        auto l1 = strlen(s1);
+        if (l1 > n) {
+            return strncmp(s1 + l1 - n, s2, n);
+        }
+    }
+    return strncmp(s1, s2, n);
+}
+
 #ifndef __APPLE__
 #include <mach/mach.h>
 

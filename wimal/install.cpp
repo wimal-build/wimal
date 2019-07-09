@@ -32,7 +32,7 @@ void Install::Run(const Context *context, std::vector<std::string> extraArgs) {
     };
     static const std::vector<link> cctools = {
         {"apple-ar", "-ar"},
-        {"apple-nm", "-lipo"},
+        {"apple-nm", "-nm"},
         {"apple-ranlib", "-ranlib"},
         {"apple-strip", "-strip"},
         {"apple-lipo", "-lipo"},

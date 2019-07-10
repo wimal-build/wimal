@@ -36,8 +36,7 @@ char *cmd_with_prefix(char *str) {
 }
 
 extern "C" int cctools_strncmp(const char *s1, const char *s2, size_t n) {
-    static const char *STR_RANLIB = "ranlib";
-    if (s2 == STR_RANLIB) {
+    if (strncmp("ranlib", s2, n) == 0) {
         auto l1 = strlen(s1);
         if (l1 > n) {
             return strncmp(s1 + l1 - n, s2, n);

@@ -109,7 +109,7 @@ target_link_libraries(apple-nm stuff)
 # ranlib
 add_executable(apple-ranlib misc/libtool.c)
 # Set `cmd_flags.ranlib` to TRUE when the executable ends with `ranlib`.
-target_compile_definitions(apple-ranlib PRIVATE strncmp=cctools_strncmp)
+target_compile_definitions(apple-ranlib PRIVATE HOOK_STRNCMP)
 target_link_libraries(apple-ranlib stuff)
 
 # install_name_tool

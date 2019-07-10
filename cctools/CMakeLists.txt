@@ -91,7 +91,7 @@ add_executable(
     ar/replace.c
 )
 # Fix duplicated symbol issue.
-target_compile_definitions(apple-ar PRIVATE -Derror=xerror -Dprint=xprint)
+target_compile_definitions(apple-ar PRIVATE error=xerror print=xprint)
 target_link_libraries(apple-ar stuff)
 
 # lipo
@@ -109,7 +109,7 @@ target_link_libraries(apple-nm stuff)
 # ranlib
 add_executable(apple-ranlib misc/libtool.c)
 # Set `cmd_flags.ranlib` to TRUE when the executable ends with `ranlib`.
-target_compile_definitions(apple-ranlib PRIVATE -Dstrncmp=cctools_strncmp)
+target_compile_definitions(apple-ranlib PRIVATE strncmp=cctools_strncmp)
 target_link_libraries(apple-ranlib stuff)
 
 # install_name_tool
@@ -139,7 +139,7 @@ add_executable(
     otool/sparc_disasm.c
 )
 target_include_directories(apple-otool BEFORE PRIVATE port)
-target_compile_definitions(apple-otool PRIVATE -DSTATIC_LLVM -D__DYNAMIC__)
+target_compile_definitions(apple-otool PRIVATE STATIC_LLVM __DYNAMIC__)
 target_link_libraries(apple-otool stuff LLVMMCDisassembler)
 
 # install

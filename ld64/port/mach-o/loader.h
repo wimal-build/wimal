@@ -163,7 +163,6 @@ using llvm::MachO::S_ATTR_LOC_RELOC;
 
 union lc_str {
     uint32_t offset;
-    char *ptr;
 };
 
 struct dylib {

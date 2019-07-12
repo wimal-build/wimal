@@ -45,7 +45,7 @@ void Cc::Run(const Context *context, std::vector<std::string> extraArgs) {
             args.emplace_back("-D__ANDROID_API__=21");
             break;
         case Context::MACHINE_X64_MACOS:
-            args.emplace_back("-mmacosx-version-min=10.8");
+            args.emplace_back("-mmacosx-version-min=10.10");
             break;
         case Context::MACHINE_ARM_IOS:
         case Context::MACHINE_A64_IOS:

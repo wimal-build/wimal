@@ -6,7 +6,7 @@ import re
 import requests
 import sys
 import tarfile
-from distutils import dir_util
+from distutils import dir_util, file_util
 
 if sys.version_info > (3, 0):
     # noinspection PyUnresolvedReferences
@@ -181,10 +181,22 @@ apt.install((
     'libc++abi1-8'
 ), output)
 dir_util.copy_tree(
-    os.path.join(output, 'usr', 'lib', 'llvm-8'),
-    os.path.join(output, 'usr')
+    os.path.join(output, 'usr', 'lib', 'llvm-8', 'include'),
+    os.path.join(output, 'usr', 'include')
+)
+file_util.copy_file(
+    os.path.join(output, 'usr', 'lib', 'llvm-8', 'lib', 'libc++abi.a'),
+    os.path.join(output, 'usr', 'lib', 'libc++abi.a'),
+)
+file_util.copy_file(
+    os.path.join(output, 'usr', 'lib', 'llvm-8', 'lib', 'libc++.a'),
+    os.path.join(output, 'usr', 'lib', 'libc++_static.a'),
 )
 dir_util.remove_tree(os.path.join(output, 'usr', 'lib', 'llvm-8'))
+
+file = open(os.path.join(output, 'usr', 'lib', 'libc++.so'), 'w')
+file.write('INPUT(-lc++_static -lc++abi -lpthread)')
+file.close()
 
 apt = Apt('http://archive.ubuntu.com/ubuntu', 'trusty', 'amd64')
 apt.update(('main', 'universe'))

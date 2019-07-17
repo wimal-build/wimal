@@ -4,8 +4,11 @@ project(uuid)
 
 set(CMAKE_C_STANDARD 99)
 
-include(CcChecks)
-cc_check_headers(
+include(MeChecks)
+me_checks(
+    SET
+
+    HEADERS
     fcntl.h
     inttypes.h
     limits.h
@@ -17,9 +20,16 @@ cc_check_headers(
     sys/socket.h
     sys/time.h
     unistd.h
-)
 
-cc_check_funcs(ftruncate gettimeofday memset socket strtoul usleep srandom)
+    FUNCS
+    ftruncate
+    gettimeofday
+    memset
+    socket
+    strtoul
+    usleep
+    srandom
+)
 
 set(
     UUID_SOURCES

@@ -2,11 +2,13 @@ cmake_minimum_required(VERSION 3.0)
 
 project(tapi)
 
-include(CcChecks)
+include(MeChecks)
 
-cc_check_compile_flag(-Wno-gnu-include-next)
-cc_check_compile_flag(-Wno-nested-anon-types)
-cc_check_compile_flag(-Wno-delete-non-virtual-dtor)
+me_compile_options(
+    -Wno-gnu-include-next
+    -Wno-nested-anon-types
+    -Wno-delete-non-virtual-dtor
+)
 
 aux_source_directory(lib/Core TAPI_CORE_SOURCES)
 aux_source_directory(tools/libtapi LIBTAPI_SOURCES)

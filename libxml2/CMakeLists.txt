@@ -62,9 +62,12 @@ configure_file(
 	@ONLY
 )
 
-# Check headers
-include(CcChecks)
-cc_check_headers(
+# Check headers and functions
+include(MeChecks)
+me_checks(
+    SET
+
+    HEADERS
 	arpa/inet.h
 	arpa/nameser.h
 	ctype.h
@@ -97,6 +100,30 @@ cc_check_headers(
 	time.h
 	unistd.h
     stdarg.h
+
+    FUNCS
+	fprintf
+	ftime
+	gettimeofday
+	isascii
+	localtime
+	mmap
+	munmap
+	printf
+	putenv
+	rand
+	rand_r
+	signal
+	snprintf
+	sprintf
+	srand
+	sscanf
+	stat
+	strftime
+	time
+	vfprintf
+	vsnprintf
+	vsprintf
 )
 
 include(CheckCSourceCompiles)
@@ -141,32 +168,6 @@ check_c_source_compiles(
 if(VA_LIST_IS_ARRAY)
     add_definitions(-DVA_LIST_IS_ARRAY)
 endif()
-
-# Check functions
-cc_check_funcs(
-	fprintf
-	ftime
-	gettimeofday
-	isascii
-	localtime
-	mmap
-	munmap
-	printf
-	putenv
-	rand
-	rand_r
-	signal
-	snprintf
-	sprintf
-	srand
-	sscanf
-	stat
-	strftime
-	time
-	vfprintf
-	vsnprintf
-	vsprintf
-)
 
 # Sources
 set(

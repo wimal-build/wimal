@@ -8,8 +8,8 @@ set(CMAKE_POLICY_DEFAULT_CMP0042 NEW CACHE STRING CMAKE_POLICY_DEFAULT_CMP0042)
 # Enable PIC
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-include(CcChecks)
-cc_check_compile_flag(-pipe)
+include(MeChecks)
+me_compile_options(-pipe)
 
 # Add zlib
 add_subdirectory(zlib)
@@ -162,6 +162,11 @@ add_llvm_install_targets(install-ld64 COMPONENT ld64 DEPENDS ld64)
 
 # Add install targets for cctools
 add_llvm_install_targets(install-cctools COMPONENT cctools DEPENDS cctools)
+
+# Fix cross-compiling issues
+execute_process(
+    COMMAND cmake -E create_symlink "${CMAKE_BINARY_DIR}/llvm/bin" "${CMAKE_BINARY_DIR}/bin"
+)
 
 # Add all install targets
 add_custom_target(

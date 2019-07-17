@@ -24,17 +24,22 @@ include_directories($<TARGET_PROPERTY:zlibstatic,SOURCE_DIR>)
 include_directories($<TARGET_PROPERTY:xml2,INCLUDE_DIRECTORIES>)
 
 # Checks
-include(CcChecks)
-cc_check_headers(
+include(MeChecks)
+me_checks(
+    SET
+
+    HEADERS
     ext2fs/ext2_fs.h
     libutil.h
     sys/acl.h
+    sys/attr.h
     sys/extattr.h
     sys/param.h
     sys/statfs.h
     sys/xattr.h
-)
-cc_check_funcs(
+    unistd.h
+
+    FUNCS
     asprintf
     lgetxattr
     lsetxattr
@@ -55,15 +60,27 @@ if(NOT HAVE_SAFE_DIRNAME)
     add_definitions(-Dsafe_dirname=dirname)
 endif()
 
-cc_check_members(statfs f_fstypename sys/types.h sys/param.h sys/mount.h)
-cc_check_members(statvfs f_fstypename sys/statvfs.h)
-cc_check_members(stat st_flags sys/stat.h)
+me_checks(
+    SET
+
+    HEADERS
+    sys/types.h
+    sys/param.h
+    sys/mount.h
+    sys/statvfs.h
+    sys/stat.h
+
+    MEMBERS
+    statfs.f_fstypename
+    statvfs.f_fstypename
+    stat.st_flags
+)
 
 if(NOT HAVE_STRUCT_STAT_ST_FLAGS)
     add_definitions("-DXAR_FLAG_FORK=\"flags\"")
 endif()
 
-cc_check_sizeof(uid_t)
+me_checks(SET SIZES uid_t)
 if(SIZEOF_UID_T EQUAL 4)
     add_definitions(-DUID_STRING=RId32)
     add_definitions("-DUID_CAST=(uint32_t)")
@@ -74,7 +91,7 @@ else()
     message(FATAL_ERROR "can not detect the size of your system's uid_t type")
 endif()
 
-cc_check_sizeof(gid_t)
+me_checks(SET SIZES gid_t)
 if(SIZEOF_GID_T EQUAL 4)
     add_definitions(-DGID_STRING=PRId32)
     add_definitions("-DGID_CAST=(uint32_t)")
@@ -85,7 +102,7 @@ else()
     message(FATAL_ERROR "can not detect the size of your system's gid_t type")
 endif()
 
-cc_check_sizeof(ino_t)
+me_checks(SET SIZES ino_t)
 if(SIZEOF_INO_T EQUAL 4)
     add_definitions(-DINO_STRING=PRId32)
     add_definitions(-DINO_HEXSTRING=PRIx32)
@@ -98,7 +115,7 @@ else()
     message(FATAL_ERROR "can not detect the size of your system's ino_t type")
 endif()
 
-cc_check_sizeof(dev_t)
+me_checks(SET SIZES dev_t)
 if(SIZEOF_DEV_T EQUAL 4)
     add_definitions(-DDEV_STRING=PRId32)
     add_definitions(-DDEV_HEXSTRING=PRIx32)
@@ -111,8 +128,7 @@ else()
     message(FATAL_ERROR "can not detect the size of your system's dev_t type")
 endif()
 
-cc_check_compile_flag(-Wno-format)
-cc_check_compile_flag(-Wno-implicit-function-declaration)
+me_compile_options(-Wno-format -Wno-implicit-function-declaration)
 
 add_definitions(-DHAVE_LIBPTHREAD=1)
 

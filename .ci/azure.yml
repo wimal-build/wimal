@@ -82,7 +82,8 @@ jobs:
           cmake -E chdir cmake-build-azure cmake ..
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_TOOLCHAIN_FILE=../cmake/CcToolchain.cmake
+          -DWIMAL_TARGET=x64-linux
+          -DCMAKE_TOOLCHAIN_FILE=../cmake/MeToolchain.cmake
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
         displayName: 'Configure project'
       - script:
@@ -134,6 +135,8 @@ jobs:
           cmake -E chdir cmake-build-azure cmake ..
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
+          -DWIMAL_TARGET=x64-macos
+          -DCMAKE_TOOLCHAIN_FILE=../cmake/MeToolchain.cmake
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
         displayName: 'Configure project'
       - script:

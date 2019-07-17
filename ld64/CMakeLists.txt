@@ -15,26 +15,28 @@ else()
     add_definitions(-D__LITTLE_ENDIAN__=1)
 endif()
 
-include(CcChecks)
-cc_check_compile_flag(-Wno-cast-qual)
-cc_check_compile_flag(-Wno-covered-switch-default)
-cc_check_compile_flag(-Wno-date-time)
-cc_check_compile_flag(-Wno-delete-non-virtual-dtor)
-cc_check_compile_flag(-Wno-deprecated-declarations)
-cc_check_compile_flag(-Wno-format)
-cc_check_compile_flag(-Wno-format-pedantic)
-cc_check_compile_flag(-Wno-gnu-include-next)
-cc_check_compile_flag(-Wno-ignored-qualifiers)
-cc_check_compile_flag(-Wno-implicit-fallthrough)
-cc_check_compile_flag(-Wno-import-preprocessor-directive-pedantic)
-cc_check_compile_flag(-Wno-missing-field-initializers)
-cc_check_compile_flag(-Wno-non-virtual-dtor)
-cc_check_compile_flag(-Wno-parentheses-equality)
-cc_check_compile_flag(-Wno-pointer-arith)
-cc_check_compile_flag(-Wno-unused-value)
-cc_check_compile_flag(-Wno-vla-extension)
-cc_check_compile_flag(-Wno-zero-length-array)
-cc_check_compile_flag(-fblocks)
+include(MeChecks)
+me_compile_options(
+    -Wno-cast-qual
+    -Wno-covered-switch-default
+    -Wno-date-time
+    -Wno-delete-non-virtual-dtor
+    -Wno-deprecated-declarations
+    -Wno-format
+    -Wno-format-pedantic
+    -Wno-gnu-include-next
+    -Wno-ignored-qualifiers
+    -Wno-implicit-fallthrough
+    -Wno-import-preprocessor-directive-pedantic
+    -Wno-missing-field-initializers
+    -Wno-non-virtual-dtor
+    -Wno-parentheses-equality
+    -Wno-pointer-arith
+    -Wno-unused-value
+    -Wno-vla-extension
+    -Wno-zero-length-array
+    -fblocks
+)
 
 include_directories(
     port

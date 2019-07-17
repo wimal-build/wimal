@@ -2,20 +2,22 @@ cmake_minimum_required(VERSION 3.0)
 
 project(cctools)
 
-include(CcChecks)
-cc_check_compile_flag(-Wno-covered-switch-default)
-cc_check_compile_flag(-Wno-format)
-cc_check_compile_flag(-Wno-gnu-include-next)
-cc_check_compile_flag(-Wno-implicit-function-declaration)
-cc_check_compile_flag(-Wno-import-preprocessor-directive-pedantic)
-cc_check_compile_flag(-Wno-incompatible-pointer-types)
-cc_check_compile_flag(-Wno-int-conversion)
-cc_check_compile_flag(-Wno-macro-redefined)
-cc_check_compile_flag(-Wno-missing-field-initializers)
-cc_check_compile_flag(-Wno-pedantic)
-cc_check_compile_flag(-Wno-sign-compare)
-cc_check_compile_flag(-Wno-unused-variable)
-cc_check_compile_flag(-Wno-visibility)
+include(MeChecks)
+me_compile_options(
+    -Wno-covered-switch-default
+    -Wno-format
+    -Wno-gnu-include-next
+    -Wno-implicit-function-declaration
+    -Wno-import-preprocessor-directive-pedantic
+    -Wno-incompatible-pointer-types
+    -Wno-int-conversion
+    -Wno-macro-redefined
+    -Wno-missing-field-initializers
+    -Wno-pedantic
+    -Wno-sign-compare
+    -Wno-unused-variable
+    -Wno-visibility
+)
 
 # Endian check
 include(TestBigEndian)

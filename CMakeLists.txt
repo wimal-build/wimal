@@ -14,6 +14,28 @@ me_compile_options(-pipe)
 # Add zlib
 add_subdirectory(zlib)
 
+# Find table-gen
+message(STATUS "Found wimal: ${WIMAL_HOME}")
+find_program(
+    PROGRAM_LLVM_TBLGEN
+    llvm-tblgen
+    HINTS ${WIMAL_HOME}/bin
+)
+find_program(
+    PROGRAM_CLANG_TBLGEN
+    clang-tblgen
+    HINTS ${WIMAL_HOME}/bin
+)
+
+if(NOT PROGRAM_LLVM_TBLGEN STREQUAL PROGRAM_LLVM_TBLGEN-NOTFOUND)
+    message(STATUS "Found llvm-tblgen: ${PROGRAM_LLVM_TBLGEN}")
+    set(LLVM_TABLEGEN ${PROGRAM_LLVM_TBLGEN} CACHE PATH LLVM_TABLEGEN)
+endif()
+if(NOT PROGRAM_CLANG_TBLGEN STREQUAL PROGRAM_CLANG_TBLGEN-NOTFOUND)
+    message(STATUS "Found clang-tblgen: ${PROGRAM_CLANG_TBLGEN}")
+    set(CLANG_TABLEGEN ${PROGRAM_CLANG_TBLGEN} CACHE PATH CLANG_TABLEGEN)
+endif()
+
 # Enable zlib
 set(LLVM_ENABLE_ZLIB ON CACHE BOOL LLVM_ENABLE_ZLIB)
 set(HAVE_LIBZ_Z 1 CACHE INTERNAL HAVE_LIBZ_Z)

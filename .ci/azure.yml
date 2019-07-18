@@ -30,27 +30,10 @@ jobs:
           rootFolderOrFile: '$(Build.SourcesDirectory)/sysroot/sysroot'
           includeRootFolder: true
           archiveType: 'tar'
-          archiveFile: '$(Build.ArtifactStagingDirectory)/wimal-sysroot-$(Build.BuildNumber).tar.gz'
-          replaceExistingArchive: true
-        displayName: 'Create wimal-sysroot-$(Build.BuildNumber).tar.gz'
-      - task: ArchiveFiles@2
-        inputs:
-          rootFolderOrFile: '$(Build.SourcesDirectory)/sysroot/sysroot'
-          includeRootFolder: true
-          archiveType: 'tar'
-          tarCompression: 'bz2'
-          archiveFile: '$(Build.ArtifactStagingDirectory)/wimal-sysroot-$(Build.BuildNumber).tar.bz2'
-          replaceExistingArchive: true
-        displayName: 'Create wimal-sysroot-$(Build.BuildNumber).tar.bz2'
-      - task: ArchiveFiles@2
-        inputs:
-          rootFolderOrFile: '$(Build.SourcesDirectory)/sysroot/sysroot'
-          includeRootFolder: true
-          archiveType: 'tar'
           tarCompression: 'xz'
           archiveFile: '$(Build.ArtifactStagingDirectory)/wimal-sysroot-$(Build.BuildNumber).tar.xz'
           replaceExistingArchive: true
-        displayName: 'Create wimal-sysroot-$(Build.BuildNumber).tar.xz'
+        displayName: 'Create tarball'
       - task: PublishBuildArtifacts@1
         inputs:
           PathtoPublish: '$(Build.ArtifactStagingDirectory)'
@@ -59,22 +42,11 @@ jobs:
   - job: linux
     timeoutInMinutes: 300
     pool:
-      vmImage: 'Ubuntu-latest'
+      vmImage: 'macOS-latest'
     steps:
       - script:
-          wget -O $(Agent.TempDirectory)/libc++abi.deb
-          http://apt.llvm.org/trusty/pool/main/l/llvm-toolchain-8/libc++abi1-8_8.0.1~svn360950-1~exp1~20190517011409.67_amd64.deb
-        displayName: 'Downloading libc++abi'
-      - script:
-          wget -O $(Agent.TempDirectory)/libc++.deb
-          http://apt.llvm.org/trusty/pool/main/l/llvm-toolchain-8/libc++1-8_8.0.1~svn360950-1~exp1~20190517011409.67_amd64.deb
-        displayName: 'Downloading libc++'
-      - script:
-          sudo dpkg -i $(Agent.TempDirectory)/libc++abi.deb $(Agent.TempDirectory)/libc++.deb
-        displayName: 'Installing libc++'
-      - script:
-          sudo apt install ninja-build -y
-        displayName: 'Installing Ninja'
+          brew install yasm nasm ninja automake libtool
+        displayName: 'Installing dependencies'
       - script:
           cmake -E make_directory cmake-build-azure
         displayName: 'Prepare project'
@@ -94,27 +66,10 @@ jobs:
           rootFolderOrFile: '$(Build.BinariesDirectory)/wimal'
           includeRootFolder: true
           archiveType: 'tar'
-          archiveFile: '$(Build.ArtifactStagingDirectory)/wimal-linux-$(Build.BuildNumber).tar.gz'
-          replaceExistingArchive: true
-        displayName: 'Create wimal-linux-$(Build.BuildNumber).tar.gz'
-      - task: ArchiveFiles@2
-        inputs:
-          rootFolderOrFile: '$(Build.BinariesDirectory)/wimal'
-          includeRootFolder: true
-          archiveType: 'tar'
-          tarCompression: 'bz2'
-          archiveFile: '$(Build.ArtifactStagingDirectory)/wimal-linux-$(Build.BuildNumber).tar.bz2'
-          replaceExistingArchive: true
-        displayName: 'Create wimal-linux-$(Build.BuildNumber).tar.bz2'
-      - task: ArchiveFiles@2
-        inputs:
-          rootFolderOrFile: '$(Build.BinariesDirectory)/wimal'
-          includeRootFolder: true
-          archiveType: 'tar'
           tarCompression: 'xz'
           archiveFile: '$(Build.ArtifactStagingDirectory)/wimal-linux-$(Build.BuildNumber).tar.xz'
           replaceExistingArchive: true
-        displayName: 'Create wimal-linux-$(Build.BuildNumber).tar.xz'
+        displayName: 'Create tarball'
       - task: PublishBuildArtifacts@1
         inputs:
           PathtoPublish: '$(Build.ArtifactStagingDirectory)'
@@ -147,27 +102,10 @@ jobs:
           rootFolderOrFile: '$(Build.BinariesDirectory)/wimal'
           includeRootFolder: true
           archiveType: 'tar'
-          archiveFile: '$(Build.ArtifactStagingDirectory)/wimal-macos-$(Build.BuildNumber).tar.gz'
-          replaceExistingArchive: true
-        displayName: 'Create wimal-macos-$(Build.BuildNumber).tar.gz'
-      - task: ArchiveFiles@2
-        inputs:
-          rootFolderOrFile: '$(Build.BinariesDirectory)/wimal'
-          includeRootFolder: true
-          archiveType: 'tar'
-          tarCompression: 'bz2'
-          archiveFile: '$(Build.ArtifactStagingDirectory)/wimal-macos-$(Build.BuildNumber).tar.bz2'
-          replaceExistingArchive: true
-        displayName: 'Create wimal-macos-$(Build.BuildNumber).tar.bz2'
-      - task: ArchiveFiles@2
-        inputs:
-          rootFolderOrFile: '$(Build.BinariesDirectory)/wimal'
-          includeRootFolder: true
-          archiveType: 'tar'
           tarCompression: 'xz'
           archiveFile: '$(Build.ArtifactStagingDirectory)/wimal-macos-$(Build.BuildNumber).tar.xz'
           replaceExistingArchive: true
-        displayName: 'Create wimal-macos-$(Build.BuildNumber).tar.xz'
+        displayName: 'Create tarball'
       - task: PublishBuildArtifacts@1
         inputs:
           PathtoPublish: '$(Build.ArtifactStagingDirectory)'

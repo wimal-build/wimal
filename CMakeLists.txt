@@ -190,6 +190,10 @@ install(
     FILES
     ${CMAKE_BINARY_DIR}/llvm/bin/llvm-tblgen
     ${CMAKE_BINARY_DIR}/llvm/bin/clang-tblgen
+    PERMISSIONS
+    OWNER_WRITE
+    OWNER_READ GROUP_READ WORLD_READ
+    OWNER_EXECUTE GROUP_EXECUTE WORLD_EXECUTE
     DESTINATION bin
     COMPONENT tablegen
 )

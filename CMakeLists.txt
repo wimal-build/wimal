@@ -163,6 +163,16 @@ add_llvm_install_targets(install-ld64 COMPONENT ld64 DEPENDS ld64)
 # Add install targets for cctools
 add_llvm_install_targets(install-cctools COMPONENT cctools DEPENDS cctools)
 
+# Add install target for llvm-tblgen and clang-tblgen
+install(
+    FILES
+    ${CMAKE_BINARY_DIR}/llvm/bin/llvm-tblgen
+    ${CMAKE_BINARY_DIR}/llvm/bin/clang-tblgen
+    DESTINATION bin
+    COMPONENT tablegen
+)
+add_llvm_install_targets(install-tablegen COMPONENT tablegen DEPENDS llvm-tblgen clang-tblgen)
+
 # Fix cross-compiling issues
 execute_process(
     COMMAND cmake -E create_symlink "${CMAKE_BINARY_DIR}/llvm/bin" "${CMAKE_BINARY_DIR}/bin"
@@ -171,6 +181,8 @@ execute_process(
 # Add all install targets
 add_custom_target(
     installation DEPENDS
+
+    install-tablegen-stripped
 
     install-cctools-stripped
 

@@ -162,7 +162,7 @@ for target in targets:
 
     copy_file(
         os.path.join(
-            ndk, 'sources', 'cxx-stl', 'llvm-libc++', 'libs', abi, 'libc++.so.' + str(level)
+            ndk, 'sources', 'cxx-stl', 'llvm-libc++', 'libs', abi, 'libc++.a.' + str(level)
         ),
         os.path.join(usr, 'lib', 'libc++.so')
     )

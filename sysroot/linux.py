@@ -214,7 +214,17 @@ apt.install((
     'libquadmath0',
     'libtsan0',
     'libatomic1',
-    'libasan0'
+    'libasan0',
+
+    'libasound2',
+    'libasound2-dev',
+    'libx11-6',
+    'libx11-dev',
+    'x11proto-core-dev',
+    'libgles2-mesa',
+    'libgles2-mesa-dev',
+    'libegl1-mesa',
+    'libegl1-mesa-dev'
 ), output)
 
 apt.repair(output)

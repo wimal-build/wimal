@@ -36,7 +36,11 @@ void Export(const Context *context) {
     for (auto &kv : environments) {
         auto off = getenv((std::string("NO") + kv.first).data());
         if (!off || strlen(off) == 0) {
+#ifdef _WIN32
+            _putenv_s(kv.first.data(), kv.second.data());
+#else
             setenv(kv.first.data(), kv.second.data(), 1);
+#endif
         }
     }
 }

@@ -1,4 +1,4 @@
-/*	$OpenBSD: socks.c,v 1.25 2018/03/27 16:31:10 deraadt Exp $	*/
+/*	$OpenBSD: socks.c,v 1.29 2019/07/29 15:19:03 benno Exp $	*/
 
 /*
  * Copyright (c) 1999 Niklas Hallqvist.  All rights reserved.
@@ -65,7 +65,7 @@ decode_addrport(const char *h, const char *p, struct sockaddr *addr,
 	int r;
 	struct addrinfo hints, *res;
 
-	bzero(&hints, sizeof(hints));
+	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = v4only ? PF_INET : PF_UNSPEC;
 	hints.ai_flags = numeric ? AI_NUMERICHOST : 0;
 	hints.ai_socktype = SOCK_STREAM;
@@ -334,7 +334,7 @@ socks_connect(const char *host, const char *port,
 			    "CONNECT %s:%d HTTP/1.0\r\n",
 			    host, ntohs(serverport));
 		}
-		if (r == -1 || (size_t)r >= sizeof(buf))
+		if (r < 0 || (size_t)r >= sizeof(buf))
 			errx(1, "hostname too long");
 		r = strlen(buf);
 
@@ -357,7 +357,7 @@ socks_connect(const char *host, const char *port,
 				errx(1, "Proxy username/password too long");
 			r = snprintf(buf, sizeof(buf), "Proxy-Authorization: "
 			    "Basic %s\r\n", resp);
-			if (r == -1 || (size_t)r >= sizeof(buf))
+			if (r < 0 || (size_t)r >= sizeof(buf))
 				errx(1, "Proxy auth response too long");
 			r = strlen(buf);
 			if ((cnt = atomicio(vwrite, proxyfd, buf, r)) != r)
@@ -373,7 +373,8 @@ socks_connect(const char *host, const char *port,
 		/* Read status reply */
 		proxy_read_line(proxyfd, buf, sizeof(buf));
 		if (proxyuser != NULL &&
-		    strncmp(buf, "HTTP/1.0 407 ", 12) == 0) {
+		    (strncmp(buf, "HTTP/1.0 407 ", 12) == 0 ||
+		    strncmp(buf, "HTTP/1.1 407 ", 12) == 0)) {
 			if (authretry > 1) {
 				fprintf(stderr, "Proxy authentication "
 				    "failed\n");

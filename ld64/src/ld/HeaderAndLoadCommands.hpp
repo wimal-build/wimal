@@ -1611,7 +1611,7 @@ void HeaderAndLoadCommandsAtom<A>::copyRawContent(uint8_t buffer[]) const
 	mh->set_flags(this->flags());
 
 	// copy load commands
-	__block uint8_t* p = &buffer[sizeof(macho_header<P>)];
+	uint8_t* p = &buffer[sizeof(macho_header<P>)];
 	
 	if ( _options.outputKind() == Options::kObjectFile )
 		p = this->copySingleSegmentLoadCommand(p);
@@ -1644,23 +1644,23 @@ void HeaderAndLoadCommandsAtom<A>::copyRawContent(uint8_t buffer[]) const
 #if 0
 			//FIXME hack to workaround simulator issues without cctools changes
 			p = this->copyVersionLoadCommand(p, ld::kPlatform_macOS, 0, _options.sdkVersion());
-			_options.platforms().forEach(^(ld::Platform platform, uint32_t version, bool &stop) {
+			_options.platforms().forEach([&](ld::Platform platform, uint32_t version, bool &stop) {
 				p = this->copyBuildVersionLoadCommand(p, platform, version, _options.sdkVersion());
 			});
 #else
-			_options.platforms().forEach(^(ld::Platform platform, uint32_t version, bool &stop) {
+			_options.platforms().forEach([&](ld::Platform platform, uint32_t version, bool &stop) {
 				if (platform == ld::kPlatform_macOS) {
 					p = this->copyVersionLoadCommand(p, platform, version, _options.sdkVersion());
 				}
 			});
 #endif
 		} else if (_options.platforms().minOS(ld::supportsLCBuildVersion) && !lcBuildVersionDisabled()) {
-			_options.platforms().forEach(^(ld::Platform platform, uint32_t version, bool &stop) {
+			_options.platforms().forEach([&](ld::Platform platform, uint32_t version, bool &stop) {
 				p = this->copyBuildVersionLoadCommand(p, platform, version, _options.sdkVersion());
 			});
 		} else {
 			assert(_platforms.count() == 1 && "LC_BUILD_VERSION required when there are multiple platforms");
-			_options.platforms().forEach(^(ld::Platform platform, uint32_t version, bool &stop) {
+			_options.platforms().forEach([&](ld::Platform platform, uint32_t version, bool &stop) {
 				p = this->copyVersionLoadCommand(p, platform, version, _options.sdkVersion());
 			});
 		}

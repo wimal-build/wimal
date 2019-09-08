@@ -372,7 +372,7 @@ void Resolver::doFile(const ld::File& file)
 					_internal.filesFromCompilerRT.push_back(objFile);
 				} else if (objFile->sourceKind() != ld::relocatable::File::kSourceLTO  ) {
 					// No bitcode section, figure out if the object file comes from LTO/compiler static library
-					_options.platforms().forEach(^(ld::Platform platform, uint32_t version, bool &stop) {
+					_options.platforms().forEach([&](ld::Platform platform, uint32_t version, bool &stop) {
 						switch ( platform ) {
 							case ld::kPlatform_macOS:
 							case ld::kPlatform_bridgeOS:
@@ -553,7 +553,7 @@ void Resolver::doFile(const ld::File& file)
 				if ( realpath(tempPath, tcLibPath) == NULL ||
 					 realpath(dylibFile->path(), tempPath) == NULL ||
 					 strncmp(tcLibPath, tempPath, strlen(tcLibPath)) != 0 ) {
-					_options.platforms().forEach(^(ld::Platform platform, uint32_t version, bool &stop) {
+					_options.platforms().forEach([&](ld::Platform platform, uint32_t version, bool &stop) {
 						switch ( platform ) {
 							case ld::kPlatform_macOS:
 							case ld::kPlatform_bridgeOS:

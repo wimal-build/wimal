@@ -999,9 +999,9 @@ tapi::LinkerInterfaceFile* Options::findTAPIFile(const std::string &path) const
 	if (!allowWeakImports())
 		flags |= tapi::ParsingFlags::DisallowWeakImports;
 
-	__block uint32_t linkMinOSVersion = 0;
+	uint32_t linkMinOSVersion = 0;
 	//FIXME handle this correctly once we have multi-platform TAPI.
-	platforms().forEach(^(ld::Platform platform, uint32_t version, bool &stop) {
+	platforms().forEach([&](ld::Platform platform, uint32_t version, bool &stop) {
 		if (linkMinOSVersion == 0)
 			linkMinOSVersion = version;
 		if (platform == ld::kPlatform_macOS)
@@ -2183,7 +2183,7 @@ std::string Options::getSDKVersionStr() const
 
 std::vector<std::string> Options::writeBitcodeLinkOptions() const
 {
-	__block std::vector<std::string> linkCommand;
+	std::vector<std::string> linkCommand;
 	switch ( fOutputKind ) {
 		case Options::kDynamicLibrary:
 			linkCommand.push_back("-dylib");
@@ -2216,7 +2216,7 @@ std::vector<std::string> Options::writeBitcodeLinkOptions() const
 	// Add deployment target.
 	// Platform is allowed to be unknown for "ld -r".
 
-	platforms().forEach(^(ld::Platform platform, uint32_t version, bool &stop) {
+	platforms().forEach([&](ld::Platform platform, uint32_t version, bool &stop) {
 		switch (platform) {
 			case ld::kPlatform_macOS:
 				linkCommand.push_back("-macosx_version_min");
@@ -4370,9 +4370,9 @@ void Options::reconfigureDefaults()
 		}
 	}
 
-	__block ld::VersionSet platformOverrides;
+	ld::VersionSet platformOverrides;
 	// adjust min based on architecture
-	platforms().forEach(^(ld::Platform platform, uint32_t version, bool &stop) {
+	platforms().forEach([&](ld::Platform platform, uint32_t version, bool &stop) {
 		if ( (fArchitecture == CPU_TYPE_I386 || fArchitecture == CPU_TYPE_X86_64)
 				&& platform == ld::kPlatform_macOS && !platforms().minOS(ld::mac10_4) ) {
 			platformOverrides.add(ld::mac10_4);
@@ -4383,7 +4383,7 @@ void Options::reconfigureDefaults()
 	});
 
 	// Insert the overrides into fPlatfroms
-	platformOverrides.forEach(^(ld::Platform platform, uint32_t version, bool &stop) {
+	platformOverrides.forEach([&](ld::Platform platform, uint32_t version, bool &stop) {
 		fPlatforms.add({platform, version});
 	});
 
@@ -5214,7 +5214,7 @@ void Options::checkIllegalOptionCombinations()
 			// always legal
 			break;
 		case kUndefinedDynamicLookup: {
-			platforms().forEach(^(ld::Platform platform, uint32_t version, bool &stop) {
+			platforms().forEach([&](ld::Platform platform, uint32_t version, bool &stop) {
 				switch (platform) {
 					case ld::kPlatform_macOS:
 					case ld::kPlatform_iOSMac:
@@ -5291,7 +5291,7 @@ void Options::checkIllegalOptionCombinations()
 	// sync reader options
 	if ( fNameSpace != kTwoLevelNameSpace ) {
 		fFlatNamespace = true;
-		platforms().forEach(^(ld::Platform platform, uint32_t version, bool &stop) {
+		platforms().forEach([&](ld::Platform platform, uint32_t version, bool &stop) {
 			switch (platform) {
 				case ld::kPlatform_unknown:
 				case ld::kPlatform_macOS:

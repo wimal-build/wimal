@@ -259,7 +259,7 @@ File<A>::File(const uint8_t* fileContent, uint64_t fileLength, const char* path,
 		lcPlatforms.add({ld::kPlatform_iOS, 0});
 
 	// check cross-linking
-	platforms.forEach(^(ld::Platform platform, uint32_t version, bool &stop) {
+	platforms.forEach([&](ld::Platform platform, uint32_t version, bool &stop) {
 		if (!lcPlatforms.contains(platform) ) {
 			this->_wrongOS = true;
 			if ( this->_addVersionLoadCommand && !indirectDylib && !ignoreMismatchPlatform ) {
@@ -470,9 +470,9 @@ void File<A>::buildExportHashTableFromExportInfo(const macho_dyld_info_command<P
 template <typename A>
 void File<A>::addSymbol(const char* name, bool weakDef, bool tlv, pint_t address)
 {
-	__block uint32_t linkMinOSVersion = 0;
+	uint32_t linkMinOSVersion = 0;
 
-	this->platforms().forEach(^(ld::Platform platform, uint32_t version, bool &stop) {
+	this->platforms().forEach([&](ld::Platform platform, uint32_t version, bool &stop) {
 		//FIXME hack to handle symbol versioning in a zippered world.
 		//This will need to be rethought
 		if (linkMinOSVersion == 0)

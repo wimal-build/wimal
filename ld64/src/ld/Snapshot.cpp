@@ -262,9 +262,7 @@ void Snapshot::createSnapshot()
 
         SnapshotLog::iterator it;
         for (it = fLog.begin(); it != fLog.end(); it++) {
-            void (^logItem)(void) = *it;
-            logItem();
-            Block_release(logItem);
+            (*it)();
         }
         fLog.erase(fLog.begin(), fLog.end());
         
@@ -371,7 +369,7 @@ void Snapshot::recordRawArgs(int argc, const char *argv[])
 void Snapshot::addSnapshotLinkArg(int argIndex, int argCount, int fileArg)
 {
     if (fRootDir == NULL) {
-        fLog.push_back(Block_copy(^{ this->addSnapshotLinkArg(argIndex, argCount, fileArg); }));
+        fLog.push_back([=]{ this->addSnapshotLinkArg(argIndex, argCount, fileArg); });
     } else {
         char buf[PATH_MAX];
         fArgIndicies.push_back(fArgs.size());
@@ -411,7 +409,7 @@ void Snapshot::recordArch(const char *arch)
     
     if (!archInArgs) {
         if (fRootDir == NULL) {
-            fLog.push_back(Block_copy(^{ this->recordArch(arch); }));
+            fLog.push_back([=]{ this->recordArch(arch); });
         } else {
             char path_buf[PATH_MAX];
             buildUniquePath(path_buf, NULL, "arch");
@@ -430,7 +428,7 @@ void Snapshot::recordArch(const char *arch)
 void Snapshot::recordObjectFile(const char *path) 
 {
     if (fRootDir == NULL) {
-        fLog.push_back(Block_copy(^{ this->recordObjectFile(path); }));
+        fLog.push_back([=]{ this->recordObjectFile(path); });
     } else {
         if (fRecordObjects) {
 			char path_buf[PATH_MAX];
@@ -501,7 +499,7 @@ void Snapshot::addDylibArg(const char *dylib)
 void Snapshot::recordDylibSymbol(ld::dylib::File* dylibFile, const char *name)
 {
     if (fRootDir == NULL) {
-        fLog.push_back(Block_copy(^{ this->recordDylibSymbol(dylibFile, name); }));
+        fLog.push_back([=]{ this->recordDylibSymbol(dylibFile, name); });
     } else {
         if (fRecordDylibSymbols) {
             // find the dylib in the table
@@ -562,7 +560,7 @@ void Snapshot::recordArchive(const char *archiveFile)
 {
     if (fRootDir == NULL) {
         const char *copy = strdup(archiveFile);
-        fLog.push_back(Block_copy(^{ this->recordArchive(archiveFile); ::free((void *)copy); }));
+        fLog.push_back([=]{ this->recordArchive(archiveFile); ::free((void *)copy); });
     } else {
         if (fRecordArchiveFiles) {
 
@@ -601,7 +599,7 @@ void Snapshot::recordSubUmbrella(const char *frameworkPath)
 {
     if (fRootDir == NULL) {
         const char *copy = strdup(frameworkPath);
-        fLog.push_back(Block_copy(^{ this->recordSubUmbrella(copy); ::free((void *)copy); }));
+        fLog.push_back([=]{ this->recordSubUmbrella(copy); ::free((void *)copy); });
     } else {
         if (fRecordUmbrellaFiles) {
             const char *framework = basename((char *)frameworkPath);
@@ -621,7 +619,7 @@ void Snapshot::recordSubLibrary(const char *dylibPath)
 {
     if (fRootDir == NULL) {
         const char *copy = strdup(dylibPath);
-        fLog.push_back(Block_copy(^{ this->recordSubLibrary(copy); ::free((void *)copy); }));
+        fLog.push_back([=]{ this->recordSubLibrary(copy); ::free((void *)copy); });
     } else {
         if (fRecordUmbrellaFiles) {
             copyFileToSnapshot(dylibPath, subdir(dylibsString));
@@ -639,7 +637,7 @@ void Snapshot::recordAssertionMessage(const char *fmt, ...)
     va_end(args);
     if (msg != NULL) {
         if (fRootDir == NULL) {
-            fLog.push_back(Block_copy(^{ this->recordAssertionMessage("%s", msg); free(msg); }));
+            fLog.push_back([=]{ this->recordAssertionMessage("%s", msg); free(msg); });
         } else {
             char path[PATH_MAX];
             buildPath(path, NULL, assertFileString);

@@ -36,6 +36,7 @@
 #include <vector>
 #include <string>
 #include <unordered_set>
+#include <functional>
 
 #include "configure.h"
 
@@ -81,7 +82,7 @@ public:
 	size_t count() const { return _versions.size(); }
 	size_t empty() const { return _versions.empty(); }
 
-	void forEach(void (^callback)(ld::Platform platform, uint32_t version, bool &stop)) const {
+	void forEach(std::function<void(ld::Platform platform, uint32_t version, bool &stop)> callback) const {
 		bool stop = false;
 		for (const auto& version : _versions) {
 			callback(version.first, version.second, stop);
@@ -92,8 +93,8 @@ public:
 
 	bool contains(ld::Platform platform) const { return _versions.count(platform) != 0; }
 	bool contains(ld::PlatformSet platforms) const {
-		__block bool retval = true;
-		forEach(^(ld::Platform platform, uint32_t version, bool &stop) {
+		bool retval = true;
+		forEach([&](ld::Platform platform, uint32_t version, bool &stop) {
 			if (platforms.find(platform) == platforms.end()) {
 				stop = true;
 				retval = false;
@@ -130,8 +131,8 @@ public:
 	}
 
 	bool minOS(const ld::VersionSet& requiredMinVersions) const {
-		__block bool retval = true;
-		forEach(^(ld::Platform platform, uint32_t version, bool &stop) {
+		bool retval = true;
+		forEach([&](ld::Platform platform, uint32_t version, bool &stop) {
 			if (!requiredMinVersions.contains(basePlatform(platform)))
 				return;
 			if (version < requiredMinVersions.minOS(basePlatform(platform))) {
@@ -153,7 +154,7 @@ public:
 			}
 		};
 
-		forEach(^(ld::Platform platform, uint32_t version, bool &stop) {
+		forEach([&](ld::Platform platform, uint32_t version, bool &stop) {
 			switch (platform) {
 				case ld::kPlatform_macOS: 				appendPlatform("macOS"); break;
 				case ld::kPlatform_iOSMac:				appendPlatform("iOSMac"); break;

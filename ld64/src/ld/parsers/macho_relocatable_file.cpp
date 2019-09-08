@@ -2176,8 +2176,8 @@ bool Parser<A>::parseLoadCommands(ld::VersionSet platforms, bool simulator, bool
 
 	// Check platform cross-linking.
 	if ( !ignoreMismatchPlatform ) {
-		__block bool warned = false;
-		platforms.forEach(^(ld::Platform platform, uint32_t version, bool &stop) {
+		bool warned = false;
+		platforms.forEach([&](ld::Platform platform, uint32_t version, bool &stop) {
 			if ( !warned && !lcPlatforms.contains(platform) ) {
 				if (_usingBitcode)
 					throwf("building for %s, but linking in object file built for %s,",
@@ -6057,7 +6057,7 @@ unsigned long CFStringSection<A>::contentHash(const class Atom<A>* atom, const l
 			return hash;
 		case contentUnknown:
 			// <rdar://problem/14134211> For malformed CFStrings, hash to address of atom so they have unique hashes
-			return ULONG_MAX - (unsigned long)(atom);
+			return ULONG_MAX - (uintptr_t)(atom);
 	}
 	return 0;
 }

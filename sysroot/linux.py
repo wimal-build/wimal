@@ -168,9 +168,10 @@ class Apt:
             self.__install__(package, path)
 
 
-output = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'sysroot')
-output = os.getenv('WIMAL_SYSROOT', output)
-output = os.path.join(output, 'x64-linux')
+output = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'output')
+sysroot = os.path.join(output, 'sysroot')
+sysroot = os.getenv('WIMAL_SYSROOT', sysroot)
+target = os.path.join(sysroot, 'x64-linux')
 
 apt = Apt('http://apt.llvm.org/trusty', 'llvm-toolchain-trusty-8', 'amd64')
 apt.update(['main'])
@@ -179,22 +180,22 @@ apt.install((
     'libc++1-8',
     'libc++abi-8-dev',
     'libc++abi1-8'
-), output)
+), target)
 dir_util.copy_tree(
-    os.path.join(output, 'usr', 'lib', 'llvm-8', 'include'),
-    os.path.join(output, 'usr', 'include')
+    os.path.join(target, 'usr', 'lib', 'llvm-8', 'include'),
+    os.path.join(target, 'usr', 'include')
 )
 file_util.copy_file(
-    os.path.join(output, 'usr', 'lib', 'llvm-8', 'lib', 'libc++abi.a'),
-    os.path.join(output, 'usr', 'lib', 'libc++abi.a'),
+    os.path.join(target, 'usr', 'lib', 'llvm-8', 'lib', 'libc++abi.a'),
+    os.path.join(target, 'usr', 'lib', 'libc++abi.a'),
 )
 file_util.copy_file(
-    os.path.join(output, 'usr', 'lib', 'llvm-8', 'lib', 'libc++.a'),
-    os.path.join(output, 'usr', 'lib', 'libc++_static.a'),
+    os.path.join(target, 'usr', 'lib', 'llvm-8', 'lib', 'libc++.a'),
+    os.path.join(target, 'usr', 'lib', 'libc++_static.a'),
 )
-dir_util.remove_tree(os.path.join(output, 'usr', 'lib', 'llvm-8'))
+dir_util.remove_tree(os.path.join(target, 'usr', 'lib', 'llvm-8'))
 
-file = open(os.path.join(output, 'usr', 'lib', 'libc++.so'), 'w')
+file = open(os.path.join(target, 'usr', 'lib', 'libc++.so'), 'w')
 file.write('INPUT(-lc++_static -lc++abi -lpthread)')
 file.close()
 
@@ -225,6 +226,6 @@ apt.install((
     'libgles2-mesa-dev',
     'libegl1-mesa',
     'libegl1-mesa-dev'
-), output)
+), target)
 
-apt.repair(output)
+apt.repair(target)

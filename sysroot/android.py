@@ -36,7 +36,8 @@ if system == 'win32' or system == 'cygwin':
 
 print('system: ' + system)
 
-sysroot = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'sysroot')
+output = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'output')
+sysroot = os.path.join(output, 'sysroot')
 sysroot = os.getenv('WIMAL_SYSROOT', sysroot)
 
 targets = ('arm', 'a64', 'x86', 'x64')

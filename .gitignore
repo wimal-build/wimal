@@ -57,7 +57,7 @@ out/
 
 ### Sysroot
 # Generated sysroot
-/sysroot/sysroot
+/sysroot/output
 
 ### Python
 # Byte-compiled / optimized / DLL files

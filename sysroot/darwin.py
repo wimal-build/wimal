@@ -1,6 +1,7 @@
 import os
+import re
 import subprocess
-from distutils import dir_util
+from distutils import dir_util, file_util
 
 
 def copy_sdk(sdk, dst):
@@ -21,7 +22,21 @@ def copy_sdk(sdk, dst):
     dir_util.copy_tree(src, dst)
 
 
-sysroot = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'sysroot')
+def copy_clang_rt(dst):
+    clang = subprocess.check_output(['xcrun', '-f', 'clang'])
+    clang = clang.decode('UTF-8').strip()
+    search_dirs = subprocess.check_output([clang, '--print-search-dirs'])
+    match = re.search('libraries: =(.*)$', search_dirs.decode('UTF-8').strip())
+    libraries = match.group(1)
+    src = os.path.join(libraries, 'lib', 'darwin', 'libclang_rt.ios.a')
+    dst = os.path.join(dst, 'darwin')
+    dir_util.mkpath(dst, mode=0o755)
+    print('    - [' + src + '] -> [' + dst + ']')
+    file_util.copy_file(src, dst)
+
+
+output = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'output')
+sysroot = os.path.join(output, 'sysroot')
 sysroot = os.getenv('WIMAL_SYSROOT', sysroot)
 
 copy_sdk('iphoneos', os.path.join(sysroot, 'a64-ios'))
@@ -31,3 +46,8 @@ copy_sdk('macosx', os.path.join(sysroot, 'x64-macos'))
 os.symlink('a64-ios', os.path.join(sysroot, 'arm-ios'))
 os.symlink('x64-ios', os.path.join(sysroot, 'x86-ios'))
 os.symlink('x64-macos', os.path.join(sysroot, 'x86-macos'))
+
+libclang = os.path.join(output, 'lib', 'clang', '8.0.0', 'lib')
+libclang = os.getenv('WIMAL_LIBCLANG', libclang)
+
+copy_clang_rt(libclang)

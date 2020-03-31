@@ -33,6 +33,9 @@ def copy_clang_rt(dst):
     dir_util.mkpath(dst, mode=0o755)
     print('    - [' + src + '] -> [' + dst + ']')
     file_util.copy_file(src, dst)
+    src = os.path.join(libraries, 'lib', 'darwin', 'libclang_rt.osx.a')
+    print('    - [' + src + '] -> [' + dst + ']')
+    file_util.copy_file(src, dst)
 
 
 output = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'output')

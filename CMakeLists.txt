@@ -229,4 +229,6 @@ add_custom_target(
 
     install-clang-stripped
     install-clang-headers-stripped
+
+    install-lld-stripped
 )

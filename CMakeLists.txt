@@ -210,6 +210,8 @@ add_custom_target(
 
     install-tablegen-stripped
 
+    install-cctools-stripped
+
     install-LLVM-stripped
 
     install-LLVMgold-stripped

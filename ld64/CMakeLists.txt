@@ -5,7 +5,7 @@ project(ld64)
 file(GLOB_RECURSE LD64_SRCS src/ld/*.c src/ld/*.cpp)
 
 set(CMAKE_C_STANDARD 99)
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 14)
 
 include(TestBigEndian)
 test_big_endian(IS_BIG_ENDIAN)
@@ -48,23 +48,12 @@ include_directories(
     $<TARGET_PROPERTY:xar,INCLUDE_DIRECTORIES>
 )
 
-option(LD64_LTO_STATIC "Link LTO statically." ON)
+option(LD64_FORCE_16KB_PAGES "Force 16kb pages." OFF)
 
-if(LD64_LTO_STATIC)
-    if(NOT LLVM_LINK_LLVM_DYLIB)
-        foreach(target ${LLVM_TARGETS_TO_BUILD})
-            list(
-                APPEND LD64_EXTRA_DEPENDS
-                LLVM${target}Desc
-                LLVM${target}CodeGen
-                LLVM${target}AsmParser
-                LLVM${target}Disassembler
-            )
-        endforeach()
-    endif()
-    aux_source_directory(${LLVM_MAIN_SRC_DIR}/tools/lto LD64_EXTRA_SRCS)
+if(LD64_FORCE_16KB_PAGES)
+  add_definitions(-DLD_PAGE_SIZE=0x4000)
 else()
-    set(LD64_EXTRA_DEPENDS LTO)
+  add_definitions(-DLD_PAGE_SIZE=0x1000)
 endif()
 
 if(LLVM_LINK_LLVM_DYLIB)
@@ -85,7 +74,7 @@ endif()
 
 add_llvm_executable(
     ld64
-    ${LD64_SRCS} ${LD64_EXTRA_SRCS} port/port.cpp port/runtime.c
+    ${LD64_SRCS} port/port.cpp port/runtime.c
     DEPENDS
     LLVMLTO
     LLVMSupport

@@ -23,7 +23,7 @@
  */
  
 // start temp HACK for cross builds
-extern "C" double log2 ( double );
+//extern "C" double log2 ( double );
 //#define __MATH__
 // end temp HACK for cross builds
 

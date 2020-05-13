@@ -110,6 +110,8 @@ using llvm::MachO::LC_VERSION_MIN_WATCHOS;
 using llvm::MachO::LC_NOTE;
 using llvm::MachO::LC_BUILD_VERSION;
 
+using llvm::MachO::load_command;
+
 using llvm::MachO::segment_command;
 using llvm::MachO::segment_command_64;
 
@@ -243,6 +245,24 @@ struct rpath_command {
 using llvm::MachO::linkedit_data_command;
 
 using llvm::MachO::encryption_info_command;
+
+using llvm::MachO::encryption_info_command_64;
+
+using llvm::MachO::version_min_command;
+
+using llvm::MachO::build_version_command;
+
+using llvm::MachO::build_tool_version;
+
+using llvm::MachO::dyld_info_command;
+
+using llvm::MachO::linker_option_command;
+
+using llvm::MachO::entry_point_command;
+
+using llvm::MachO::source_version_command;
+
+using llvm::MachO::data_in_code_entry;
 
 using llvm::MachO::PLATFORM_MACOS;
 using llvm::MachO::PLATFORM_IOS;

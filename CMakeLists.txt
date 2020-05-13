@@ -216,6 +216,8 @@ add_custom_target(
 
     install-LLVMgold-stripped
 
+    install-ld64-stripped
+
     install-wimal-stripped
 
     install-llvm-ar-stripped

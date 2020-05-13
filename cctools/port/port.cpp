@@ -1,5 +1,3 @@
-extern "C" const char apple_version[] = "cctools-921";
-
 #include <errno.h>
 #include <libc.h>
 #include <mach-o/dyld.h>
@@ -298,5 +296,20 @@ void strmode(mode_t mode, char *p) {
     *p++ = ' ';
     *p = '\0';
 }
+
+#endif // __APPLE__
+
+#ifndef __APPLE__
+
+__BEGIN_DECLS
+// https://github.com/freebsd/freebsd/blob/master/lib/libc/stdlib/reallocf.c
+void *reallocf(void *ptr, size_t size) {
+    void *nptr = realloc(ptr, size);
+    if (!nptr && ptr && size != 0) {
+        free(ptr);
+    }
+    return nptr;
+}
+__END_DECLS
 
 #endif // __APPLE__

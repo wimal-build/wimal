@@ -14,10 +14,15 @@
 #endif // EBADRPC
 
 #define st_mtimespec st_mtim
+#define st_atimespec st_atim
 
 #ifndef AR_EFMT1
 #define AR_EFMT1 "#1/"
 #endif // AR_EFMT1
+
+#ifndef O_EXLOCK
+#define O_EXLOCK 0
+#endif // O_EXLOCK
 
 #endif // __APPLE__
 

@@ -15,6 +15,7 @@ me_compile_options(
     -Wno-missing-field-initializers
     -Wno-pedantic
     -Wno-sign-compare
+    -Wno-unguarded-availability-new
     -Wno-unused-variable
     -Wno-visibility
 )
@@ -35,8 +36,10 @@ add_library(
     stuff
 
     libstuff/allocate.c
+    libstuff/apple_version.c
     libstuff/arch.c
     libstuff/arch_usage.c
+    libstuff/args.c
     libstuff/best_arch.c
     libstuff/breakout.c
     libstuff/bytesex.c
@@ -62,6 +65,7 @@ add_library(
     libstuff/symbol_list.c
     libstuff/unix_standard_mode.c
     libstuff/version_number.c
+    libstuff/write64.c
     libstuff/writeout.c
 
     # Use cpp for symbol __cxa_demangle

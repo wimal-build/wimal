@@ -48,7 +48,7 @@ jobs:
           brew install yasm nasm ninja automake libtool
         displayName: 'Installing dependencies'
       - script:
-          cmake -E make_directory cmake-build-azure
+          cmake -E make_directory cmake-build-tablegen cmake-build-azure
         displayName: 'Prepare project'
       - script:
           cmake -E chdir cmake-build-azure cmake ..
@@ -58,6 +58,16 @@ jobs:
           -DCMAKE_TOOLCHAIN_FILE=../cmake/MeToolchain.cmake
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
         displayName: 'Configure project'
+      - script:
+          cmake -E chdir cmake-build-tablegen cmake ..
+          -GNinja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_INSTALL_PREFIX=$(Build.SourcesDirectory)/cmake/wimal
+          -DWIMAL_HOME=$(Build.SourcesDirectory)/cmake/wimal
+        displayName: 'Configure tablegen'
+      - script:
+          cmake --build cmake-build-tablegen --target install-tablegen --
+        displayName: 'Generate table-gen'
       - script:
           cmake --build cmake-build-azure --target installation --
         displayName: 'Build project'
@@ -84,7 +94,7 @@ jobs:
           brew install yasm nasm ninja automake libtool
         displayName: 'Installing dependencies'
       - script:
-          cmake -E make_directory cmake-build-azure
+          cmake -E make_directory cmake-build-tablegen cmake-build-azure
         displayName: 'Prepare project'
       - script:
           cmake -E chdir cmake-build-azure cmake ..
@@ -94,6 +104,16 @@ jobs:
           -DCMAKE_TOOLCHAIN_FILE=../cmake/MeToolchain.cmake
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
         displayName: 'Configure project'
+      - script:
+          cmake -E chdir cmake-build-tablegen cmake ..
+          -GNinja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_INSTALL_PREFIX=$(Build.SourcesDirectory)/cmake/wimal
+          -DWIMAL_HOME=$(Build.SourcesDirectory)/cmake/wimal
+        displayName: 'Configure tablegen'
+      - script:
+          cmake --build cmake-build-tablegen --target install-tablegen --
+        displayName: 'Generate tablegen'
       - script:
           cmake --build cmake-build-azure --target installation --
         displayName: 'Build project'

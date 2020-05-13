@@ -7,7 +7,7 @@ The ELF Linker as a Library
 You can embed LLD to your program by linking against it and calling the linker's
 entry point function lld::elf::link.
 
-The current policy is that it is your reponsibility to give trustworthy object
+The current policy is that it is your responsibility to give trustworthy object
 files. The function is guaranteed to return as long as you do not pass corrupted
 or malicious object files. A corrupted file could cause a fatal error or SEGV.
 That being said, you don't need to worry too much about it if you create object
@@ -307,3 +307,11 @@ Glossary
   On Unix, your program is generally not guaranteed to be safe with ICF,
   although large programs happen to work correctly.
   LLD works fine with ICF for example.
+
+Other Info
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   missingkeyfunction

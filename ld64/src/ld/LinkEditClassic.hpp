@@ -303,7 +303,8 @@ bool SymbolTableAtom<A>::addLocal(const ld::Atom* atom, StringPoolAtom* pool)
 			symbolName = anonName;
 		}
 	}
-	entry.set_n_strx(pool->add(symbolName));
+	// <rdar://problem/43388350> ER: Coalesce the string pools for the symbol table when linking objects together
+	entry.set_n_strx(pool->addUnique(symbolName));
 
 	// set n_type
 	uint8_t type = N_SECT;
@@ -414,6 +415,8 @@ void SymbolTableAtom<A>::addGlobal(const ld::Atom* atom, StringPoolAtom* pool)
         desc |= N_NO_DEAD_STRIP;
     if ( (this->_options.outputKind() == Options::kObjectFile) && this->_state.allObjectFilesScatterable && isAltEntry(atom) )
         desc |= N_ALT_ENTRY;
+    if ( (this->_options.outputKind() == Options::kObjectFile) && atom->cold() )
+        desc |= N_COLD_FUNC;
 	if ( (atom->definition() == ld::Atom::definitionRegular) && (atom->combine() == ld::Atom::combineByName) ) {
 		desc |= N_WEAK_DEF;
 		// <rdar://problem/6783167> support auto hidden weak symbols: .weak_def_can_be_hidden
@@ -2074,6 +2077,7 @@ private:
 	void										encodeStubSection(ld::Internal::FinalSection* sect);
 	void										encodeLazyPointerSection(ld::Internal::FinalSection* sect);
 	void										encodeNonLazyPointerSection(ld::Internal::FinalSection* sect);
+	void										encodeTLVPointerSection(ld::Internal::FinalSection* sect);
 	uint32_t									symIndexOfStubAtom(const ld::Atom*);
 	uint32_t									symIndexOfLazyPointerAtom(const ld::Atom*);
 	uint32_t									symIndexOfNonLazyPointerAtom(const ld::Atom*);
@@ -2249,6 +2253,16 @@ void IndirectSymbolTableAtom<A>::encodeNonLazyPointerSection(ld::Internal::Final
 }
 
 template <typename A>
+void IndirectSymbolTableAtom<A>::encodeTLVPointerSection(ld::Internal::FinalSection* sect)
+{
+	sect->indirectSymTabStartIndex = _entries.size();
+	for (std::vector<const ld::Atom*>::iterator ait = sect->atoms.begin(); ait != sect->atoms.end(); ++ait) {
+		_entries.push_back(symIndexOfNonLazyPointerAtom(*ait));
+	}
+}
+
+
+template <typename A>
 void IndirectSymbolTableAtom<A>::encode()
 {
 	// static executables should not have an indirect symbol table, unless PIE
@@ -2278,6 +2292,9 @@ void IndirectSymbolTableAtom<A>::encode()
 				break;
 			case ld::Section::typeNonLazyPointer:
 				this->encodeNonLazyPointerSection(sect);
+				break;
+			case ld::Section::typeTLVPointers:
+				this->encodeTLVPointerSection(sect);
 				break;
 			default:
 				break;

@@ -143,13 +143,13 @@ public:
 	virtual bool							hasWeakExternals() const override final	{ return _hasWeakExports; }
 	virtual bool							deadStrippable() const override final { return _deadStrippable; }
 	virtual bool							hasWeakDefinition(const char* name) const override final;
+    virtual bool                            hasDefinition(const char* name) const override final;
 	virtual bool							hasPublicInstallName() const override final { return _hasPublicInstallName; }
 	virtual bool							allSymbolsAreWeakImported() const override final;
 	virtual bool							installPathVersionSpecific() const override final { return _installPathOverride; }
 	virtual bool							appExtensionSafe() const override final	{ return _appExtensionSafe; };
+    virtual void                            forEachExportedSymbol(void (^handler)(const char* symbolName, bool weakDef)) const override;
 
-
-	bool									wrongOS() const { return _wrongOS; }
 
 private:
 	using pint_t = typename A::P::uint_t;
@@ -183,6 +183,7 @@ private:
 	using NameSet = std::unordered_set<const char*, CStringHash, ld::CStringEquals>;
 
 	std::pair<bool, bool>		hasWeakDefinitionImpl(const char* name) const;
+    bool                        hasDefinitionImpl(const char* name) const;
 	bool						containsOrReExports(const char* name, bool& weakDef, bool& tlv, pint_t& addr) const;
 	void						assertNoReExportCycles(ReExportChain*) const;
 
@@ -206,7 +207,6 @@ protected:
 	std::unique_ptr<ld::Bitcode>		_bitcode;
 	ld::VersionSet                      _platforms;
 	uint8_t								_swiftVersion;
-	bool								_wrongOS;
 	bool								_linkingFlat;
 	bool								_noRexports;
 	bool								_explictReExportFound;
@@ -240,7 +240,6 @@ File<A>::File(const char* path, time_t mTime, ld::File::Ordinal ord, const ld::V
 	  _parentUmbrella(nullptr),
     _platforms(platforms),
 	  _swiftVersion(0),
-	  _wrongOS(false),
 	  _linkingFlat(linkingFlatNamespace),
 	  _noRexports(false),
 	  _explictReExportFound(false),
@@ -275,6 +274,23 @@ std::pair<bool, bool> File<A>::hasWeakDefinitionImpl(const char* name) const
 }
 
 template <typename A>
+bool File<A>::hasDefinitionImpl(const char* name) const
+{
+    const auto pos = _atoms.find(name);
+    if ( pos != this->_atoms.end() )
+        return true;
+
+    // look in re-exported libraries.
+    for (const auto &dep : _dependentDylibs) {
+        if ( dep.reExport ) {
+            if ( dep.dylib->hasDefinitionImpl(name) )
+                return true;
+        }
+    }
+    return false;
+}
+
+template <typename A>
 bool File<A>::hasWeakDefinition(const char* name) const
 {
 	// If we are supposed to ignore this export, then pretend we don't have it.
@@ -282,6 +298,16 @@ bool File<A>::hasWeakDefinition(const char* name) const
 		return false;
 
 	return hasWeakDefinitionImpl(name).second;
+}
+
+template <typename A>
+bool File<A>::hasDefinition(const char* name) const
+{
+    // If we are supposed to ignore this export, then pretend we don't have it.
+    if ( _ignoreExports.count(name) != 0 )
+        return false;
+
+    return hasDefinitionImpl(name);
 }
 
 template <typename A>
@@ -348,6 +374,14 @@ bool File<A>::justInTimeforEachAtom(const char* name, ld::File::AtomHandler& han
 }
 
 template <typename A>
+void File<A>::forEachExportedSymbol(void (^handler)(const char* symbolName, bool weakDef)) const
+{
+    for (const auto& entry : _atoms) {
+        handler(entry.first, entry.second.weakDef);
+    }
+}
+
+template <typename A>
 void File<A>::assertNoReExportCycles(ReExportChain* prev) const
 {
 	// recursively check my re-exported dylibs
@@ -392,7 +426,7 @@ void File<A>::processIndirectLibraries(ld::dylib::File::DylibHandler* handler, b
 					fprintf(stderr, "processIndirectLibraries() parent=%s, child=%s\n", this->installPath(), dep.path);
 				// a LC_REEXPORT_DYLIB, LC_SUB_UMBRELLA or LC_SUB_LIBRARY says we re-export this child
 				dep.dylib = (File<A>*)handler->findDylib(dep.path, this, this->speculativelyLoaded());
-				if ( dep.dylib->hasPublicInstallName() && !dep.dylib->wrongOS() ) {
+				if ( dep.dylib->hasPublicInstallName() ) {
 					// promote this child to be automatically added as a direct dependent if this already is
 					if ( (this->explicitlyLinked() || this->implicitlyLinked()) && (strcmp(dep.path, dep.dylib->installPath()) == 0) ) {
 						if ( log )

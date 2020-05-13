@@ -96,6 +96,7 @@
 #include "stuff/errors.h"
 #include "stuff/allocate.h"
 #include "stuff/guess_short_name.h"
+#include "stuff/write64.h"
 #ifdef LTO_SUPPORT
 #include "stuff/lto.h"
 #include <xar/xar.h>
@@ -540,6 +541,9 @@ void *cookie)
 	process_flags.bss_nsect = NO_SECT;
 	process_flags.nlibs = 0;
 	process_flags.lib_names = NULL;
+
+	llvm_bundle_pointer = NULL;
+	llvm_bundle_size = 0;
 
 	if(ofile->mh == NULL && ofile->mh64 == NULL){
 #ifdef LTO_SUPPORT
@@ -1071,7 +1075,7 @@ struct cmd_flags *cmd_flags)
 	    return;
 
 	xar_fd = mkstemp(xar_filename);
-	if(write(xar_fd, llvm_bundle_pointer, llvm_bundle_size) !=
+	if(write64(xar_fd, llvm_bundle_pointer, llvm_bundle_size) !=
 	        llvm_bundle_size){
 	    if(ofile->xar_member_name != NULL)
 		system_error("Can't write (__LLVM,__bundle) section contents "
@@ -1765,6 +1769,11 @@ char *arch_name)
 	       ((symbols[i].nl.n_type & N_TYPE) != N_UNDF) &&
 	       (symbols[i].nl.n_desc & N_ALT_ENTRY) == N_ALT_ENTRY)
 		    printf("[alt entry] ");
+
+	    if(ofile->mh_filetype == MH_OBJECT &&
+	       ((symbols[i].nl.n_type & N_TYPE) != N_UNDF) &&
+	       (symbols[i].nl.n_desc & N_COLD_FUNC) == N_COLD_FUNC)
+		    printf("[cold func] ");
 
 	    if((symbols[i].nl.n_desc & N_ARM_THUMB_DEF) == N_ARM_THUMB_DEF)
 		    printf("[Thumb] ");

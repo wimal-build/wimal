@@ -173,27 +173,26 @@ sysroot = os.path.join(output, 'sysroot')
 sysroot = os.getenv('WIMAL_SYSROOT', sysroot)
 target = os.path.join(sysroot, 'x64-linux')
 
-apt = Apt('http://apt.llvm.org/focal', 'llvm-toolchain-focal-10', 'amd64')
+apt = Apt('http://apt.llvm.org/trusty', 'llvm-toolchain-trusty-8', 'amd64')
 apt.update(['main'])
 apt.install((
-    'libc++-10-dev',
-    'libc++1-10',
-    'libc++abi-10-dev',
-    'libc++abi1-10'
+    'libc++-8-dev',
+    'libc++abi-8-dev',
 ), target)
 dir_util.copy_tree(
-    os.path.join(target, 'usr', 'lib', 'llvm-10', 'include'),
+    os.path.join(target, 'usr', 'lib', 'llvm-8', 'include'),
     os.path.join(target, 'usr', 'include')
 )
 file_util.copy_file(
-    os.path.join(target, 'usr', 'lib', 'llvm-10', 'lib', 'libc++abi.a'),
+    os.path.join(target, 'usr', 'lib', 'llvm-8', 'lib', 'libc++abi.a'),
     os.path.join(target, 'usr', 'lib', 'libc++abi.a'),
 )
 file_util.copy_file(
-    os.path.join(target, 'usr', 'lib', 'llvm-10', 'lib', 'libc++.a'),
+    os.path.join(target, 'usr', 'lib', 'llvm-8', 'lib', 'libc++.a'),
     os.path.join(target, 'usr', 'lib', 'libc++_static.a'),
 )
-dir_util.remove_tree(os.path.join(target, 'usr', 'lib', 'llvm-10'))
+dir_util.remove_tree(os.path.join(target, 'usr', 'lib', 'llvm-8'))
+dir_util.remove_tree(os.path.join(target, 'usr', 'lib', 'x86_64-linux-gnu'))
 
 file = open(os.path.join(target, 'usr', 'lib', 'libc++.so'), 'w')
 file.write('INPUT(-lc++_static -lc++abi -lpthread)')

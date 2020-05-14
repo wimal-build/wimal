@@ -50,7 +50,7 @@ os.symlink('a64-ios', os.path.join(sysroot, 'arm-ios'))
 os.symlink('x64-ios', os.path.join(sysroot, 'x86-ios'))
 os.symlink('x64-macos', os.path.join(sysroot, 'x86-macos'))
 
-libclang = os.path.join(output, 'lib', 'clang', '8.0.0', 'lib')
+libclang = os.path.join(output, 'lib', 'clang', '10.0.0', 'lib')
 libclang = os.getenv('WIMAL_LIBCLANG', libclang)
 
 copy_clang_rt(libclang)

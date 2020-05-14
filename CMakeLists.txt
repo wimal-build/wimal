@@ -129,6 +129,8 @@ set(
     CACHE STRING
     LLVM_EXTERNAL_CLANG_SOURCE_DIR
 )
+# Disable clang dylib
+set(CLANG_LINK_CLANG_DYLIB OFF CACHE BOOL CLANG_LINK_CLANG_DYLIB)
 
 # Enable lld
 set(LLVM_TOOL_LLD_BUILD ON CACHE BOOL LLVM_TOOL_LLD_BUILD)
@@ -232,7 +234,7 @@ add_custom_target(
     install-dsymutil-stripped
 
     install-clang-stripped
-    install-clang-headers-stripped
+    install-clang-resource-headers-stripped
 
     install-lld-stripped
 )

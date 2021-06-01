@@ -103,7 +103,12 @@ set(
 )
 
 # Include external projects
-set(LLVM_EXTERNAL_PROJECTS wimal CACHE STRING LLVM_EXTERNAL_PROJECTS)
+set(LLVM_EXTERNAL_PROJECTS
+    wimal
+    clang
+    CACHE STRING
+    LLVM_EXTERNAL_PROJECTS
+)
 
 # Enable wimal
 set(
@@ -114,7 +119,7 @@ set(
 )
 
 # Enable clang
-set(LLVM_TOOL_CLANG_BUILD OFF CACHE BOOL LLVM_TOOL_CLANG_BUILD)
+set(LLVM_TOOL_CLANG_BUILD ON CACHE BOOL LLVM_TOOL_CLANG_BUILD)
 set(
     LLVM_EXTERNAL_CLANG_SOURCE_DIR
     "${CMAKE_CURRENT_SOURCE_DIR}/clang"
@@ -185,6 +190,7 @@ add_llvm_install_targets(install-cctools COMPONENT cctools DEPENDS cctools)
 install(
     FILES
     ${CMAKE_BINARY_DIR}/llvm/bin/llvm-tblgen
+    ${CMAKE_BINARY_DIR}/llvm/bin/clang-tblgen
     PERMISSIONS
     OWNER_WRITE
     OWNER_READ GROUP_READ WORLD_READ
@@ -192,7 +198,7 @@ install(
     DESTINATION bin
     COMPONENT tablegen
 )
-add_llvm_install_targets(install-tablegen COMPONENT tablegen DEPENDS llvm-tblgen)
+add_llvm_install_targets(install-tablegen COMPONENT tablegen DEPENDS llvm-tblgen clang-tblgen)
 
 # Fix cross-compiling issues
 execute_process(
@@ -221,4 +227,7 @@ add_custom_target(
     install-llvm-rc-stripped
     install-llvm-symbolizer-stripped
     install-dsymutil-stripped
+
+    install-clang-stripped
+    install-clang-headers-stripped
 )

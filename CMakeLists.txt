@@ -231,6 +231,8 @@ add_custom_target(
     install-llvm-rc-stripped
     install-llvm-symbolizer-stripped
     install-dsymutil-stripped
+    install-llvm-lipo-stripped
+    install-llvm-install-name-tool-stripped
 
     install-clang-stripped
     install-clang-headers-stripped

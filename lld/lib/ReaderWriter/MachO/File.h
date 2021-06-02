@@ -427,6 +427,12 @@ private:
     case MachOLinkingContext::arch_arm64:
       arch = llvm::MachO::AK_arm64;
       break;
+    case MachOLinkingContext::arch_armv7:
+      arch = llvm::MachO::AK_armv7;
+      break;
+    case MachOLinkingContext::arch_armv7s:
+      arch = llvm::MachO::AK_armv7s;
+      break;
     default:
       return std::make_error_code(std::errc::invalid_argument);
     }

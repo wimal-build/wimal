@@ -130,4 +130,6 @@ struct unwind_info_compressed_second_level_page_header {
     uint16_t encodingsCount;
 };
 
+#define UNWIND_INFO_COMPRESSED_ENTRY_FUNC_OFFSET(entry) (entry & 0x00FFFFFF)
+
 #endif // LD64_MACH_O_COMPACT_UNWIND_ENCODING_H_

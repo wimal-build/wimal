@@ -106,6 +106,7 @@ set(
 set(LLVM_EXTERNAL_PROJECTS
     wimal
     clang
+    lld
     CACHE STRING
     LLVM_EXTERNAL_PROJECTS
 )
@@ -130,7 +131,7 @@ set(
 set(CLANG_LINK_CLANG_DYLIB OFF CACHE BOOL CLANG_LINK_CLANG_DYLIB)
 
 # Enable lld
-set(LLVM_TOOL_LLD_BUILD OFF CACHE BOOL LLVM_TOOL_LLD_BUILD)
+set(LLVM_TOOL_LLD_BUILD ON CACHE BOOL LLVM_TOOL_LLD_BUILD)
 set(
     LLVM_EXTERNAL_LLD_SOURCE_DIR
     "${CMAKE_CURRENT_SOURCE_DIR}/lld"
@@ -173,6 +174,9 @@ set(LINKER_SUPPORTS_COLOR_DIAGNOSTICS OFF CACHE BOOL LINKER_SUPPORTS_COLOR_DIAGN
 
 # Add LLVM
 add_subdirectory(llvm)
+
+# Fix missing header "mach-o/compact_unwind_encoding.h"
+target_include_directories(lldMachO2 PRIVATE ld64/port)
 
 # Fix dependencies
 add_dependencies(LLVMSupport zlibstatic)
@@ -230,4 +234,6 @@ add_custom_target(
 
     install-clang-stripped
     install-clang-headers-stripped
+
+    install-lld-stripped
 )

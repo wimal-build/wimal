@@ -10,6 +10,11 @@ void Invoke::Run(const Context *context, std::vector<std::string> extraArgs) {
     std::vector<const char *> arguments;
     arguments.reserve(context->args.size() + extraArgs.size() + 2);
     auto command = context->toolchain / (context->triple + "-" + context->action);
+    if (context->triple.find("darwin") != std::string::npos) {
+        if (context->action == "ld") {
+            command = context->toolchain / (context->triple + "-ld64");
+        }
+    }
     auto filename = command.filename().string();
     arguments.emplace_back(filename.data());
     for (const auto &arg : context->args) {

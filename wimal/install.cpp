@@ -49,8 +49,11 @@ void Install::Run(const Context *context, std::vector<std::string> extraArgs) {
         for (auto &link : llvm) {
             auto src = boost::filesystem::relative(context->bin / link.src, path);
             auto dst = path / (triple + link.dst);
+            if (!strcmp(link.src, "lld") && triple.find("darwin") != std::string::npos) {
+                dst = path / (triple + "-ld64");
+            }
             std::cout << "Linking " << dst << " -> " << src << std::endl;
-            boost::filesystem::create_symlink(src, path / (triple + link.dst), ec);
+            boost::filesystem::create_symlink(src, dst, ec);
         }
     }
 }

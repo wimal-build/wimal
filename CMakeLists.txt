@@ -235,7 +235,7 @@ add_custom_target(
     install-llvm-install-name-tool-stripped
 
     install-clang-stripped
-    install-clang-headers-stripped
+    install-clang-resource-headers-stripped
 
     install-lld-stripped
 )

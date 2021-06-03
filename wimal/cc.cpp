@@ -30,8 +30,7 @@ void Cc::Run(const Context *context, std::vector<std::string> extraArgs) {
         "-cxx-isystem" + (context->sysroot / "usr" / "include" / "c++" / "v1").string(),
         "--prefix", context->toolchain.string(),
         "-Qunused-arguments",
-        "-stdlib=libc++",
-        "-fuse-ld=lld"
+        "-stdlib=libc++"
     };
     // Define the api levels for android and darwin targets.
     switch (context->machine) {
@@ -47,17 +46,14 @@ void Cc::Run(const Context *context, std::vector<std::string> extraArgs) {
             break;
         case Context::MACHINE_X64_MACOS:
             args.emplace_back("-mmacosx-version-min=10.10");
-            args.emplace_back("-Wl,-sdk_version,10.10");
             break;
         case Context::MACHINE_ARM_IOS:
         case Context::MACHINE_A64_IOS:
             args.emplace_back("-miphoneos-version-min=9.0");
-            args.emplace_back("-Wl,-sdk_version,9.0");
             break;
         case Context::MACHINE_X86_IOS:
         case Context::MACHINE_X64_IOS:
             args.emplace_back("-mios-simulator-version-min=9.0");
-            args.emplace_back("-Wl,-sdk_version,9.0");
             break;
         default: {
             break;

@@ -42,10 +42,10 @@ jobs:
   - job: linux
     timeoutInMinutes: 300
     pool:
-      vmImage: 'macOS-latest'
+      vmImage: 'Ubuntu-latest'
     steps:
       - script:
-          brew install yasm nasm ninja automake libtool
+          sudo apt install ninja-build yasm nasm -y
         displayName: 'Installing dependencies'
       - script:
           cmake -E make_directory cmake-build-tablegen cmake-build-azure

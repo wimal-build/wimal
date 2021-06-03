@@ -152,7 +152,7 @@ void InterfaceFile::addParentUmbrella(const Target &target,
                            Target rhs) { return lhs.first < rhs; });
 
   if ((it != _parentUmbrellas.end()) && !(target < it->first)) {
-    it->second = umbrella;
+    it->second = umbrella.str();
     return;
   }
 
@@ -166,7 +166,7 @@ void InterfaceFile::addUUID(const Target &target, StringRef uuid) {
                            Target rhs) { return lhs.first < rhs; });
 
   if ((it != _uuids.end()) && !(target < it->first)) {
-    it->second = uuid;
+    it->second = uuid.str();
     return;
   }
 
@@ -189,7 +189,7 @@ void InterfaceFile::inlineFramework(std::shared_ptr<InterfaceFile> framework) {
   auto addFramework = [&](std::shared_ptr<InterfaceFile> &&framework) {
     auto it = lower_bound(
         _documents, framework->getInstallName(),
-        [](std::shared_ptr<InterfaceFile> &lhs, const std::string &rhs) {
+        [](std::shared_ptr<InterfaceFile> &lhs, const StringRef &rhs) {
           return lhs->getInstallName() < rhs;
         });
 

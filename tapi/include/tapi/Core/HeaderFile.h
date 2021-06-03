@@ -19,6 +19,7 @@
 #include "tapi/Defines.h"
 #include "llvm/ADT/StringRef.h"
 #include <string>
+#include <vector>
 
 TAPI_NAMESPACE_INTERNAL_BEGIN
 

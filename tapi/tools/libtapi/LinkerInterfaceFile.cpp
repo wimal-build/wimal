@@ -140,7 +140,7 @@ public:
     }
 
     if (action == "install_name") {
-      _installName = symbolName;
+      _installName = symbolName.str();
       _installPathOverride = true;
       if (_installName == "/System/Library/Frameworks/"
                           "ApplicationServices.framework/Versions/A/"
@@ -387,7 +387,7 @@ bool LinkerInterfaceFile::Impl::init(
     _platforms.emplace_back(value);
   }
   llvm::sort(_platforms);
-  _installName = interface->getInstallName();
+  _installName = interface->getInstallName().str();
   _currentVersion = interface->getCurrentVersion();
   _compatibilityVersion = interface->getCompatibilityVersion();
   _hasTwoLevelNamespace = interface->isTwoLevelNamespace();

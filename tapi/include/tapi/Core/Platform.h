@@ -38,6 +38,7 @@ enum class Platform : uint8_t {
   iOSSimulator = PLATFORM_IOSSIMULATOR,
   tvOSSimulator = PLATFORM_TVOSSIMULATOR,
   watchOSSimulator = PLATFORM_WATCHOSSIMULATOR,
+  DriverKit = PLATFORM_DRIVERKIT,
 };
 
 using PlatformSet = std::set<Platform>;

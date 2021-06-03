@@ -56,7 +56,7 @@ template <> struct DenseMapInfo<SymbolsMapKey> {
   }
 
   static unsigned getHashValue(const SymbolsMapKey &key) {
-    return combineHashValue(hash_value(key.kind), hash_value(key.name));
+    return detail::combineHashValue(hash_value(key.kind), hash_value(key.name));
   }
 
   static bool isEqual(const SymbolsMapKey &lhs, const SymbolsMapKey &rhs) {

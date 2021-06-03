@@ -164,7 +164,7 @@ public:
       : _symbols(std::move(symbols)) {}
 
   template <typename T> void setPath(T &&path) {
-    _path = std::forward<T &&>(path);
+    _path = (std::string) path;
   }
   const std::string &getPath() const { return _path; }
 
@@ -207,7 +207,7 @@ public:
     return mapToArchitectureSet(_targets);
   }
 
-  void setInstallName(StringRef installName) { _installName = installName; }
+  void setInstallName(StringRef installName) { _installName = installName.str(); }
   StringRef getInstallName() const { return _installName; }
 
   void setCurrentVersion(PackedVersion version) { _currentVersion = version; }

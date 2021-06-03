@@ -160,7 +160,7 @@ const DiagnosticBuilder &operator<<(const DiagnosticBuilder &db,
   for (auto platform : platforms) {
     if (index > 0)
       diagString.append(", ");
-    diagString.append(getPlatformName(platform));
+    diagString.append(getPlatformName(platform).str());
     ++index;
   }
   diagString.append(" ]");

@@ -43,7 +43,7 @@ ObjectFile::createCOFFObjectFile(MemoryBufferRef Object) {
 }
 
 Expected<std::unique_ptr<ObjectFile>>
-ObjectFile::createELFObjectFile(MemoryBufferRef Obj) {
+ObjectFile::createELFObjectFile(MemoryBufferRef Obj, bool) {
   llvm_unreachable("not supported");
 }
 

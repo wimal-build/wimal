@@ -40,7 +40,7 @@ XPI::targets(ArchitectureSet architectures) const {
 
 std::string XPI::getPrettyName(bool demangle) const {
   if (!demangle)
-    return _name;
+    return _name.str();
 
   if (demangle && _name.startswith("__Z")) {
     int status = 0;
@@ -54,9 +54,9 @@ std::string XPI::getPrettyName(bool demangle) const {
   }
 
   if (_name[0] == '_')
-    return _name.substr(1);
+    return _name.substr(1).str();
 
-  return _name;
+  return _name.str();
 }
 
 std::string XPI::getAnnotatedName(bool demangle) const {

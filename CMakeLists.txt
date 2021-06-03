@@ -107,6 +107,7 @@ set(LLVM_EXTERNAL_PROJECTS
     wimal
     clang
     lld
+    tapi
     CACHE STRING
     LLVM_EXTERNAL_PROJECTS
 )

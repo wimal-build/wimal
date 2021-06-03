@@ -160,12 +160,10 @@ static Error readMachOHeader(MachOObjectFile *object, API &api) {
   }
 
   for (auto &section : object->sections()) {
-    StringRef sectionName;
-    section.getName(sectionName);
+    StringRef sectionName = section.getName().get();
     if (sectionName != "__objc_imageinfo" && sectionName != "__image_info")
       continue;
-    StringRef content;
-    section.getContents(content);
+    StringRef content = section.getContents().get();
     if ((content.size() >= 8) && (content[0] == 0)) {
       uint32_t flags;
       if (object->isLittleEndian()) {
@@ -227,15 +225,15 @@ static ObjCPropertyRecord::AttributeKind getAttributeKind(StringRef attr) {
 static Error readUndefinedSymbols(MachOObjectFile *object, API &api) {
   for (const auto &symbol : object->symbols()) {
     auto symbolFlags = symbol.getFlags();
-    if ((symbolFlags & BasicSymbolRef::SF_Global) == 0)
+    if ((*symbolFlags & BasicSymbolRef::SF_Global) == 0)
       continue;
-    if ((symbolFlags & BasicSymbolRef::SF_Undefined) == 0)
+    if ((*symbolFlags & BasicSymbolRef::SF_Undefined) == 0)
       continue;
     auto symbolName = symbol.getName();
     if (!symbolName)
       return symbolName.takeError();
 
-    auto flags = (symbolFlags & BasicSymbolRef::SF_Weak)
+    auto flags = (*symbolFlags & BasicSymbolRef::SF_Weak)
                      ? APIFlags::WeakReferenced
                      : APIFlags::None;
 

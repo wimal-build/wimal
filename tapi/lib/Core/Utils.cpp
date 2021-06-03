@@ -88,10 +88,10 @@ std::string findLibrary(StringRef installName, FileManager &fm,
       SmallString<PATH_MAX> tbdPath = fullPath;
       TAPI_INTERNAL::replace_extension(tbdPath, ".tbd");
       if (fm.exists(tbdPath))
-        return tbdPath.str();
+        return tbdPath.str().str();
 
       if (fm.exists(fullPath))
-        return fullPath.str();
+        return fullPath.str().str();
     }
   } else {
     // Copy ld64's behavior: If this is a .dylib inside a framework, do not
@@ -107,10 +107,10 @@ std::string findLibrary(StringRef installName, FileManager &fm,
         TAPI_INTERNAL::replace_extension(tbdPath, ".tbd");
 
         if (fm.exists(tbdPath))
-          return tbdPath.str();
+          return tbdPath.str().str();
 
         if (fm.exists(fullPath))
-          return fullPath.str();
+          return fullPath.str().str();
       }
     }
   }
@@ -123,10 +123,10 @@ std::string findLibrary(StringRef installName, FileManager &fm,
     TAPI_INTERNAL::replace_extension(tbdPath, ".tbd");
 
     if (fm.exists(tbdPath))
-      return tbdPath.str();
+      return tbdPath.str().str();
 
     if (fm.exists(fullPath))
-      return fullPath.str();
+      return fullPath.str().str();
   }
 
   return std::string();

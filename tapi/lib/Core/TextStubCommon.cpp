@@ -190,16 +190,16 @@ StringRef ScalarTraits<UUID>::input(StringRef scalar, void *c, UUID &value) {
     return "invalid uuid string pair";
 
   value.first = Target{getArchType(arch), Platform::unknown};
-  value.second = uuid;
+  value.second = uuid.str();
   return {};
 }
 QuotingType ScalarTraits<UUID>::mustQuote(StringRef) {
   return QuotingType::Single;
 }
 
-using clang::InputKind;
-void ScalarEnumerationTraits<InputKind::Language>::enumeration(
-    IO &io, InputKind::Language &kind) {
+using InputKind = clang::Language;
+void ScalarEnumerationTraits<clang::Language>::enumeration(
+    IO &io, clang::Language &kind) {
   io.enumCase(kind, "c", InputKind::C);
   io.enumCase(kind, "cxx", InputKind::CXX);
   io.enumCase(kind, "objective-c", InputKind::ObjC);

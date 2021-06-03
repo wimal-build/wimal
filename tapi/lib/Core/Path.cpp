@@ -54,7 +54,7 @@ enumerateFiles(FileManager &fm, StringRef path,
                const std::function<bool(StringRef)> &func) {
   PathSeq files;
   std::error_code ec;
-  auto &fs = *fm.getVirtualFileSystem();
+  auto &fs = fm.getVirtualFileSystem();
   for (llvm::vfs::recursive_directory_iterator i(fs, path, ec), ie; i != ie;
        i.increment(ec)) {
     if (ec)

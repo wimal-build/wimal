@@ -4,8 +4,8 @@ project(ld64)
 
 file(GLOB_RECURSE LD64_SRCS src/ld/*.c src/ld/*.cpp)
 
-set(CMAKE_C_STANDARD 99)
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 
 include(TestBigEndian)
 test_big_endian(IS_BIG_ENDIAN)

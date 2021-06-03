@@ -568,7 +568,7 @@ private:
 		bool					wildCardMatch(const char* pattern, const char* candidate) const;
 		bool					inCharRange(const char*& range, unsigned char c) const;
 
-		NameSet							fRegular;
+		mutable NameSet					fRegular;
 		std::vector<const char*>		fWildCard;
 	};
 

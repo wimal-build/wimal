@@ -94,7 +94,7 @@ int ExpandResponseFiles(int* argc_p, char** argv_p[])
 
   // return the modified values, adding a NULL terminator to the string list
   if (result == EXPAND_COMPLETE) {
-    args.strs = (char**)reallocf(args.strs, sizeof(char*) * (args.nstr + 1));
+    args.strs = (char**)realloc(args.strs, sizeof(char*) * (args.nstr + 1));
     if (!args.strs)
       throwf("reallocf failed");
     args.strs[args.nstr] = NULL;
@@ -382,7 +382,7 @@ static char* get_option(char** buf)
  */
 static void string_list_add(struct string_list* list, const char* str)
 {
-  list->strs = (char**)reallocf(list->strs, sizeof(char*) * (list->nstr + 1));
+  list->strs = (char**)realloc(list->strs, sizeof(char*) * (list->nstr + 1));
   if (!list->strs) {
     throwf("reallocf failed");
   }
@@ -395,7 +395,7 @@ static void string_list_add(struct string_list* list, const char* str)
 static void string_list_add_argv(struct string_list* list, int argc,
 char* argv[])
 {
-  list->strs = (char**)reallocf(list->strs, sizeof(char*) * (list->nstr + argc));
+  list->strs = (char**)realloc(list->strs, sizeof(char*) * (list->nstr + argc));
   if (!list->strs) {
     throwf("reallocf failed");
   }

@@ -108,6 +108,7 @@ set(LLVM_EXTERNAL_PROJECTS
     clang
     lld
     tapi
+    ld64
     CACHE STRING
     LLVM_EXTERNAL_PROJECTS
 )
@@ -239,4 +240,6 @@ add_custom_target(
     install-clang-resource-headers-stripped
 
     install-lld-stripped
+
+    install-ld64-stripped
 )

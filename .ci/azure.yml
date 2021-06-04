@@ -3,6 +3,9 @@ jobs:
     pool:
       vmImage: 'macOS-latest'
     steps:
+      - script:
+          brew install ninja
+        displayName: 'Installing dependencies'
       - task: UsePythonVersion@0
         inputs:
           versionSpec: '3.x'
@@ -15,6 +18,11 @@ jobs:
           scriptSource: 'filePath'
           scriptPath: '$(Build.SourcesDirectory)/sysroot/android.py'
         displayName: 'Create android sysroot'
+      - task: PythonScript@0
+        inputs:
+          scriptSource: 'filePath'
+          scriptPath: '$(Build.SourcesDirectory)/sysroot/linux-prepare.py'
+        displayName: 'Prepare linux sysroot'
       - task: PythonScript@0
         inputs:
           scriptSource: 'filePath'

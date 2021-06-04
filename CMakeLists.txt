@@ -246,4 +246,6 @@ add_custom_target(
     install-lld-stripped
 
     install-ld64-stripped
+
+    install-LTO-stripped
 )

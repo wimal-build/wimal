@@ -1778,7 +1778,11 @@ bool optimize(  const std::vector<const ld::Atom*>&	allAtoms,
 
 }; // namespace lto
 
-static const char *sLTODylib = "@rpath/libLTO.dylib";
+#ifdef __linux__
+static const char *sLTODylib = "libLTO.so";
+#else
+static const char *sLTODylib = "libLTO.dylib";
+#endif
 static std::atomic<bool> sLTOIsLoaded(false);
 
 static void *getHandle() {

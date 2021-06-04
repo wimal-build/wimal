@@ -40,7 +40,8 @@ endif()
 set(LLVM_ENABLE_ZLIB ON CACHE BOOL LLVM_ENABLE_ZLIB)
 set(HAVE_LIBZ_Z 1 CACHE INTERNAL HAVE_LIBZ_Z)
 set(HAVE_ZLIB_H 1 CACHE INTERNAL HAVE_ZLIB_H)
-include_directories($<TARGET_PROPERTY:zlibstatic,INCLUDE_DIRECTORIES>)
+get_target_property(ZLIB_INCLUDE_DIRECTORIES zlibstatic INCLUDE_DIRECTORIES)
+include_directories(${ZLIB_INCLUDE_DIRECTORIES})
 link_directories("${CMAKE_CURRENT_BINARY_DIR}/zlib")
 
 # Add libxml2
@@ -108,7 +109,6 @@ set(LLVM_EXTERNAL_PROJECTS
     lld
     tapi
     ld64
-    cctools
     CACHE STRING
     LLVM_EXTERNAL_PROJECTS
 )
@@ -175,8 +175,14 @@ set(CLANG_BUILD_EXAMPLES OFF CACHE BOOL CLANG_BUILD_EXAMPLES)
 # Disable Z3 resolver
 set(LLVM_ENABLE_Z3_SOLVER OFF CACHE BOOL LLVM_ENABLE_Z3_SOLVER)
 
+# Disable linker color diagnostics
+set(LINKER_SUPPORTS_COLOR_DIAGNOSTICS OFF CACHE BOOL LINKER_SUPPORTS_COLOR_DIAGNOSTICS)
+
 # Add LLVM
 add_subdirectory(llvm)
+
+# Fix missing header "mach-o/compact_unwind_encoding.h"
+target_include_directories(lldMachO2 PRIVATE ld64/port)
 
 # Fix dependencies
 add_dependencies(LLVMSupport zlibstatic)
@@ -190,7 +196,7 @@ add_llvm_install_targets(install-ld64 COMPONENT ld64 DEPENDS ld64)
 # Add install targets for cctools
 add_llvm_install_targets(install-cctools COMPONENT cctools DEPENDS cctools)
 
-# Add install target for llvm-tblgen and clang-tblgen
+# Add install target for llvm-tblgen
 install(
     FILES
     ${CMAKE_BINARY_DIR}/llvm/bin/llvm-tblgen
@@ -215,13 +221,9 @@ add_custom_target(
 
     install-tablegen-stripped
 
-    install-cctools-stripped
-
     install-LLVM-stripped
 
     install-LLVMgold-stripped
-
-    install-ld64-stripped
 
     install-wimal-stripped
 
@@ -235,9 +237,13 @@ add_custom_target(
     install-llvm-rc-stripped
     install-llvm-symbolizer-stripped
     install-dsymutil-stripped
+    install-llvm-lipo-stripped
+    install-llvm-install-name-tool-stripped
 
     install-clang-stripped
     install-clang-resource-headers-stripped
 
     install-lld-stripped
+
+    install-ld64-stripped
 )

@@ -50,7 +50,7 @@ Architecture ArchitectureSet::getABICompatibleSlice(Architecture arch) const {
       return arch2;
   }
 
-  return Architecture::unknown;
+  return AK_unknown;
 }
 
 ArchitectureSet::operator std::string() const {
@@ -60,7 +60,7 @@ ArchitectureSet::operator std::string() const {
   std::string result;
   auto size = count();
   for (auto arch : *this) {
-    result.append(getArchName(arch));
+    result.append(getArchName(arch).str());
     size -= 1;
     if (size)
       result.append(" ");
@@ -71,7 +71,7 @@ ArchitectureSet::operator std::string() const {
 ArchitectureSet::operator std::vector<Architecture>() const {
   std::vector<Architecture> archs;
   for (auto arch : *this) {
-    if (arch == Architecture::unknown)
+    if (arch == AK_unknown)
       continue;
     archs.emplace_back(arch);
   }
@@ -91,7 +91,7 @@ const DiagnosticBuilder &operator<<(const DiagnosticBuilder &db,
   return db;
 }
 
-ArchitectureSet mapToArchitectureSet(const std::vector<Triple> &targets) {
+ArchitectureSet mapToArchitectureSet(ArrayRef<Triple> targets) {
   ArchitectureSet result;
   for (const auto &target : targets)
     result |= getArchType(target.getArchName());

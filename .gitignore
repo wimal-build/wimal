@@ -55,6 +55,14 @@ out/
 /lld/test/
 /lld/unittests/
 
+### libcxx
+# libcxx tests
+/libcxx/test/
+
+### libcxxabi
+# libcxxabi tests
+/libcxxabi/test/
+
 ### Sysroot
 # Generated sysroot
 /sysroot/output

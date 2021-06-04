@@ -9,7 +9,7 @@ namespace wimal {
 void Invoke::Run(const Context *context, std::vector<std::string> extraArgs) {
     std::vector<const char *> arguments;
     arguments.reserve(context->args.size() + extraArgs.size() + 2);
-    auto command = context->toolchain / (context->triple + "-" + context->action);
+    auto command = context->toolchain / context->action;
     auto filename = command.filename().string();
     arguments.emplace_back(filename.data());
     for (const auto &arg : context->args) {

@@ -35,6 +35,7 @@ include_directories(port include)
 add_library(
     stuff
 
+    libstuff/align.c
     libstuff/allocate.c
     libstuff/apple_version.c
     libstuff/arch.c
@@ -46,6 +47,8 @@ add_library(
     libstuff/checkout.c
     libstuff/coff_bytesex.c
     libstuff/crc32.c
+    libstuff/depinfo.c
+    libstuff/diagnostics.c
     libstuff/errors.c
     libstuff/execute.c
     libstuff/fatal_arch.c
@@ -67,6 +70,7 @@ add_library(
     libstuff/version_number.c
     libstuff/write64.c
     libstuff/writeout.c
+    libstuff/xcode.c
 
     # Use cpp for symbol __cxa_demangle
     port/port.cpp
@@ -122,32 +126,6 @@ target_link_libraries(apple-ranlib stuff)
 add_executable(apple-install_name_tool misc/install_name_tool.c)
 target_link_libraries(apple-install_name_tool stuff)
 
-# otool
-add_executable(
-    apple-otool
-    otool/arm64_disasm.c
-    otool/arm_disasm.c
-    otool/coff_print.c
-    otool/dyld_bind_info.c
-    otool/hppa_disasm.c
-    otool/i386_disasm.c
-    otool/i860_disasm.c
-    otool/m68k_disasm.c
-    otool/m88k_disasm.c
-    otool/main.c
-    otool/notify.c
-    otool/ofile_print.c
-    otool/ppc_disasm.c
-    otool/print_bitcode.c
-    otool/print_objc.c
-    otool/print_objc2_32bit.c
-    otool/print_objc2_64bit.c
-    otool/sparc_disasm.c
-)
-target_include_directories(apple-otool BEFORE PRIVATE port)
-target_compile_definitions(apple-otool PRIVATE STATIC_LLVM __DYNAMIC__)
-target_link_libraries(apple-otool stuff LLVMMCDisassembler)
-
 # install
 add_custom_target(
     cctools DEPENDS
@@ -157,7 +135,6 @@ add_custom_target(
     apple-nm
     apple-ranlib
     apple-install_name_tool
-    apple-otool
 )
 install(
     TARGETS
@@ -167,7 +144,6 @@ install(
     apple-nm
     apple-ranlib
     apple-install_name_tool
-    apple-otool
     DESTINATION bin
     COMPONENT cctools
 )

@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.0)
 
+project(wimal-build)
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # Suppress warnings of policy CMP0042
@@ -109,6 +111,7 @@ set(LLVM_EXTERNAL_PROJECTS
     lld
     tapi
     ld64
+    cctools
     CACHE STRING
     LLVM_EXTERNAL_PROJECTS
 )
@@ -248,4 +251,6 @@ add_custom_target(
     install-ld64-stripped
 
     install-LTO-stripped
+
+    install-cctools-stripped
 )

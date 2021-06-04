@@ -19,4 +19,9 @@
                 (((uint64_t)(x) & 0x0000000000ff0000ULL) << 24) | \
                 (((uint64_t)(x) & 0x000000000000ff00ULL) << 40) | \
                 (((uint64_t)(x) & 0x00000000000000ffULL) << 56)))
+
+#define _OSSwapInt16(x) OSSwapInt16(x)
+#define _OSSwapInt32(x) OSSwapInt32(x)
+#define _OSSwapInt64(x) OSSwapInt64(x)
+
 #endif // __APPLE__

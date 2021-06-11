@@ -61,6 +61,9 @@ add_subdirectory(xar)
 # Add uuid
 add_subdirectory(uuid)
 
+# Disable terminfo
+set(LLVM_ENABLE_TERMINFO OFF CACHE BOOL LLVM_ENABLE_TERMINFO)
+
 # Necessary for ld64
 set(LLVM_ENABLE_EH ON CACHE BOOL LLVM_ENABLE_EH)
 set(LLVM_ENABLE_RTTI ON CACHE BOOL LLVM_ENABLE_RTTI)

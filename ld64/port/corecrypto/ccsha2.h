@@ -15,7 +15,7 @@ static void ccsha256_update(struct ccdigest_ctx *ctx_, size_t size, const void *
 
 static void ccsha256_final(struct ccdigest_ctx *ctx_, void *digest) {
     SHA256_CTX *ctx = (SHA256_CTX *)ctx_;
-    SHA256_Final(ctx, digest);
+    SHA256_Final(digest, ctx);
 }
 
 static const struct ccdigest_info ccsha256_info = {

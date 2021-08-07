@@ -230,7 +230,7 @@ bool File::justInTimeforEachAtom(const char* name, ld::File::AtomHandler& handle
     return false;
 }
 
-void File::forEachExportedSymbol(void (^handler)(const char* symbolName, bool weakDef)) const
+void File::forEachExportedSymbol(std::function<void(const char* symbolName, bool weakDef)> handler) const
 {
     for (const auto& entry : _atoms) {
         handler(entry.first, entry.second.weakDef);
@@ -267,9 +267,9 @@ void File::addExportedSymbol(const char *name, bool weakDef, bool tlv, uint64_t 
         const char* symAction = &name[4];
         // $ld$previous$/tmp/vers0.dylib$$1$10.0$10.4$_testSymbol$
         if (symAction != nullptr && strncmp(symAction, "previous$", 9) == 0) {
-            __block uint32_t linkMinOSVersion = 0;
-            __block ld::Platform linkPlatform = ld::Platform::unknown;
-            this->platforms().forEach(^(ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
+            uint32_t linkMinOSVersion = 0;
+            ld::Platform linkPlatform = ld::Platform::unknown;
+            this->platforms().forEach([&](ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
                 //FIXME hack to handle symbol versioning in a zippered world.
                 //This will need to be rethought
                 if (linkMinOSVersion == 0) {

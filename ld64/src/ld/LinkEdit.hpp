@@ -1305,12 +1305,12 @@ void ChainedInfoAtom<A>::encode() const
 	}
 
 	// build imports and symbol table
-	__block std::vector<dyld_chained_import>  		  imports;
-	__block std::vector<dyld_chained_import_addend>   importsAddend;
-	__block std::vector<dyld_chained_import_addend64> importsAddend64;
-	__block std::vector<char>                		  stringPool;
+	std::vector<dyld_chained_import>  		  imports;
+	std::vector<dyld_chained_import_addend>   importsAddend;
+	std::vector<dyld_chained_import_addend64> importsAddend64;
+	std::vector<char>                		  stringPool;
 	stringPool.push_back('\0');
-	_writer._chainedFixupBinds.forEachBind(^(unsigned int bindOrdinal, const ld::Atom* importAtom, uint64_t addend) {
+	_writer._chainedFixupBinds.forEachBind([&](unsigned int bindOrdinal, const ld::Atom* importAtom, uint64_t addend) {
 		uint32_t libOrdinal;
 		uint64_t tempAddend = addend;
 		bool isBind = _writer.needsBind(importAtom, false, &tempAddend, nullptr, nullptr, &libOrdinal);
@@ -2238,9 +2238,9 @@ void CodeSignatureAtom::encode() const
 	_sigRef = libcd_create(inBbufferSize);
 
 	// figure out which hashes to use
-	__block ld::Platform sig_platform = ld::Platform::unknown;
-	__block uint32_t     sig_min_version;
-	_opts.platforms().forEach(^(ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool& stop) {
+	ld::Platform sig_platform = ld::Platform::unknown;
+	uint32_t     sig_min_version;
+	_opts.platforms().forEach([&](ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool& stop) {
 		switch ( platform ) {
 		case Platform::unknown:
 		case Platform::freestanding:

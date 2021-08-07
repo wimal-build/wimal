@@ -27,6 +27,7 @@
 
 #include <mach-o/loader.h>
 
+#include <functional>
 #include <set>
 
 namespace ld {
@@ -76,7 +77,7 @@ struct PlatformInfo
 
 const PlatformInfo& platformInfo(Platform platform);
 
-void forEachSupportedPlatform(void (^handler)(const PlatformInfo& info, bool& stop));
+void forEachSupportedPlatform(std::function<void(const PlatformInfo& info, bool& stop)> handler);
 
 Platform      platformForLoadCommand(uint32_t lc, const mach_header* mh);
 Platform      platformFromBuildVersion(uint32_t plat, const mach_header* mh);

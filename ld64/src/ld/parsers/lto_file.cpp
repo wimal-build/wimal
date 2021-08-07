@@ -107,7 +107,7 @@ public:
 																					{ return _debugInfoModTime; }
 	const std::vector<ld::relocatable::File::Stab>*	stabs()	const override			{ return NULL; }
 	bool										canScatterAtoms() const override		{ return true; }
-	void										forEachLtoSymbol(void (^handler)(const char*)) const override;
+	void										forEachLtoSymbol(std::function<void(const char*)> handler) const override;
 	LinkerOptionsList*							linkerOptions() const override		{ return NULL; }
 	const ToolVersionList&						toolVersions() const override		{ return _toolVersions; }
 	bool												isThinLTO() const			{ return _isThinLTO; }
@@ -525,7 +525,7 @@ File::~File()
 }
 
 // this is only called when generating a text map file, to better detail where code came from
-void File::forEachLtoSymbol(void (^handler)(const char*)) const
+void File::forEachLtoSymbol(std::function<void(const char*)> handler) const
 {
 #if LTO_API_VERSION >= 11
 	if ( lto_module_t module = ::lto_module_create_in_local_context(_content, _contentLength, _path) ) {

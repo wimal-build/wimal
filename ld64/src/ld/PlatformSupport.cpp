@@ -76,8 +76,8 @@ static void versionToString(uint32_t value, char buffer[32])
 void VersionSet::checkObjectCrosslink(const VersionSet& objectPlatforms, const std::string& targetPath, bool internalSDK,
                                       bool bitcode, bool platformMismatchesAreWarning) const {
     // Check platform cross-linking.
-    __block bool warned = false;
-    forEach(^(ld::Platform cmdLinePlatform, uint32_t cmdLineMinVersion, uint32_t cmdLineSDKVersion, bool& stop) {
+    bool warned = false;
+    forEach([&](ld::Platform cmdLinePlatform, uint32_t cmdLineMinVersion, uint32_t cmdLineSDKVersion, bool& stop) {
         // <rdar://50990574> if .o file is old and has no platform specified, don't complain (unless building for iOSMac)
         if ( objectPlatforms.empty() && !contains(ld::Platform::iOSMac))
             return;
@@ -146,8 +146,8 @@ void VersionSet::checkDylibCrosslink(const VersionSet& dylibPlatforms, const std
                                      bool bitcode, bool isUnzipperedTwin, const char* installName, bool fromSDK,
                                      bool platformMismatchesAreWarning) const {
     // Check platform cross-linking.
-    __block bool warned = false;
-    forEach(^(ld::Platform cmdLinePlatform, uint32_t cmdLineMinVersion, uint32_t cmdLineSDKVersion, bool& stop) {
+    bool warned = false;
+    forEach([&](ld::Platform cmdLinePlatform, uint32_t cmdLineMinVersion, uint32_t cmdLineSDKVersion, bool& stop) {
         // <rdar://51768462> if dylib is old and has no platform specified, don't complain (unless building for iOSMac)
         if ( dylibPlatforms.empty() && !contains(ld::Platform::iOSMac))
             return;
@@ -241,7 +241,7 @@ const PlatformInfo& platformInfo(Platform platform)
     return sAllSupportedPlatforms[0];
 }
 
-void forEachSupportedPlatform(void (^handler)(const PlatformInfo& info, bool& stop))
+void forEachSupportedPlatform(std::function<void(const PlatformInfo& info, bool& stop)> handler)
 {
     bool stop = false;
     for (const PlatformInfo& info : sAllSupportedPlatforms) {

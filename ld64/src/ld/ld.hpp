@@ -103,7 +103,7 @@ public:
 	size_t empty() const { return _versions.empty(); }
 	void   clear() { _versions.clear(); }
 
-	void forEach(void (^callback)(ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop)) const {
+	void forEach(std::function<void(ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop)> callback) const {
 		bool stop = false;
 		for (const auto& version : _versions) {
 			callback(version.platform, version.minVersion, version.sdkVersion, stop);
@@ -120,8 +120,8 @@ public:
 	}
 
 	bool contains(const ld::PlatformSet& platforms) const {
-		__block bool retval = true;
-		forEach(^(ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
+		bool retval = true;
+		forEach([&](ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
 			if (platforms.find(platform) == platforms.end()) {
 				stop = true;
 				retval = false;
@@ -144,8 +144,8 @@ public:
 	}
 
 	bool minOS(const ld::VersionSet& requiredMinVersions) const {
-		__block bool retval = true;
-		forEach(^(ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
+		bool retval = true;
+		forEach([&](ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
 			if (!requiredMinVersions.contains(basePlatform(platform)))
 				return;
 			if (minVersion < requiredMinVersions.minOS(basePlatform(platform))) {
@@ -167,7 +167,7 @@ public:
 			}
 		};
 
-		forEach(^(ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
+		forEach([&](ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
 			appendPlatform(nameFromPlatform(platform));
 		});
 
@@ -444,7 +444,7 @@ namespace relocatable {
 		virtual SourceKind					sourceKind() const { return kSourceUnknown; }
 		virtual const uint8_t*				fileContent() const { return nullptr; }
 		virtual const std::vector<AstTimeAndPath>*	astFiles() const { return nullptr; }
-		virtual void						forEachLtoSymbol(void (^handler)(const char*)) const { }
+		virtual void						forEachLtoSymbol(std::function<void (const char*)> handler) const { }
 	};
 } // namespace relocatable
 
@@ -510,7 +510,7 @@ namespace dylib {
 		virtual bool						allSymbolsAreWeakImported() const = 0;
 		virtual bool						installPathVersionSpecific() const { return false; }
 		virtual bool						appExtensionSafe() const = 0;
-		virtual void						forEachExportedSymbol(void (^handler)(const char* symbolName, bool weakDef)) const = 0;
+		virtual void						forEachExportedSymbol(std::function<void(const char* symbolName, bool weakDef)> handler) const = 0;
 		virtual bool						hasReExportedDependentsThatProvidedExportAtom() const { return false; }
 		virtual bool						isUnzipperedTwin() const { return false; }
 

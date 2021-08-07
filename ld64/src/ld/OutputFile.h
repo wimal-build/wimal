@@ -320,7 +320,7 @@ private:
 		bool  	 hasLargeAddends() const;
 		bool     hasHugeAddends() const;
 		bool	 hasHugeSymbolStrings() const;
-		void	 forEachBind(void (^callback)(unsigned bindOrdinal, const ld::Atom* importAtom, uint64_t addend));
+		void	 forEachBind(std::function<void(unsigned bindOrdinal, const ld::Atom* importAtom, uint64_t addend)> callback);
 		uint32_t ordinal(const ld::Atom* atom, uint64_t addend) const;
 		void	 setMaxRebase(uint64_t max) { _maxRebase = max; }
 		uint64_t maxRebase() const { return _maxRebase; }

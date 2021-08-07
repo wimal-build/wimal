@@ -707,7 +707,7 @@ bool isArchiveFile(const uint8_t* fileContent, uint64_t fileLength, ld::Platform
 			cpu_subtype_t 	subtype;
 			ld::VersionSet	platformsFound;
 			if ( mach_o::relocatable::isObjectFile(p->content(), p->contentSize(), &type, &subtype, platformsFound) ) {
-				platformsFound.forEach(^(ld::Platform aPlat, uint32_t minVersion, uint32_t sdkVersion, bool& stop) {
+				platformsFound.forEach([&](ld::Platform aPlat, uint32_t minVersion, uint32_t sdkVersion, bool& stop) {
 					*platform = aPlat;
 				});
 				return true;

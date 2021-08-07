@@ -394,7 +394,7 @@ void Resolver::doFile(const ld::File& file)
 				}
 				else if (objFile->sourceKind() != ld::relocatable::File::kSourceLTO  ) {
 					// No bitcode section, figure out if the object file comes from LTO/compiler static library
-					_options.platforms().forEach(^(ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
+					_options.platforms().forEach([&](ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
 						if ( platformInfo(platform).supportsEmbeddedBitcode ) {
 							throwf("'%s' does not contain bitcode. "
 								   "You must rebuild it with bitcode enabled (Xcode setting ENABLE_BITCODE), obtain an updated library from the vendor, or disable bitcode for this target.", file.path());
@@ -584,7 +584,7 @@ void Resolver::doFile(const ld::File& file)
 				if ( realpath(tempPath, tcLibPath) == NULL ||
 					 realpath(dylibFile->path(), tempPath) == NULL ||
 					 strncmp(tcLibPath, tempPath, strlen(tcLibPath)) != 0 ) {
-					_options.platforms().forEach(^(ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
+					_options.platforms().forEach([&](ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
 						if ( platformInfo(platform).supportsEmbeddedBitcode ) {
 							throwf("'%s' does not contain bitcode. "
 								   "You must rebuild it with bitcode enabled (Xcode setting ENABLE_BITCODE), obtain an updated library from the vendor, or disable bitcode for this target.", file.path());

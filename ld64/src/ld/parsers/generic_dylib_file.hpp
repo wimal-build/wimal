@@ -128,7 +128,7 @@ public:
 	virtual bool							allSymbolsAreWeakImported() const override final;
 	virtual bool							installPathVersionSpecific() const override final { return _installPathOverride; }
 	virtual bool							appExtensionSafe() const override final	{ return _appExtensionSafe; };
-    virtual void                            forEachExportedSymbol(void (^handler)(const char* symbolName, bool weakDef)) const override;
+    virtual void                            forEachExportedSymbol(std::function<void(const char* symbolName, bool weakDef)> handler) const override;
     virtual bool						    isUnzipperedTwin() const override { return _isUnzipperedTwin; }
     File*                                   createSyntheticDylib(const char* insstallName, uint32_t version) const;
     void                                    addExportedSymbol(const ExportAtom*);

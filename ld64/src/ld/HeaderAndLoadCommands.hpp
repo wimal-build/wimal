@@ -405,7 +405,7 @@ void HeaderAndLoadCommandsAtom<A>::symbolTableCmdInfo(uint64_t &offset, uint64_t
 template <typename A>
 uint64_t HeaderAndLoadCommandsAtom<A>::size() const
 {
-	__block uint32_t sz = sizeof(macho_header<P>);
+	uint32_t sz = sizeof(macho_header<P>);
 	
 	sz += sizeof(macho_segment_command<P>) * this->segmentCount();
 	sz += sizeof(macho_section<P>) * this->nonHiddenSectionCount();
@@ -439,7 +439,7 @@ uint64_t HeaderAndLoadCommandsAtom<A>::size() const
 
 	if ( _hasVersionLoadCommand ) {
 		if ( _hasVersionLoadCommand ) {
-			_options.platforms().forEach(^(ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
+			_options.platforms().forEach([&](ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
 				if (_options.shouldUseBuildVersion(platform, minVersion)) {
 					sz += alignedSize(sizeof(macho_build_version_command<P>) + sizeof(macho_build_tool_version<P>)*_toolsVersions.size());
 				} else {
@@ -1659,7 +1659,7 @@ void HeaderAndLoadCommandsAtom<A>::copyRawContent(uint8_t buffer[]) const
 	mh->set_flags(this->flags());
 
 	// copy load commands
-	__block uint8_t* p = &buffer[sizeof(macho_header<P>)];
+	uint8_t* p = &buffer[sizeof(macho_header<P>)];
 	
 	if ( _options.outputKind() == Options::kObjectFile )
 		p = this->copySingleSegmentLoadCommand(p);
@@ -1694,7 +1694,7 @@ void HeaderAndLoadCommandsAtom<A>::copyRawContent(uint8_t buffer[]) const
 		p = this->copyUUIDLoadCommand(p);
 
 	if ( _hasVersionLoadCommand ) {
-		_options.platforms().forEach(^(ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
+		_options.platforms().forEach([&](ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
 			if (_options.shouldUseBuildVersion(platform, minVersion)) {
 				p = this->copyBuildVersionLoadCommand(p, platform, minVersion, sdkVersion);
 			} else {

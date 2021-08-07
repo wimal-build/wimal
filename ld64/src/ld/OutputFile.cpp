@@ -4851,7 +4851,7 @@ void OutputFile::buildDylibOrdinalMapping(ld::Internal& state)
 	}
 
 	// look at each dylib supplied in state
-	__block std::unordered_map<const char*, ld::dylib::File*, CStringHash, CStringEquals> allReExports;
+	std::unordered_map<const char*, ld::dylib::File*, CStringHash, CStringEquals> allReExports;
 	bool hasReExports = false;
 	for (std::vector<ld::dylib::File*>::iterator it = dylibs.begin(); it != dylibs.end(); ++it) {
 		ld::dylib::File* aDylib = *it;
@@ -4874,7 +4874,7 @@ void OutputFile::buildDylibOrdinalMapping(ld::Internal& state)
 		}
 		if ( aDylib->explicitlyLinked() && aDylib->willBeReExported() ) {
 			hasReExports = true;
-			aDylib->forEachExportedSymbol(^(const char* symbolName, bool weakDef) {
+			aDylib->forEachExportedSymbol([&](const char* symbolName, bool weakDef) {
 				// <rdar://problem/52457393> don't warn about duplicate weak-def re-exports
 				if ( weakDef )
 					return;
@@ -6705,9 +6705,9 @@ void OutputFile::writeMapFile(ld::Internal& state)
 				}
 			}
 			// for LTO build map of symbols back to original .o file
-			__block std::map<std::string, const ld::File*> ltoSymbolsMap;
+			std::map<std::string, const ld::File*> ltoSymbolsMap;
 			for (const ld::relocatable::File* ltoFile : state.filesForLTO) {
-				ltoFile->forEachLtoSymbol(^(const char* symName) {
+				ltoFile->forEachLtoSymbol([&](const char* symName) {
 					auto pos = ltoSymbolsMap.find(symName);
 					if ( pos == ltoSymbolsMap.end() ) {
 						ltoSymbolsMap[symName] = ltoFile;
@@ -7457,7 +7457,7 @@ bool OutputFile::ChainedFixupBinds::hasHugeSymbolStrings() const
 	return ( totalStringSize >= 0x00800000);
 }
 
-void OutputFile::ChainedFixupBinds::forEachBind(void (^callback)(unsigned bindOrdinal, const ld::Atom* importAtom, uint64_t addend))
+void OutputFile::ChainedFixupBinds::forEachBind(std::function<void(unsigned bindOrdinal, const ld::Atom* importAtom, uint64_t addend)> callback)
 {
 	unsigned index = 0;
 	for (const AtomAndAddend& entry : _bindsTargets) {

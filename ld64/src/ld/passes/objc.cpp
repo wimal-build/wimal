@@ -1683,7 +1683,7 @@ CategoryNameAtom<A>::CategoryNameAtom(ld::Internal& state, const std::vector<con
 
 template <typename A>
 static void forEachMethod(ld::Internal& state, const ld::Atom* categoryMethodListAtom,
-						  void (^callback)(const MethodEntryInfo& method))
+						  std::function<void(const MethodEntryInfo& method)> callback)
 {
 	const uint32_t count 			= MethodList<A>::count(state, categoryMethodListAtom);
 	const uint32_t entrySize 		= MethodList<A>::elementSize(state, categoryMethodListAtom);
@@ -1802,15 +1802,15 @@ MethodListAtom<A>::MethodListAtom(ld::Internal& state, const ld::Atom* baseMetho
 			symbolTableIn, false, false, false, ld::Atom::Alignment(3)), _file(NULL), _methodCount(0), _listFormat(kind), _listUse(use)
 {
 	static const bool log = false;
-	__block CStringSet baseMethodListMethodNames;
-	__block CStringSet categoryMethodNames;
-	__block std::vector<const ld::Atom*> reverseMethodLists;
+	CStringSet baseMethodListMethodNames;
+	CStringSet categoryMethodNames;
+	std::vector<const ld::Atom*> reverseMethodLists;
 	if ( baseMethodList != NULL ) {
 		// if base class has method list, then associate new method list with file defining class
 		_file = baseMethodList->file();
 		reverseMethodLists.push_back(baseMethodList);
 		deadAtoms.insert(baseMethodList);
-		forEachMethod<A>(state, baseMethodList,^(const MethodEntryInfo& method) {
+		forEachMethod<A>(state, baseMethodList,[&](const MethodEntryInfo& method) {
 			baseMethodListMethodNames.insert(method.methodName);
 			++_methodCount;
 			if (log) fprintf(stderr, "base:     '%s'\n", method.methodName);
@@ -1874,7 +1874,7 @@ MethodListAtom<A>::MethodListAtom(ld::Internal& state, const ld::Atom* baseMetho
 					break;
 			}
 			if ( methodListAtom != nullptr ) {
-				forEachMethod<A>(state, methodListAtom,^(const MethodEntryInfo& method) {
+				forEachMethod<A>(state, methodListAtom,[&](const MethodEntryInfo& method) {
 					++_methodCount;
 					if ( baseMethodListMethodNames.count(method.methodName) != 0 ) {
 						warning("method '%s%s' in category from %s overrides method from class in %s",
@@ -1900,10 +1900,10 @@ MethodListAtom<A>::MethodListAtom(ld::Internal& state, const ld::Atom* baseMetho
 	if (log) fprintf(stderr, "total method count in merged list %u\n\n", _methodCount);
 	
 	// build fixups for merged method list (in reverse order to match what objc runtime would do)
-	__block uint32_t methodIndex = 0;
+	uint32_t methodIndex = 0;
 	while ( !reverseMethodLists.empty() ) {
 		const ld::Atom* methodList = reverseMethodLists.back();
-		forEachMethod<A>(state, methodList,^(const MethodEntryInfo& method) {
+		forEachMethod<A>(state, methodList,[&](const MethodEntryInfo& method) {
 			appendMethod(methodIndex, method, state, selectorNameToSlot);
 			++methodIndex;
 		});

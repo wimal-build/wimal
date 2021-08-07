@@ -89,7 +89,7 @@ private:
 
     friend class SnapshotArchiveFileLog;
     
-    typedef std::vector<void(^)(void)> SnapshotLog;    
+    typedef std::vector<std::function<void(void)>> SnapshotLog;    
 
     struct strcompclass {
         bool operator() (const char *a, const char *b) const { return ::strcmp(a, b) < 0; }

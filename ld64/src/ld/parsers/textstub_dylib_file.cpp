@@ -151,9 +151,9 @@ File<A>::File(const char* path, const uint8_t* fileContent, uint64_t fileLength,
 {
 	std::unique_ptr<tapi::LinkerInterfaceFile> file;
 	std::string errorMessage;
-	__block uint32_t linkMinOSVersion = 0;
+	uint32_t linkMinOSVersion = 0;
 	//FIXME handle this correctly once we have multi-platfrom TAPI
-	platforms.forEach(^(ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
+	platforms.forEach([&](ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
 		if (linkMinOSVersion == 0)
 			linkMinOSVersion = minVersion;
 		if (platform == ld::Platform::macOS)

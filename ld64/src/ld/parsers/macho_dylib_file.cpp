@@ -454,10 +454,10 @@ void File<A>::buildExportHashTableFromExportInfo(uint32_t exportsOffset, uint32_
 template <typename A>
 void File<A>::addSymbol(const char* name, bool weakDef, bool tlv, pint_t address)
 {
-	__block uint32_t linkMinOSVersion = 0;
-	__block ld::Platform linkPlatform = ld::Platform::unknown;
+	uint32_t linkMinOSVersion = 0;
+	ld::Platform linkPlatform = ld::Platform::unknown;
 
-	this->platforms().forEach(^(ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
+	this->platforms().forEach([&](ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
 		//FIXME hack to handle symbol versioning in a zippered world.
 		//This will need to be rethought
 		if (linkMinOSVersion == 0) {

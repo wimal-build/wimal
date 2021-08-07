@@ -1094,9 +1094,9 @@ tapi::LinkerInterfaceFile* Options::findTAPIFile(const std::string &path) const
 	if (!allowWeakImports())
 		flags |= tapi::ParsingFlags::DisallowWeakImports;
 
-	__block uint32_t linkMinOSVersion = 0;
+	uint32_t linkMinOSVersion = 0;
 	//FIXME handle this correctly once we have multi-platform TAPI.
-	platforms().forEach(^(ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
+	platforms().forEach([&](ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
 		if (linkMinOSVersion == 0)
 			linkMinOSVersion = minVersion;
 		if (platform == ld::Platform::macOS)
@@ -2266,7 +2266,7 @@ std::string Options::getSDKVersionStr() const
 		}
 	};
 
-	platforms().forEach(^(ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
+	platforms().forEach([&](ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
 		appendString(getVersionString32(sdkVersion));
 	});
 
@@ -2275,7 +2275,7 @@ std::string Options::getSDKVersionStr() const
 
 std::vector<std::string> Options::writeBitcodeLinkOptions() const
 {
-	__block std::vector<std::string> linkCommand;
+	std::vector<std::string> linkCommand;
 	switch ( fOutputKind ) {
 		case Options::kDynamicLibrary:
 			linkCommand.push_back("-dylib");
@@ -2308,7 +2308,7 @@ std::vector<std::string> Options::writeBitcodeLinkOptions() const
 	// Add deployment target.
 	// Platform is allowed to be unknown for "ld -r".
 
-	platforms().forEach(^(ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
+	platforms().forEach([&](ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
 		std::string platName = nameFromPlatform(platform);
 		std::transform(platName.begin(), platName.end(), platName.begin(), [](unsigned char c) -> unsigned char {
 			if (c == ' ') return '-';
@@ -2391,8 +2391,8 @@ const char* Options::checkForNullVersionArgument(const char* argument_name, cons
 
 static const ld::PlatformInfo* isPlatformOption(const char* arg)
 {
-	__block const ld::PlatformInfo* result = nullptr;
-	forEachSupportedPlatform(^(const ld::PlatformInfo& info, bool& stop) {
+	const ld::PlatformInfo* result = nullptr;
+	ld::forEachSupportedPlatform([&](const ld::PlatformInfo& info, bool& stop) {
 		if ( strcmp(arg, info.commandLineArg) == 0 ) {
 			result = &info;
 			stop = true;
@@ -2599,10 +2599,10 @@ void Options::parse(int argc, const char* argv[])
 				}
 				catch (const char* message) {
 					// see if this is a Csu .o file only need for when targeting old OS versions
-					__block bool 					isPreMinOS = false;
-					__block ld::Platform 			thisPlatform = ld::Platform::unknown;
-					__block uint32_t				thisPlatformMinOS = 0;
-					fPlatforms.forEach(^(ld::Platform aPlatform, uint32_t minVersion, uint32_t sdkVersion, bool& stop) {
+					bool 					isPreMinOS = false;
+					ld::Platform 			thisPlatform = ld::Platform::unknown;
+					uint32_t				thisPlatformMinOS = 0;
+					fPlatforms.forEach([&](ld::Platform aPlatform, uint32_t minVersion, uint32_t sdkVersion, bool& stop) {
 						const ld::PlatformInfo& info = platformInfo(aPlatform);
 						if ( minVersion < info.minimumOsVersion ) {
 							isPreMinOS 		  = true;
@@ -4620,7 +4620,7 @@ void Options::reconfigureDefaults()
 			warning("No platform min-version specified on command line");
 
 		// check for *_DEPLOYMENT_TARGET env var
-		ld::forEachSupportedPlatform(^(const ld::PlatformInfo& info, bool& stop) {
+		ld::forEachSupportedPlatform([&](const ld::PlatformInfo& info, bool& stop) {
 			if ( info.fallbackEnvVarName != NULL ) {
 				if ( const char* versStr = getenv(info.fallbackEnvVarName) ) {
 					stop = true;
@@ -5467,8 +5467,8 @@ void Options::reconfigureDefaults()
 		} else {
 			// This is kind of gross, but we will remove it once -platform_version is adopted, so
 			// there is no point in adding a nicer interface to VersionSet
-			__block ld::Platform currentPlatform;
-			fPlatforms.forEach(^(ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
+			ld::Platform currentPlatform;
+			fPlatforms.forEach([&](ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
 				currentPlatform = platform;
 			});
 			fPlatforms.updateSDKVersion(currentPlatform, fSDKVersion);
@@ -5489,8 +5489,8 @@ void Options::reconfigureDefaults()
 			int len = end-start+1;
 			if ( len > 2 ) {
 				strlcpy(sdkVersionStr, start+1, len);
-				__block ld::Platform currentPlatform;
-				fPlatforms.forEach(^(ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
+				ld::Platform currentPlatform;
+				fPlatforms.forEach([&](ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
 					if ( platform != ld::Platform::iOSMac )
 						currentPlatform = platform;
 				});
@@ -5694,7 +5694,7 @@ void Options::checkIllegalOptionCombinations()
 			// always legal
 			break;
 		case kUndefinedDynamicLookup: {
-			platforms().forEach(^(ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
+			platforms().forEach([&](ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
 				switch (platform) {
 					case ld::Platform::macOS:
 						if ( fSharedRegionEligible && dyldLoadsOutput() )
@@ -5776,7 +5776,7 @@ void Options::checkIllegalOptionCombinations()
 	// sync reader options
 	if ( fNameSpace != kTwoLevelNameSpace ) {
 		fFlatNamespace = true;
-		platforms().forEach(^(ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
+		platforms().forEach([&](ld::Platform platform, uint32_t minVersion, uint32_t sdkVersion, bool &stop) {
 			switch (platform) {
 				case ld::Platform::unknown:
 				case ld::Platform::macOS:

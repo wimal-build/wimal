@@ -19,6 +19,7 @@ me_checks(
     sys/ioctl.h
     sys/socket.h
     sys/time.h
+    sys/syscall.h
     unistd.h
 
     FUNCS
@@ -29,6 +30,9 @@ me_checks(
     strtoul
     usleep
     srandom
+
+    TYPES
+    loff_t
 )
 
 set(

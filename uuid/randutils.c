@@ -13,7 +13,9 @@
 #include <string.h>
 #include <sys/time.h>
 
+#ifdef HAVE_SYS_SYSCALL_H
 #include <sys/syscall.h>
+#endif // HAVE_SYS_SYSCALL_H
 
 #include "randutils.h"
 

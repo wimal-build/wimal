@@ -1,7 +1,7 @@
 #ifndef LD64_MACHINE_ENDIAN_H_
 #define LD64_MACHINE_ENDIAN_H_
 
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__CYGWIN__)
 #include_next <machine/endian.h>
 #else // !__APPLE__
 #include <arpa/inet.h>

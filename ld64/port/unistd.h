@@ -8,6 +8,8 @@
 // http://www.manpagez.com/man/5/types/
 #include <sys/types.h> // For mode_t
 
+#include <arpa/inet.h>
+
 // http://www.manpagez.com/man/3/mkpath_np/
 int mkpath_np(const char *path, mode_t omode);
 

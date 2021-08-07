@@ -9,6 +9,8 @@
 #define __uint64_t uint64_t
 #endif // __APPLE__
 
+#include <sys/types.h> //On cygwin, <machine/types.h> must be included via <sys/types.h>
+
 #include_next <mach/i386/_structs.h>
 
 #ifndef _STRUCT_OPMASK_REG

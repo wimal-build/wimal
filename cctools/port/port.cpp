@@ -101,7 +101,9 @@ kern_return_t mach_port_deallocate(ipc_space_t task, mach_port_name_t name) {
 // _NSGetExecutablePath
 #include <mach-o/dyld.h>
 #include <sys/types.h> // for sysctl
+#ifndef __CYGWIN__
 #include <sys/sysctl.h> // for sysctl
+#endif // __CYGWIN__
 #include <unistd.h> // for access / readlink
 
 int _NSGetExecutablePath(char *epath, unsigned int *size) {

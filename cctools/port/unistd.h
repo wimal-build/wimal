@@ -24,6 +24,10 @@
 #define O_EXLOCK 0
 #endif // O_EXLOCK
 
+#ifndef L_SET
+#define L_SET SEEK_SET // cygwin
+#endif // L_SET
+
 #endif // __APPLE__
 
 #endif // CCTOOLS_UNISTD_H_

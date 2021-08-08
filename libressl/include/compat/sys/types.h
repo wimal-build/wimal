@@ -57,7 +57,7 @@ typedef SSIZE_T ssize_t;
 #endif
 #endif
 
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__CYGWIN__)
 #define __warn_references(sym,msg)
 #else
 

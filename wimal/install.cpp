@@ -1,6 +1,5 @@
 #include "install.hpp"
 
-#include <boost/filesystem.hpp>
 #include <iostream>
 
 #include "context.hpp"
@@ -8,12 +7,18 @@
 namespace wimal {
 
 void Install::Run(const Context *context, std::vector<std::string> extraArgs) {
-    boost::system::error_code ec;
+    std::error_code ec;
     for (auto &target : context->targets) {
         for (auto &action : actions) {
+#ifdef __CYGWIN__
+            auto dst = context->bin / (target + "-" + action.first + ".exe");
+            std::cout << "Creating " << dst << std::endl;
+            ghc::filesystem::copy_file("wimal", dst, ghc::filesystem::copy_options::update_existing, ec);
+#else
             auto dst = context->bin / (target + "-" + action.first);
             std::cout << "Creating " << dst << std::endl;
-            boost::filesystem::create_symlink("wimal", dst, ec);
+            ghc::filesystem::create_symlink("wimal", dst, ec);
+#endif
         }
     }
     struct link {
@@ -48,24 +53,23 @@ void Install::Run(const Context *context, std::vector<std::string> extraArgs) {
     };
     for (std::size_t i = 0; i < context->targets.size(); ++i) {
         auto &target = context->targets[i];
-        auto &triple = context->triples[i];
         auto toolchain = context->wimal / "toolchain";
         bool apple = target.find("-ios") != target.npos || target.find("-macos") != target.npos;
-        if (!boost::filesystem::is_directory(toolchain)) {
+        if (!ghc::filesystem::is_directory(toolchain)) {
             std::cout << "Creating " << toolchain << std::endl;
-            boost::filesystem::create_directory(toolchain, ec);
+            ghc::filesystem::create_directory(toolchain, ec);
         }
         auto path = toolchain / target;
-        if (!boost::filesystem::is_directory(path)) {
+        if (!ghc::filesystem::is_directory(path)) {
             std::cout << "Creating " << path << std::endl;
-            boost::filesystem::create_directory(path, ec);
+            ghc::filesystem::create_directory(path, ec);
         }
         auto &links = apple ? cctools : llvm;
         for (auto &link : links) {
-            auto src = boost::filesystem::relative(context->bin / link.src, path);
+            auto src = ghc::filesystem::relative(context->bin / link.src, path);
             auto dst = path / link.dst;
             std::cout << "Linking " << dst << " -> " << src << std::endl;
-            boost::filesystem::create_symlink(src, dst, ec);
+            ghc::filesystem::create_symlink(src, dst, ec);
         }
     }
 }

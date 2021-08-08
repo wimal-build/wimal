@@ -23,6 +23,8 @@ include_directories($<TARGET_PROPERTY:zlibstatic,INCLUDE_DIRECTORIES>)
 include_directories($<TARGET_PROPERTY:zlibstatic,SOURCE_DIR>)
 include_directories($<TARGET_PROPERTY:xml2,INCLUDE_DIRECTORIES>)
 
+add_definitions(-DLIBXML_STATIC)
+
 # Checks
 include(MeChecks)
 me_checks(

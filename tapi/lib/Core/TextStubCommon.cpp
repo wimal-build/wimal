@@ -18,15 +18,15 @@ namespace llvm {
 namespace yaml {
 
 using Impl = ScalarTraits<StringRef>;
-void ScalarTraits<FlowStringRef>::output(const FlowStringRef &value, void *ctx,
+inline void ScalarTraits<FlowStringRef>::output(const FlowStringRef &value, void *ctx,
                                          raw_ostream &os) {
   Impl::output(value, ctx, os);
 }
-StringRef ScalarTraits<FlowStringRef>::input(StringRef value, void *ctx,
+inline StringRef ScalarTraits<FlowStringRef>::input(StringRef value, void *ctx,
                                              FlowStringRef &out) {
   return Impl::input(value, ctx, out.value);
 }
-QuotingType ScalarTraits<FlowStringRef>::mustQuote(StringRef name) {
+inline QuotingType ScalarTraits<FlowStringRef>::mustQuote(StringRef name) {
   return Impl::mustQuote(name);
 }
 
@@ -95,7 +95,7 @@ QuotingType ScalarTraits<PackedVersion>::mustQuote(StringRef) {
   return QuotingType::None;
 }
 
-void ScalarTraits<SwiftVersion>::output(const SwiftVersion &value, void *,
+inline void ScalarTraits<SwiftVersion>::output(const SwiftVersion &value, void *,
                                         raw_ostream &os) {
   switch (value) {
   case 1:
@@ -115,7 +115,7 @@ void ScalarTraits<SwiftVersion>::output(const SwiftVersion &value, void *,
     break;
   }
 }
-StringRef ScalarTraits<SwiftVersion>::input(StringRef scalar, void *,
+inline StringRef ScalarTraits<SwiftVersion>::input(StringRef scalar, void *,
                                             SwiftVersion &value) {
   value = StringSwitch<SwiftVersion>(scalar)
               .Case("1.0", 1)
@@ -131,7 +131,7 @@ StringRef ScalarTraits<SwiftVersion>::input(StringRef scalar, void *,
 
   return StringRef();
 }
-QuotingType ScalarTraits<SwiftVersion>::mustQuote(StringRef) {
+inline QuotingType ScalarTraits<SwiftVersion>::mustQuote(StringRef) {
   return QuotingType::None;
 }
 

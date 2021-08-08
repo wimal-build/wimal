@@ -26,12 +26,18 @@ void Cc::Run(const Context *context, std::vector<std::string> extraArgs) {
         "-target", context->triple,
         "--sysroot", context->sysroot.string(),
         // Avoid clang using system c++ include path.
-        "-nostdinc++",
-        "-cxx-isystem" + (context->sysroot / "usr" / "include" / "c++" / "v1").string(),
         "--prefix", context->toolchain.string(),
-        "-Qunused-arguments",
-        "-stdlib=libc++"
+        "-Qunused-arguments"
     };
+    if (context->machine != Context::MACHINE_X64_MINGW) {
+        args.insert(
+            args.end(), {
+                "-nostdinc++",
+                "-cxx-isystem" + (context->sysroot / "usr" / "include" / "c++" / "v1").string(),
+                "-stdlib=libc++"
+            }
+        );
+    }
     // Define the api levels for android and darwin targets.
     switch (context->machine) {
         case Context::MACHINE_ARM_ANDROID:

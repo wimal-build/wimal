@@ -13,7 +13,7 @@ void Install::Run(const Context *context, std::vector<std::string> extraArgs) {
 #ifdef __CYGWIN__
             auto dst = context->bin / (target + "-" + action.first + ".exe");
             std::cout << "Creating " << dst << std::endl;
-            ghc::filesystem::copy_file("wimal", dst, ghc::filesystem::copy_options::update_existing, ec);
+            ghc::filesystem::copy(context->bin / "wimal.exe", dst, ec);
 #else
             auto dst = context->bin / (target + "-" + action.first);
             std::cout << "Creating " << dst << std::endl;

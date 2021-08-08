@@ -7,6 +7,7 @@ namespace wimal {
 const std::vector<std::string> Context::targets = {
     "x64-linux",
     "x64-cygwin",
+    "x64-mingw",
     "x64-macos",
     "a64-macos",
     "arm-android",
@@ -22,6 +23,7 @@ const std::vector<std::string> Context::targets = {
 const std::vector<std::string> Context::triples = {
     "x86_64-wimal-linux",
     "x86_64-wimal-cygwin",
+    "x86_64-w64-mingw",
     "x86_64-apple-darwin",
     "arm64-apple-darwin",
     "armv7-wimal-linux-androideabi",
@@ -38,6 +40,7 @@ const std::vector<std::string> Context::triples = {
 const std::vector<std::string> Context::hosts = {
     "x86_64-linux-gnu",
     "x86_64-pc-cygwin",
+    "x86_64-w64-mingw",
     "x86_64-apple-darwin",
     "arm64-apple-darwin",
     "armv7-none-linux-androideabi",
@@ -78,4 +81,5 @@ Context::Context(int argc, char **argv) {
 }
 
 Context::~Context() = default;
+
 }

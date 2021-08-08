@@ -74,7 +74,17 @@ set(LLVM_ENABLE_EH ON CACHE BOOL LLVM_ENABLE_EH)
 set(LLVM_ENABLE_RTTI ON CACHE BOOL LLVM_ENABLE_RTTI)
 
 # Build libLLVM.so
-set(LLVM_LINK_LLVM_DYLIB ON CACHE BOOL LLVM_LINK_LLVM_DYLIB)
+if (CYGWIN)
+    set(LLVM_LINK_LLVM_DYLIB OFF CACHE BOOL LLVM_LINK_LLVM_DYLIB)
+else()
+    set(
+        LLVM_DYLIB_TARGETS
+        install-LLVM-stripped
+        install-LLVMgold-stripped
+        install-LTO-stripped
+    )
+    set(LLVM_LINK_LLVM_DYLIB ON CACHE BOOL LLVM_LINK_LLVM_DYLIB)
+endif()
 
 # Enable LLVMgold
 set(LLVM_ENABLE_PIC ON CACHE BOOL LLVM_ENABLE_PIC)
@@ -232,9 +242,7 @@ add_custom_target(
 
     install-tablegen-stripped
 
-    install-LLVM-stripped
-
-    install-LLVMgold-stripped
+    ${LLVM_DYLIB_TARGETS}
 
     install-wimal-stripped
 
@@ -257,8 +265,6 @@ add_custom_target(
     install-lld-stripped
 
     install-ld64-stripped
-
-    install-LTO-stripped
 
     install-cctools-stripped
 )

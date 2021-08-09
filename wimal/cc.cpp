@@ -96,6 +96,11 @@ void Cc::Run(const Context *context, std::vector<std::string> extraArgs) {
         arguments.emplace_back(arg.data());
     }
     for (const auto &arg : context->args) {
+        if (context->machine == Context::MACHINE_X64_MINGW) {
+            if (arg == "-fPIC") {
+                continue;
+            }
+        }
         arguments.emplace_back(arg.data());
     }
     for (const auto &arg : extraArgs) {

@@ -81,6 +81,10 @@ __pycache__/
 /jsoncpp/test/
 /jsoncpp/example/
 
+### libuv
+/libuv/test/
+/libuv/docs/
+
 ### wimal
 /cmake/.cache
 /cmake/wimal

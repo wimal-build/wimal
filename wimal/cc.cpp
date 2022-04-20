@@ -173,13 +173,13 @@ static inline void BearReport(const Context *context, const char *cc, const std:
     if (filename.empty()) {
         return;
     }
-    boost::filesystem::path file(filename);
+    ghc::filesystem::path file(filename);
     if (!file.is_absolute()) {
         file = context->cwd / file;
     }
     Json::Value object;
     object["directory"] = context->cwd.string();
-    object["file"] = file.normalize().string();
+    object["file"] = file.lexically_normal().string();
     auto &iArguments = object["arguments"];
     iArguments.append(Json::Value(cc));
     for (size_t i = 1; i < arguments.size(); ++i) {

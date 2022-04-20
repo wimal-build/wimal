@@ -55,10 +55,10 @@ Context::Context(int argc, char **argv) {
     for (int i = 1; i < argc; ++i) {
         args.emplace_back(argv[i]);
     }
-    cwd = boost::filesystem::current_path();
-    auto path = boost::filesystem::path(argv[0]);
+    cwd = ghc::filesystem::current_path();
+    auto path = ghc::filesystem::path(argv[0]);
     tool = path.filename().string();
-    path = boost::filesystem::canonical(path);
+    path = ghc::filesystem::canonical(path);
     bin = path.parent_path();
     wimal = bin.parent_path();
     clang = wimal;

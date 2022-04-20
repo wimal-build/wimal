@@ -1,9 +1,10 @@
 #ifndef WIMAL_CONTEXT_HPP
 #define WIMAL_CONTEXT_HPP
 
-#include <boost/filesystem.hpp>
 #include <string>
 #include <vector>
+
+#include "filesystem.hpp"
 
 namespace wimal {
 
@@ -35,12 +36,12 @@ public:
     ~Context();
 
 public:
-    boost::filesystem::path cwd;
-    boost::filesystem::path bin;
-    boost::filesystem::path wimal;
-    boost::filesystem::path clang;
-    boost::filesystem::path toolchain;
-    boost::filesystem::path sysroot;
+    ghc::filesystem::path cwd;
+    ghc::filesystem::path bin;
+    ghc::filesystem::path wimal;
+    ghc::filesystem::path clang;
+    ghc::filesystem::path toolchain;
+    ghc::filesystem::path sysroot;
     Machine machine;
     std::string tool;
     std::string target;

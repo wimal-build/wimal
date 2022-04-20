@@ -52,13 +52,13 @@ static inline void Spawn(BearCache *cache, const Context *context, const std::ve
     if (context->args.empty()) {
         return;
     }
-    boost::filesystem::path command;
+    ghc::filesystem::path command;
     for (const auto &arg : context->args) {
         if (command.empty()) {
             if (arg.empty() || arg[0] == '-') {
                 continue;
             }
-            command = boost::filesystem::path(arg);
+            command = ghc::filesystem::path(arg);
         }
         arguments.emplace_back(const_cast<char *>(arg.data()));
     }

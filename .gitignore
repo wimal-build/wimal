@@ -77,6 +77,10 @@ __pycache__/
 !/libxml2/*.[c|h]
 /libxml2/**/Makefile.am
 
+### jsoncpp
+/jsoncpp/test/
+/jsoncpp/example/
+
 ### wimal
 /cmake/.cache
 /cmake/wimal

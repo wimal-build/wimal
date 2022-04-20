@@ -2,6 +2,7 @@
 
 #include <iostream>
 
+#include "bear.hpp"
 #include "cc.hpp"
 #include "context.hpp"
 #include "install.hpp"
@@ -23,7 +24,8 @@ const std::unordered_map<std::string, std::shared_ptr<Action>> Action::actions{
     {"strip", std::make_shared<Invoke>()},
     {"readelf", std::make_shared<Invoke>()},
     {"dsymutil", std::make_shared<Invoke>()},
-    {"install_name_tool", std::make_shared<Invoke>()}
+    {"install_name_tool", std::make_shared<Invoke>()},
+    {"bear", std::make_shared<Bear>()},
 };
 
 Action::Action() = default;

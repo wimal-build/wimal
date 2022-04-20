@@ -1,10 +1,205 @@
 #include "cc.hpp"
 
+#include <json/json.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 #include <unistd.h>
+#include <unordered_set>
 
 #include "context.hpp"
 
 namespace wimal {
+
+static const std::vector<std::unordered_set<std::string>> kFlagsByNumArgs = {
+    {},
+    {
+        "--analyzer-output",
+        "--autocomplete",
+        "--config",
+        "--cuda-include-ptx",
+        "--dyld-prefix",
+        "--gcc-toolchain",
+        "--gpu-instrument-lib",
+        "--gpu-max-threads-per-block",
+        "--hip-version",
+        "--language",
+        "--no-cuda-include-ptx",
+        "--output",
+        "--prefix",
+        "--serialize-diagnostics",
+        "--sysroot",
+        "--sysroot",
+        "--unwindlib",
+        "-A",
+        "-B",
+        "-D",
+        "-I",
+        "-L",
+        "-MF",
+        "-MQ",
+        "-MT",
+        "-T",
+        "-U",
+        "-Xanalyzer",
+        "-Xassembler",
+        "-Xassembler",
+        "-Xclang",
+        "-Xlinker",
+        "-Xopenmp-target",
+        "-Xpreprocessor",
+        "-Xpreprocessor",
+        "-Z",
+        "-allowable_client",
+        "-arch",
+        "-arch_only",
+        "-arcmt-migrate-report-output",
+        "-aux-info",
+        "-bundle_loader",
+        "-cuid",
+        "-current_version",
+        "-dependency-dot",
+        "-dependency-file",
+        "-dsym-dir",
+        "-dumpbase",
+        "-dumpbase-ext",
+        "-dumpdir",
+        "-dylib_file",
+        "-dylinker_install_name",
+        "-e",
+        "-entry",
+        "-exported_symbols_list",
+        "-faligned-new",
+        "-ffile-prefix-map",
+        "-flinker-output",
+        "-force_load",
+        "-fplugin",
+        "-framework",
+        "-fuse-ld",
+        "-idirafter",
+        "-imacros",
+        "-image_base",
+        "-imultilib",
+        "-include",
+        "-init",
+        "-install_name",
+        "-interface-stub-version",
+        "-iplugindir",
+        "-iprefix",
+        "-iquote",
+        "-isysroot",
+        "-isystem",
+        "-iwithprefix",
+        "-iwithprefixbefore",
+        "-l",
+        "-mllvm",
+        "-module-dependency-dir",
+        "-o",
+        "-seg1addr",
+        "-serialize-diagnostics",
+        "-specs",
+        "-std",
+        "-target",
+        "-u",
+        "-umbrella",
+        "-unexported_symbols_list",
+        "-unwindlib",
+        "-wrapper",
+        "-x",
+        "-z",
+    },
+    {
+        "-segaddr",
+    },
+    {
+        "-segcreate",
+        "-segprot",
+    },
+};
+static const std::vector<std::vector<std::string>> kFlagPrefixesByNumArgs = {
+    {},
+    {
+        "-Xarch",
+        "-Xcuda",
+        "-Xopenmp-target=",
+        "-lazy",
+        "-multiply_defined",
+        "-seg_",
+    },
+    {},
+    {
+        "-sect",
+    },
+};
+
+static inline void BearReport(const Context *context, const char *cc, const std::vector<char *> &arguments) {
+    auto env = getenv("WIMAL_BEAR_PORT");
+    if (!env) {
+        return;
+    }
+    auto port = std::stoi(env);
+    // Parse filename
+    std::string filename;
+    size_t skip = 1;
+    for (auto arg : arguments) {
+        if (!arg) {
+            break;
+        }
+        if (skip) {
+            --skip;
+            continue;
+        }
+        if (arg[0] != '-') {
+            filename.assign(arg);
+        }
+        std::string flag(arg);
+        for (size_t i = 1; i < kFlagsByNumArgs.size(); ++i) {
+            if (kFlagsByNumArgs[i].find(flag) != kFlagsByNumArgs[i].end()) {
+                skip = i;
+                break;
+            }
+        }
+        for (size_t i = 1; !skip && i < kFlagPrefixesByNumArgs.size(); ++i) {
+            for (auto &prefix : kFlagPrefixesByNumArgs[i]) {
+                if (flag.size() <= prefix.size()) {
+                    continue;
+                }
+                if (strncmp(flag.data(), prefix.data(), prefix.size()) == 0) {
+                    skip = i;
+                    break;
+                }
+            }
+        }
+    }
+    if (filename.empty()) {
+        return;
+    }
+    boost::filesystem::path file(filename);
+    if (!file.is_absolute()) {
+        file = context->cwd / file;
+    }
+    Json::Value object;
+    object["directory"] = context->cwd.string();
+    object["file"] = file.normalize().string();
+    auto &iArguments = object["arguments"];
+    iArguments.append(Json::Value(cc));
+    for (size_t i = 1; i < arguments.size(); ++i) {
+        if (arguments[i]) {
+            iArguments.append(arguments[i]);
+        }
+    }
+    auto data = object.toStyledString();
+    auto fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (fd == -1) {
+        return;
+    }
+    sockaddr_in address{};
+    memset(&address, 0, sizeof(address));
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    address.sin_port = htons(port);
+    sendto(fd, data.data(), data.size(), 0, (sockaddr *) &address, sizeof(address));
+    close(fd);
+}
 
 static inline std::string CcForAction(const std::string &action) {
     if (action == "cc") {
@@ -84,19 +279,20 @@ void Cc::Run(const Context *context, std::vector<std::string> extraArgs) {
             break;
         }
     }
-    std::vector<const char *> arguments;
+    std::vector<char *> arguments;
     arguments.reserve(args.size() + context->args.size() + extraArgs.size() + 1);
     for (const auto &arg : args) {
-        arguments.emplace_back(arg.data());
+        arguments.emplace_back(const_cast<char *>(arg.data()));
     }
     for (const auto &arg : context->args) {
-        arguments.emplace_back(arg.data());
+        arguments.emplace_back(const_cast<char *>(arg.data()));
     }
     for (const auto &arg : extraArgs) {
-        arguments.emplace_back(arg.data());
+        arguments.emplace_back(const_cast<char *>(arg.data()));
     }
     arguments.emplace_back(nullptr);
-    execvp(cc.string().data(), const_cast<char *const *>(arguments.data()));
+    BearReport(context, cc.string().data(), arguments);
+    execvp(cc.c_str(), arguments.data());
 }
 
 }

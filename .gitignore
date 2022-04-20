@@ -88,3 +88,6 @@ __pycache__/
 ### wimal
 /cmake/.cache
 /cmake/wimal
+
+### clangd
+/.cache

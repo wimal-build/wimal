@@ -17,7 +17,7 @@ def copy_file(src, dst):
         file_util.copy_file(src, dst)
 
 
-api = int(os.getenv('ANDROID_PLATFORM', '17'))
+api = int(os.getenv('ANDROID_PLATFORM', '21'))
 
 ndk = os.getenv('ANDROID_NDK', 'android-ndk')
 if not os.path.isdir(ndk):
@@ -69,10 +69,6 @@ abis = {
 
 for target in targets:
     level = api
-
-    if target == 'a64' or target == 'x64':
-        if level < 21:
-            level = 21
 
     print('+ [' + target + '-android]:')
 
@@ -145,14 +141,6 @@ for target in targets:
         os.path.join(ndk, 'sources', 'cxx-stl', 'llvm-libc++', 'libs', abi, 'libunwind.a'),
         os.path.join(usr, 'lib', 'libunwind.a')
     )
-
-    if level < 21:
-        copy_file(
-            os.path.join(
-                ndk, 'sources', 'cxx-stl', 'llvm-libc++', 'libs', abi, 'libandroid_support.a'
-            ),
-            os.path.join(usr, 'lib', 'libandroid_support.a')
-        )
 
     copy_file(
         os.path.join(

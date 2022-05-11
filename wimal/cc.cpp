@@ -232,7 +232,7 @@ void Cc::Run(const Context *context, std::vector<std::string> extraArgs) {
         case Context::MACHINE_ARM_ANDROID:
         case Context::MACHINE_X86_ANDROID:
             args.emplace_back("-DANDROID");
-            args.emplace_back("-D__ANDROID_API__=17");
+            args.emplace_back("-D__ANDROID_API__=21");
             break;
         case Context::MACHINE_A64_ANDROID:
         case Context::MACHINE_X64_ANDROID:

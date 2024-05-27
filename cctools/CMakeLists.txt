@@ -7,6 +7,7 @@ me_compile_options(
     -Wno-covered-switch-default
     -Wno-format
     -Wno-gnu-include-next
+    -Wno-implicit-fallthrough
     -Wno-implicit-function-declaration
     -Wno-import-preprocessor-directive-pedantic
     -Wno-incompatible-pointer-types
@@ -85,6 +86,7 @@ set_property(
     add_execute_list_with_prefix=no_add_execute_list_with_prefix
     cmd_with_prefix=no_cmd_with_prefix
 )
+target_link_libraries(stuff PUBLIC dl)
 
 # ar
 add_executable(
@@ -104,6 +106,30 @@ add_executable(
 target_compile_definitions(apple-ar PRIVATE error=xerror print=xprint)
 target_link_libraries(apple-ar stuff)
 
+# otool
+add_executable(
+    apple-otool
+    otool/arm64_disasm.c
+    otool/arm_disasm.c
+    otool/coff_print.c
+    otool/dyld_bind_info.c
+    otool/hppa_disasm.c
+    otool/i386_disasm.c
+    otool/i860_disasm.c
+    otool/m68k_disasm.c
+    otool/m88k_disasm.c
+    otool/main.c
+    otool/ofile_print.c
+    otool/ppc_disasm.c
+    otool/print_bitcode.c
+    otool/print_objc.c
+    otool/print_objc2_32bit.c
+    otool/print_objc2_64bit.c
+    otool/print_objc2_util.c
+    otool/sparc_disasm.c
+)
+target_link_libraries(apple-otool stuff)
+
 # lipo
 add_executable(apple-lipo misc/lipo.c)
 target_link_libraries(apple-lipo stuff)
@@ -122,6 +148,10 @@ add_executable(apple-ranlib misc/libtool.c)
 target_compile_definitions(apple-ranlib PRIVATE HOOK_STRNCMP)
 target_link_libraries(apple-ranlib stuff)
 
+# libtool
+add_executable(apple-libtool misc/libtool.c)
+target_link_libraries(apple-libtool stuff)
+
 # install_name_tool
 add_executable(apple-install_name_tool misc/install_name_tool.c)
 target_link_libraries(apple-install_name_tool stuff)
@@ -130,20 +160,24 @@ target_link_libraries(apple-install_name_tool stuff)
 add_custom_target(
     cctools DEPENDS
     apple-ar
-    apple-lipo
-    apple-strip
-    apple-nm
-    apple-ranlib
     apple-install_name_tool
+    apple-libtool
+    apple-lipo
+    apple-nm
+    apple-otool
+    apple-ranlib
+    apple-strip
 )
 install(
     TARGETS
     apple-ar
-    apple-lipo
-    apple-strip
-    apple-nm
-    apple-ranlib
     apple-install_name_tool
+    apple-libtool
+    apple-lipo
+    apple-nm
+    apple-otool
+    apple-ranlib
+    apple-strip
     DESTINATION bin
     COMPONENT cctools
 )

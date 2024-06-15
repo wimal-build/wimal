@@ -1,31 +1,30 @@
 import os
-import subprocess
+import requests
+import shutil
 import sys
-from distutils import dir_util, file_util
-
-
-def copy_directory(src, dst):
-    print('    - [' + src + '] -> [' + dst + ']')
-    if not os.path.isdir(src):
-        exit(1)
-    dir_util.copy_tree(src, dst, preserve_symlinks=1)
-
 
 def copy_file(src, dst):
     print('    - [' + src + '] -> [' + dst + ']')
     if os.path.isfile(src):
-        file_util.copy_file(src, dst)
+        shutil.copy2(src, dst, follow_symlinks=False)
 
+def remove_file(file):
+    if os.path.isfile(file):
+        os.unlink(file)
 
-api = int(os.getenv('ANDROID_PLATFORM', '21'))
-
-ndk = os.getenv('ANDROID_NDK', 'android-ndk')
-if not os.path.isdir(ndk):
-    ndk = os.path.join(os.getenv('ANDROID_HOME', 'android-sdk'), 'ndk-bundle')
-if not os.path.isdir(ndk):
-    ndk = os.path.join(os.getenv('ANDROID_SDK_ROOT', 'android-sdk'), 'ndk-bundle')
-
-print('ndk: ' + ndk)
+def copy_directory(src, dst):
+    print('    - [' + src + '] -> [' + dst + ']')
+    if not os.path.isdir(src):
+        return
+    if not os.path.isdir(dst):
+        os.makedirs(dst, exist_ok=True)
+    for item in os.listdir(src):
+        src_item = os.path.join(src, item)
+        dst_item = os.path.join(dst, item)
+        if os.path.isdir(src_item):
+            copy_directory(src_item, dst_item)
+        else:
+            copy_file(src_item, dst_item)
 
 system = sys.platform
 
@@ -35,6 +34,43 @@ if system == 'win32' or system == 'cygwin':
     system = 'windows'
 
 print('system: ' + system)
+
+api = int(os.getenv('ANDROID_PLATFORM', '21'))
+
+# Download the ndk and extract it to a temporary directory inside the current directory
+
+# Download the ndk zip
+ndk_zip = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'android-ndk.zip')
+
+# https://github.com/android/ndk/wiki/Unsupported-Downloads
+ndk_download_link = 'https://dl.google.com/android/repository/android-ndk-r21e-' + system + '-x86_64.zip'
+
+if not os.path.isfile(ndk_zip):
+    print('Downloading the Android NDK...')
+    response = requests.get(ndk_download_link, stream=True)
+    with open(ndk_zip, 'wb') as file:
+        shutil.copyfileobj(response.raw, file)
+    del response
+
+# Extract the ndk zip
+ndk = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'output', 'android-ndk')
+if not os.path.isdir(ndk):
+    print('Extracting the Android NDK...')
+    shutil.unpack_archive(ndk_zip, ndk)
+
+# Remove the ndk zip
+# os.remove(ndk_zip)
+
+# Set the ndk path
+ndk = os.path.join(ndk, "android-ndk-r21e")
+
+# ndk = os.getenv('ANDROID_NDK', 'android-ndk')
+if not os.path.isdir(ndk):
+    ndk = os.path.join(os.getenv('ANDROID_HOME', 'android-sdk'), 'ndk-bundle')
+if not os.path.isdir(ndk):
+    ndk = os.path.join(os.getenv('ANDROID_SDK_ROOT', 'android-sdk'), 'ndk-bundle')
+
+print('ndk: ' + ndk)
 
 output = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'output')
 sysroot = os.path.join(output, 'sysroot')
@@ -83,7 +119,7 @@ for target in targets:
     if target == 'x64':
         copy_directory(
             os.path.join(platform, 'arch-' + arch, 'usr', 'lib64'),
-            os.path.join(usr, 'lib64')
+            os.path.join(usr, 'lib')
         )
 
     copy_directory(os.path.join(ndk, 'sysroot', 'usr', 'include'), os.path.join(usr, 'include'))
@@ -93,7 +129,7 @@ for target in targets:
         os.path.join(usr, 'local', 'include')
     )
 
-    copy_file(os.path.join(ndk, 'source.properties'), root)
+    copy_file(os.path.join(ndk, 'source.properties'), os.path.join(root, 'source.properties'))
 
     copy_directory(
         os.path.join(ndk, 'sources', 'cxx-stl', 'llvm-libc++', 'include'),
@@ -128,11 +164,6 @@ for target in targets:
     )
 
     copy_file(
-        os.path.join(ndk, 'sources', 'cxx-stl', 'llvm-libc++', 'libs', abi, 'libc++_shared.so'),
-        os.path.join(usr, 'lib', 'libc++_shared.so')
-    )
-
-    copy_file(
         os.path.join(ndk, 'sources', 'cxx-stl', 'llvm-libc++', 'libs', abi, 'libc++_static.a'),
         os.path.join(usr, 'lib', 'libc++_static.a')
     )
@@ -155,11 +186,13 @@ for target in targets:
         ),
         os.path.join(usr, 'lib', 'libc++.so')
     )
-
-    objcopy = os.path.join(ndk, 'toolchains', 'llvm', 'prebuilt', system + '-x86_64', 'bin', 'llvm-objcopy')
-    if os.path.isfile(objcopy):
-        subprocess.call([objcopy, '--strip-all', os.path.join(usr, 'lib', 'libc++_shared.so')])
-
+    
+    # Remove the unused libraries
+    remove_file(os.path.join(usr, 'lib', 'libc.a'))
+    remove_file(os.path.join(usr, 'lib', 'libm.a'))
+    remove_file(os.path.join(usr, 'lib', 'libc++_shared.so'))
+    
+    # Create a dummy libpthread.a
     with open(os.path.join(usr, 'lib', 'libpthread.a'), 'w') as file:
         file.write('INPUT()')
         file.close()

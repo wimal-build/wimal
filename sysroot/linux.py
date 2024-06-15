@@ -6,7 +6,7 @@ import re
 import requests
 import sys
 import tarfile
-from distutils import dir_util, file_util
+import shutil
 
 if sys.version_info > (3, 0):
     # noinspection PyUnresolvedReferences
@@ -14,6 +14,25 @@ if sys.version_info > (3, 0):
 else:
     # noinspection PyUnresolvedReferences,PyPackageRequirements
     from backports import lzma
+
+def copy_file(src, dst):
+    print('    - [' + src + '] -> [' + dst + ']')
+    if os.path.isfile(src):
+        shutil.copy2(src, dst, follow_symlinks=False)
+
+def copy_directory(src, dst):
+    print('    - [' + src + '] -> [' + dst + ']')
+    if not os.path.isdir(src):
+        return
+    if not os.path.isdir(dst):
+        os.makedirs(dst, exist_ok=True)
+    for item in os.listdir(src):
+        src_item = os.path.join(src, item)
+        dst_item = os.path.join(dst, item)
+        if os.path.isdir(src_item):
+            copy_directory(src_item, dst_item)
+        else:
+            copy_file(src_item, dst_item)
 
 
 # noinspection PyClassHasNoInit,PyShadowingBuiltins
@@ -179,20 +198,20 @@ apt.install((
     'libc++-8-dev',
     'libc++abi-8-dev',
 ), target)
-dir_util.copy_tree(
+copy_directory(
     os.path.join(target, 'usr', 'lib', 'llvm-8', 'include'),
     os.path.join(target, 'usr', 'include')
 )
-file_util.copy_file(
+copy_file(
     os.path.join(target, 'usr', 'lib', 'llvm-8', 'lib', 'libc++abi.a'),
     os.path.join(target, 'usr', 'lib', 'libc++abi.a'),
 )
-file_util.copy_file(
+copy_file(
     os.path.join(target, 'usr', 'lib', 'llvm-8', 'lib', 'libc++.a'),
     os.path.join(target, 'usr', 'lib', 'libc++_static.a'),
 )
-dir_util.remove_tree(os.path.join(target, 'usr', 'lib', 'llvm-8'))
-dir_util.remove_tree(os.path.join(target, 'usr', 'lib', 'x86_64-linux-gnu'))
+shutil.rmtree(os.path.join(target, 'usr', 'lib', 'llvm-8'))
+shutil.rmtree(os.path.join(target, 'usr', 'lib', 'x86_64-linux-gnu'))
 
 file = open(os.path.join(target, 'usr', 'lib', 'libc++.so'), 'w')
 file.write('INPUT(-lc++_static -lc++abi -lpthread)')
@@ -218,13 +237,17 @@ apt.install((
 
     'libasound2',
     'libasound2-dev',
+
+    'libpulse0',
+    'libpulse-dev',
+
     'libx11-6',
     'libx11-dev',
     'x11proto-core-dev',
     'libgles2-mesa',
     'libgles2-mesa-dev',
     'libegl1-mesa',
-    'libegl1-mesa-dev'
+    'libegl1-mesa-dev',
 ), target)
 
 apt.repair(target)

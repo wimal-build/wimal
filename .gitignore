@@ -46,6 +46,16 @@ out/
 # Libcxxabi tests
 /libcxxabi/test/
 
+### Libcxx
+# Libcxx tests
+/libcxx/test/
+
+# Libcxx benchmarks
+/libcxx/benchmarks/
+
+# Libcxx docs
+/libcxx/docs
+
 ### Clang
 # Clang tests
 /clang/test/

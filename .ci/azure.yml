@@ -27,8 +27,8 @@ jobs:
         displayName: 'Create darwin sysroot'
       - task: ArchiveFiles@2
         inputs:
-          rootFolderOrFile: '$(Build.SourcesDirectory)/sysroot/output'
-          includeRootFolder: false
+          rootFolderOrFile: '$(Build.SourcesDirectory)/sysroot/output/sysroot'
+          includeRootFolder: true
           archiveType: 'tar'
           tarCompression: 'xz'
           archiveFile: '$(Build.ArtifactStagingDirectory)/wimal-sysroot-$(Build.BuildNumber).tar.xz'

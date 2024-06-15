@@ -42,6 +42,10 @@ out/
 !/llvm/lib/Target/ARM/**
 !/llvm/lib/Target/**/LLVMBuild.txt
 
+### libcxxabi
+# Libcxxabi tests
+/libcxxabi/test/
+
 ### Clang
 # Clang tests
 /clang/test/

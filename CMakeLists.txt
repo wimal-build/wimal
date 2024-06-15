@@ -127,6 +127,7 @@ set(
 # Include external projects
 set(LLVM_EXTERNAL_PROJECTS
     wimal
+    libcxx
     clang
     lld
     tapi
@@ -143,6 +144,27 @@ set(
     CACHE STRING
     LLVM_EXTERNAL_WIMAL_SOURCE_DIR
 )
+
+# Enable libcxx
+set(
+    LLVM_EXTERNAL_LIBCXX_SOURCE_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/libcxx"
+    CACHE STRING
+    LLVM_EXTERNAL_LIBCXX_SOURCE_DIR
+)
+
+# Disable libcxx tests
+set(LIBCXX_INCLUDE_TESTS OFF CACHE BOOL LIBCXX_INCLUDE_TESTS)
+set(LIBCXXABI_INCLUDE_TESTS OFF CACHE BOOL LIBCXXABI_INCLUDE_TESTS)
+
+# Disable libcxx benchmarks
+set(LIBCXX_INCLUDE_BENCHMARKS OFF CACHE BOOL LIBCXX_INCLUDE_BENCHMARKS)
+
+# Disable libcxx docs
+set(LIBCXX_INCLUDE_DOCS OFF CACHE BOOL LIBCXX_INCLUDE_DOCS)
+
+# Disable installing libcxx library
+set(LIBCXX_INSTALL_LIBRARY OFF CACHE BOOL LIBCXX_INSTALL_LIBRARY)
 
 # Enable clang
 set(LLVM_TOOL_CLANG_BUILD ON CACHE BOOL LLVM_TOOL_CLANG_BUILD)
@@ -263,9 +285,11 @@ add_custom_target(
     install-llvm-lipo-stripped
     install-llvm-install-name-tool-stripped
 
+    install-cxx-headers-stripped
+
     install-clang-stripped
     install-clang-resource-headers-stripped
-
+    
     install-lld-stripped
 
     install-ld64-stripped

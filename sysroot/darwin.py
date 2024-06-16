@@ -1,9 +1,6 @@
 import os
-import re
-import subprocess
 import requests
 import shutil
-import zipfile
 
 sdk_versions = {
     'iPhoneOS': '11.0',
@@ -11,7 +8,7 @@ sdk_versions = {
     'MacOSX': '10.14'
 }
 
-sdk_url_format = 'https://github.com/wimal-build/{0}.sdk/archive/refs/tags/{0}{1}.sdk.zip'
+sdk_url_format = 'https://github.com/wimal-build/{0}.sdk/archive/refs/tags/{0}{1}.sdk.tar.gz'
 sdk_folder_name_format = '{0}.sdk-{0}{1}.sdk'
 
 
@@ -41,16 +38,16 @@ def retrieve_sdk(sdk, folder):
         os.makedirs(folder, exist_ok=True)
     sdk_version = sdk_versions[sdk]
     url = sdk_url_format.format(sdk, sdk_version)
-    sdk_zip = os.path.join(folder, sdk + '.zip')
-    # Download the sdk zip
-    if not os.path.isfile(sdk_zip):
+    sdk_tarball = os.path.join(folder, sdk + '.tar.gz')
+    # Download the sdk tarball
+    if not os.path.isfile(sdk_tarball):
         print('Downloading the ' + sdk + ' SDK...')
         response = requests.get(url, stream=True)
-        with open(sdk_zip, 'wb') as file:
+        with open(sdk_tarball, 'wb') as file:
             shutil.copyfileobj(response.raw, file)
     # Extract the sdk zip
     print('Extracting the ' + sdk + ' SDK...')
-    zipfile.ZipFile(sdk_zip).extractall(folder)
+    shutil.unpack_archive(sdk_tarball, folder)
 
 
 def copy_sdk(src, dst):

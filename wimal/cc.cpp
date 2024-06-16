@@ -274,6 +274,8 @@ void Cc::Run(const Context *context, std::vector<std::string> extraArgs) {
         case Context::MACHINE_X86_ANDROID:
         case Context::MACHINE_X64_ANDROID:
             args.emplace_back("-Wl,--build-id=sha1");
+            // Fix libc++ namespace issue for ndk.
+            args.emplace_back("-D_LIBCPP_ABI_NAMESPACE=__ndk1");
             break;
         default: {
             break;

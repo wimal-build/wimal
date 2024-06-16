@@ -222,7 +222,7 @@ void Cc::Run(const Context *context, std::vector<std::string> extraArgs) {
         "--sysroot", context->sysroot.string(),
         // Avoid clang using system c++ include path.
         "-nostdinc++",
-        "-cxx-isystem" + (context->sysroot / "usr" / "include" / "c++" / "v1").string(),
+        "-cxx-isystem" + (context->clang / "include" / "c++" / "v1").string(),
         "--prefix", context->toolchain.string(),
         "-Qunused-arguments",
         "-stdlib=libc++"

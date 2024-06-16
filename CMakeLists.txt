@@ -295,6 +295,8 @@ add_custom_target(
     install-ld64-stripped
 
     install-LTO-stripped
+    
+    install-llvm-ifs-stripped
 
     install-cctools-stripped
 )

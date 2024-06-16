@@ -3,9 +3,9 @@ import requests
 import shutil
 
 sdk_versions = {
-    'iPhoneOS': '11.0',
-    'iPhoneSimulator': '11.0',
-    'MacOSX': '10.14'
+    'iPhoneOS': '12.0',
+    'iPhoneSimulator': '12.0',
+    'MacOSX': '11.1'
 }
 
 sdk_url_format = 'https://github.com/wimal-build/{0}.sdk/archive/refs/tags/{0}{1}.sdk.tar.gz'

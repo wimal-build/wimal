@@ -12,6 +12,7 @@ class Context {
 public:
     enum Machine {
         MACHINE_X64_LINUX,
+        MACHINE_A64_LINUX,
         MACHINE_X64_CYGWIN,
         MACHINE_X64_MACOS,
         MACHINE_A64_MACOS,

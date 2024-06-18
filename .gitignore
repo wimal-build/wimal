@@ -105,3 +105,6 @@ __pycache__/
 
 ### clangd
 /.cache
+
+### compiler-rt
+/compiler-rt/test

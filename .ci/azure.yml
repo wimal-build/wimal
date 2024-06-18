@@ -1,179 +1,257 @@
 jobs:
   - job: sysroot
     pool:
-      vmImage: 'macOS-latest'
+      vmImage: "macOS-latest"
     steps:
       - task: UsePythonVersion@0
         inputs:
-          versionSpec: '3.x'
+          versionSpec: "3.x"
           addToPath: true
-          architecture: 'x64'
+          architecture: "x64"
       - script: python -m pip install -r $(Build.SourcesDirectory)/sysroot/requirements.txt
-        displayName: 'Install requirements'
+        displayName: "Install requirements"
       - task: PythonScript@0
         inputs:
-          scriptSource: 'filePath'
-          scriptPath: '$(Build.SourcesDirectory)/sysroot/android.py'
-        displayName: 'Create android sysroot'
+          scriptSource: "filePath"
+          scriptPath: "$(Build.SourcesDirectory)/sysroot/android.py"
+        displayName: "Create android sysroot"
       - task: PythonScript@0
         inputs:
-          scriptSource: 'filePath'
-          scriptPath: '$(Build.SourcesDirectory)/sysroot/linux.py'
-        displayName: 'Create linux sysroot'
+          scriptSource: "filePath"
+          scriptPath: "$(Build.SourcesDirectory)/sysroot/linux.py"
+        displayName: "Create linux sysroot"
       - task: PythonScript@0
         inputs:
-          scriptSource: 'filePath'
-          scriptPath: '$(Build.SourcesDirectory)/sysroot/darwin.py'
-        displayName: 'Create darwin sysroot'
+          scriptSource: "filePath"
+          scriptPath: "$(Build.SourcesDirectory)/sysroot/darwin.py"
+        displayName: "Create darwin sysroot"
       - task: ArchiveFiles@2
         inputs:
-          rootFolderOrFile: '$(Build.SourcesDirectory)/sysroot/output/sysroot'
+          rootFolderOrFile: "$(Build.SourcesDirectory)/sysroot/output/sysroot"
           includeRootFolder: true
-          archiveType: 'tar'
-          tarCompression: 'xz'
-          archiveFile: '$(Build.ArtifactStagingDirectory)/wimal-sysroot-$(Build.BuildNumber).tar.xz'
+          archiveType: "tar"
+          tarCompression: "xz"
+          archiveFile: "$(Build.ArtifactStagingDirectory)/wimal-sysroot-$(Build.BuildNumber).tar.xz"
           replaceExistingArchive: true
-        displayName: 'Create tarball'
+        displayName: "Create tarball"
       - task: PublishBuildArtifacts@1
         inputs:
-          PathtoPublish: '$(Build.ArtifactStagingDirectory)'
-          ArtifactName: 'wimal-sysroot-$(Build.BuildNumber)'
-        displayName: 'Upload artifact'
+          PathtoPublish: "$(Build.ArtifactStagingDirectory)"
+          ArtifactName: "wimal-sysroot-$(Build.BuildNumber)"
+        displayName: "Upload artifact"
+  - job: compiler_rt
+    pool:
+      vmImage: "macOS-latest"
+    steps:
+      - script: brew install ninja
+        displayName: "Installing dependencies"
+      - script: cmake -E make_directory
+          cmake-build/darwin
+          cmake-build/x64-linux
+          cmake-build/arm-android
+          cmake-build/a64-android
+          cmake-build/x86-android
+          cmake-build/x64-android
+        displayName: "Prepare project"
+      - script: cmake -E chdir cmake-build/x64-linux
+          cmake ../../compiler-rt/lib/builtins
+          -GNinja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
+          -DCMAKE_TOOLCHAIN_FILE=../../cmake/MeToolchain.cmake
+          -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=x86_64-linux-gnu
+          -DWIMAL_TARGET=x64-linux
+        displayName: "(x64-linux) Configure project"
+      - script: cmake --build cmake-build/x64-linux --target install-builtins-stripped --
+        displayName: "(x64-linux) Build project"
+      - script: cmake -E chdir cmake-build/arm-android
+          cmake ../../compiler-rt/lib/builtins
+          -GNinja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
+          -DCMAKE_TOOLCHAIN_FILE=../../cmake/MeToolchain.cmake
+          -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=armv7-none-linux-androideabi
+          -DWIMAL_TARGET=arm-android
+          -DANDROID=ON
+        displayName: "(arm-android) Configure project"
+      - script: cmake --build cmake-build/arm-android --target install-builtins-stripped --
+        displayName: "(arm-android) Build project"
+      - script: cmake -E chdir cmake-build/a64-android
+          cmake ../../compiler-rt/lib/builtins
+          -GNinja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
+          -DCMAKE_TOOLCHAIN_FILE=../../cmake/MeToolchain.cmake
+          -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=aarch64-none-linux-android
+          -DWIMAL_TARGET=a64-android
+          -DANDROID=ON
+        displayName: "(a64-android) Configure project"
+      - script: cmake --build cmake-build/a64-android --target install-builtins-stripped --
+        displayName: "(a64-android) Build project"
+      - script: cmake -E chdir cmake-build/x86-android
+          cmake ../../compiler-rt/lib/builtins
+          -GNinja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
+          -DCMAKE_TOOLCHAIN_FILE=../../cmake/MeToolchain.cmake
+          -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=i686-none-linux-android
+          -DWIMAL_TARGET=x86-android
+          -DANDROID=ON
+        displayName: "(x86-android) Configure project"
+      - script: cmake --build cmake-build/x86-android --target install-builtins-stripped --
+        displayName: "(x86-android) Build project"
+      - script: cmake -E chdir cmake-build/x64-android
+          cmake ../../compiler-rt/lib/builtins
+          -GNinja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
+          -DCMAKE_TOOLCHAIN_FILE=../../cmake/MeToolchain.cmake
+          -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=x86_64-none-linux-android
+          -DWIMAL_TARGET=x64-android
+          -DANDROID=ON
+        displayName: "(x64-android) Configure project"
+      - script: cmake --build cmake-build/x64-android --target install-builtins-stripped --
+        displayName: "(x64-android) Build project"
+      - script: cmake -E chdir cmake-build/darwin
+          cmake ../../compiler-rt/lib/builtins
+          -GNinja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
+          -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=x86_64-apple-darwin
+        displayName: "(Darwin) Configure project"
+      - script: cmake --build cmake-build/darwin --target install-builtins-stripped --
+        displayName: "(Darwin) Build project"
+      - task: ArchiveFiles@2
+        inputs:
+          rootFolderOrFile: "$(Build.BinariesDirectory)/wimal"
+          includeRootFolder: true
+          archiveType: "tar"
+          tarCompression: "xz"
+          archiveFile: "$(Build.ArtifactStagingDirectory)/wimal-compiler-rt-$(Build.BuildNumber).tar.xz"
+          replaceExistingArchive: true
+        displayName: "Create tarball"
+      - task: PublishBuildArtifacts@1
+        inputs:
+          PathtoPublish: "$(Build.ArtifactStagingDirectory)"
+          ArtifactName: "wimal-compiler-rt-$(Build.BuildNumber)"
+        displayName: "Upload artifact"
   - job: linux
     timeoutInMinutes: 300
     pool:
-      vmImage: 'Ubuntu-latest'
+      vmImage: "Ubuntu-latest"
     steps:
-      - script:
-          sudo apt install ninja-build yasm nasm -y
-        displayName: 'Installing dependencies'
-      - script:
-          cmake -E make_directory cmake-build-tablegen cmake-build-azure
-        displayName: 'Prepare project'
-      - script:
-          cmake -E chdir cmake-build-azure cmake ..
+      - script: sudo apt install ninja-build yasm nasm -y
+        displayName: "Installing dependencies"
+      - script: cmake -E make_directory cmake-build-tablegen cmake-build-azure
+        displayName: "Prepare project"
+      - script: cmake -E chdir cmake-build-azure cmake ..
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
           -DWIMAL_TARGET=x64-linux
           -DCMAKE_TOOLCHAIN_FILE=../cmake/MeToolchain.cmake
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
-        displayName: 'Configure project'
-      - script:
-          cmake -E chdir cmake-build-tablegen cmake ..
+        displayName: "Configure project"
+      - script: cmake -E chdir cmake-build-tablegen cmake ..
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_INSTALL_PREFIX=$(Build.SourcesDirectory)/cmake/wimal
           -DWIMAL_HOME=$(Build.SourcesDirectory)/cmake/wimal
-        displayName: 'Configure tablegen'
-      - script:
-          cmake --build cmake-build-tablegen --target install-tablegen --
-        displayName: 'Generate table-gen'
-      - script:
-          cmake --build cmake-build-azure --target installation --
-        displayName: 'Build project'
+        displayName: "Configure tablegen"
+      - script: cmake --build cmake-build-tablegen --target install-tablegen --
+        displayName: "Generate table-gen"
+      - script: cmake --build cmake-build-azure --target installation --
+        displayName: "Build project"
       - task: ArchiveFiles@2
         inputs:
-          rootFolderOrFile: '$(Build.BinariesDirectory)/wimal'
+          rootFolderOrFile: "$(Build.BinariesDirectory)/wimal"
           includeRootFolder: true
-          archiveType: 'tar'
-          tarCompression: 'xz'
-          archiveFile: '$(Build.ArtifactStagingDirectory)/wimal-linux-$(Build.BuildNumber).tar.xz'
+          archiveType: "tar"
+          tarCompression: "xz"
+          archiveFile: "$(Build.ArtifactStagingDirectory)/wimal-linux-$(Build.BuildNumber).tar.xz"
           replaceExistingArchive: true
-        displayName: 'Create tarball'
+        displayName: "Create tarball"
       - task: PublishBuildArtifacts@1
         inputs:
-          PathtoPublish: '$(Build.ArtifactStagingDirectory)'
-          ArtifactName: 'wimal-linux-$(Build.BuildNumber)'
-        displayName: 'Upload artifact'
+          PathtoPublish: "$(Build.ArtifactStagingDirectory)"
+          ArtifactName: "wimal-linux-$(Build.BuildNumber)"
+        displayName: "Upload artifact"
   - job: macos
     timeoutInMinutes: 300
     pool:
-      vmImage: 'macOS-latest'
+      vmImage: "macOS-latest"
     steps:
-      - script:
-          brew install yasm nasm ninja automake libtool
-        displayName: 'Installing dependencies'
-      - script:
-          cmake -E make_directory cmake-build-tablegen cmake-build-azure
-        displayName: 'Prepare project'
-      - script:
-          cmake -E chdir cmake-build-azure cmake ..
+      - script: brew install yasm nasm ninja automake libtool
+        displayName: "Installing dependencies"
+      - script: cmake -E make_directory cmake-build-tablegen cmake-build-azure
+        displayName: "Prepare project"
+      - script: cmake -E chdir cmake-build-azure cmake ..
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
           -DWIMAL_TARGET=x64-macos
           -DCMAKE_TOOLCHAIN_FILE=../cmake/MeToolchain.cmake
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
-        displayName: 'Configure project'
-      - script:
-          cmake -E chdir cmake-build-tablegen cmake ..
+        displayName: "Configure project"
+      - script: cmake -E chdir cmake-build-tablegen cmake ..
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_INSTALL_PREFIX=$(Build.SourcesDirectory)/cmake/wimal
           -DWIMAL_HOME=$(Build.SourcesDirectory)/cmake/wimal
-        displayName: 'Configure tablegen'
-      - script:
-          cmake --build cmake-build-tablegen --target install-tablegen --
-        displayName: 'Generate tablegen'
-      - script:
-          cmake --build cmake-build-azure --target installation --
-        displayName: 'Build project'
+        displayName: "Configure tablegen"
+      - script: cmake --build cmake-build-tablegen --target install-tablegen --
+        displayName: "Generate tablegen"
+      - script: cmake --build cmake-build-azure --target installation --
+        displayName: "Build project"
       - task: ArchiveFiles@2
         inputs:
-          rootFolderOrFile: '$(Build.BinariesDirectory)/wimal'
+          rootFolderOrFile: "$(Build.BinariesDirectory)/wimal"
           includeRootFolder: true
-          archiveType: 'tar'
-          tarCompression: 'xz'
-          archiveFile: '$(Build.ArtifactStagingDirectory)/wimal-macos-$(Build.BuildNumber).tar.xz'
+          archiveType: "tar"
+          tarCompression: "xz"
+          archiveFile: "$(Build.ArtifactStagingDirectory)/wimal-macos-$(Build.BuildNumber).tar.xz"
           replaceExistingArchive: true
-        displayName: 'Create tarball'
+        displayName: "Create tarball"
       - task: PublishBuildArtifacts@1
         inputs:
-          PathtoPublish: '$(Build.ArtifactStagingDirectory)'
-          ArtifactName: 'wimal-macos-$(Build.BuildNumber)'
-        displayName: 'Upload artifact'
+          PathtoPublish: "$(Build.ArtifactStagingDirectory)"
+          ArtifactName: "wimal-macos-$(Build.BuildNumber)"
+        displayName: "Upload artifact"
   - job: arm64_macos
     timeoutInMinutes: 300
     pool:
-      vmImage: 'macOS-latest'
+      vmImage: "macOS-latest"
     steps:
-      - script:
-          brew install yasm nasm ninja automake libtool
-        displayName: 'Installing dependencies'
-      - script:
-          cmake -E make_directory cmake-build-tablegen cmake-build-azure
-        displayName: 'Prepare project'
-      - script:
-          cmake -E chdir cmake-build-azure cmake ..
+      - script: brew install yasm nasm ninja automake libtool
+        displayName: "Installing dependencies"
+      - script: cmake -E make_directory cmake-build-tablegen cmake-build-azure
+        displayName: "Prepare project"
+      - script: cmake -E chdir cmake-build-azure cmake ..
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
           -DWIMAL_TARGET=a64-macos
           -DCMAKE_TOOLCHAIN_FILE=../cmake/MeToolchain.cmake
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
-        displayName: 'Configure project'
-      - script:
-          cmake -E chdir cmake-build-tablegen cmake ..
+        displayName: "Configure project"
+      - script: cmake -E chdir cmake-build-tablegen cmake ..
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_INSTALL_PREFIX=$(Build.SourcesDirectory)/cmake/wimal
           -DWIMAL_HOME=$(Build.SourcesDirectory)/cmake/wimal
-        displayName: 'Configure tablegen'
-      - script:
-          cmake --build cmake-build-tablegen --target install-tablegen --
-        displayName: 'Generate tablegen'
-      - script:
-          cmake --build cmake-build-azure --target installation --
-        displayName: 'Build project'
+        displayName: "Configure tablegen"
+      - script: cmake --build cmake-build-tablegen --target install-tablegen --
+        displayName: "Generate tablegen"
+      - script: cmake --build cmake-build-azure --target installation --
+        displayName: "Build project"
       - task: ArchiveFiles@2
         inputs:
-          rootFolderOrFile: '$(Build.BinariesDirectory)/wimal'
+          rootFolderOrFile: "$(Build.BinariesDirectory)/wimal"
           includeRootFolder: true
-          archiveType: 'tar'
-          tarCompression: 'xz'
-          archiveFile: '$(Build.ArtifactStagingDirectory)/wimal-arm64_macos-$(Build.BuildNumber).tar.xz'
+          archiveType: "tar"
+          tarCompression: "xz"
+          archiveFile: "$(Build.ArtifactStagingDirectory)/wimal-arm64_macos-$(Build.BuildNumber).tar.xz"
           replaceExistingArchive: true
-        displayName: 'Create tarball'
+        displayName: "Create tarball"
       - task: PublishBuildArtifacts@1
         inputs:
-          PathtoPublish: '$(Build.ArtifactStagingDirectory)'
-          ArtifactName: 'wimal-arm64_macos-$(Build.BuildNumber)'
-        displayName: 'Upload artifact'
+          PathtoPublish: "$(Build.ArtifactStagingDirectory)"
+          ArtifactName: "wimal-arm64_macos-$(Build.BuildNumber)"
+        displayName: "Upload artifact"

@@ -57,7 +57,7 @@ jobs:
           cmake ../../compiler-rt/lib/builtins
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
+          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
           -DCMAKE_TOOLCHAIN_FILE=../../cmake/MeToolchain.cmake
           -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=x86_64-linux-gnu
           -DWIMAL_TARGET=x64-linux
@@ -68,7 +68,7 @@ jobs:
           cmake ../../compiler-rt/lib/builtins
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
+          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
           -DCMAKE_TOOLCHAIN_FILE=../../cmake/MeToolchain.cmake
           -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=armv7-none-linux-androideabi
           -DWIMAL_TARGET=arm-android
@@ -80,7 +80,7 @@ jobs:
           cmake ../../compiler-rt/lib/builtins
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
+          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
           -DCMAKE_TOOLCHAIN_FILE=../../cmake/MeToolchain.cmake
           -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=aarch64-none-linux-android
           -DWIMAL_TARGET=a64-android
@@ -92,7 +92,7 @@ jobs:
           cmake ../../compiler-rt/lib/builtins
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
+          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
           -DCMAKE_TOOLCHAIN_FILE=../../cmake/MeToolchain.cmake
           -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=i686-none-linux-android
           -DWIMAL_TARGET=x86-android
@@ -104,7 +104,7 @@ jobs:
           cmake ../../compiler-rt/lib/builtins
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
+          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
           -DCMAKE_TOOLCHAIN_FILE=../../cmake/MeToolchain.cmake
           -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=x86_64-none-linux-android
           -DWIMAL_TARGET=x64-android
@@ -116,7 +116,7 @@ jobs:
           cmake ../../compiler-rt/lib/builtins
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
+          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
           -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=x86_64-apple-darwin
         displayName: "(Darwin) Configure project"
       - script: cmake --build cmake-build/darwin --target install-builtins-stripped --

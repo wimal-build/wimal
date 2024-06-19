@@ -89,6 +89,10 @@ __END_DECLS
 #endif // qsort_r
 #define qsort_r(...) ld64_qsort_r(__VA_ARGS__)
 
+#ifndef PAGE_MASK
+#define PAGE_MASK 0xFFFFF000UL
+#endif // PAGE_MASK
+
 #endif // __APPLE__
 
 #endif // LD64_CONFIGURE_H_

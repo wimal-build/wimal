@@ -236,14 +236,27 @@ def build_sdk(platform, machine, toolchain):
 
     copy_file(
         os.path.join(target, 'usr', 'lib', 'llvm-7', 'lib', 'libc++abi.a'),
-        os.path.join(libdir, 'libc++abi.a'),
+        os.path.join(libdir, 'libc++abi_static.a'),
     )
     copy_file(
         os.path.join(target, 'usr', 'lib', 'llvm-7', 'lib', 'libc++.a'),
         os.path.join(libdir, 'libc++_static.a'),
     )
+
+    try:
+        os.remove(os.path.join(libdir, 'libc++.so'))
+    except FileNotFoundError:
+        pass
     file = open(os.path.join(libdir, 'libc++.so'), 'w')
-    file.write('INPUT(-lc++_static -lc++abi -lpthread)')
+    file.write('INPUT(-lc++_static -lc++abi_static -lpthread)')
+    file.close()
+
+    try:
+        os.remove(os.path.join(libdir, 'libc++abi.so'))
+    except FileNotFoundError:
+        pass
+    file = open(os.path.join(libdir, 'libc++abi.so'), 'w')
+    file.write('INPUT(-lc++abi_static -lpthread)')
     file.close()
 
     shutil.rmtree(os.path.join(target, 'etc'))

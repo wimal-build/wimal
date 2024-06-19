@@ -175,6 +175,46 @@ jobs:
           PathtoPublish: "$(Build.ArtifactStagingDirectory)"
           ArtifactName: "wimal-linux-$(Build.BuildNumber)"
         displayName: "Upload artifact"
+  - job: a64_linux
+    timeoutInMinutes: 300
+    pool:
+      vmImage: "Ubuntu-latest"
+    steps:
+      - script: sudo apt install ninja-build yasm nasm -y
+        displayName: "Installing dependencies"
+      - script: cmake -E make_directory cmake-build-tablegen cmake-build-azure
+        displayName: "Prepare project"
+      - script: cmake -E chdir cmake-build-azure cmake ..
+          -GNinja
+          -DCMAKE_BUILD_TYPE=Release
+          -DWIMAL_TARGET=a64-linux
+          -DCMAKE_TOOLCHAIN_FILE=../cmake/MeToolchain.cmake
+          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
+        displayName: "Configure project"
+      - script: cmake -E chdir cmake-build-tablegen cmake ..
+          -GNinja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_INSTALL_PREFIX=$(Build.SourcesDirectory)/cmake/wimal
+          -DWIMAL_HOME=$(Build.SourcesDirectory)/cmake/wimal
+        displayName: "Configure tablegen"
+      - script: cmake --build cmake-build-tablegen --target install-tablegen --
+        displayName: "Generate table-gen"
+      - script: cmake --build cmake-build-azure --target installation --
+        displayName: "Build project"
+      - task: ArchiveFiles@2
+        inputs:
+          rootFolderOrFile: "$(Build.BinariesDirectory)/wimal"
+          includeRootFolder: true
+          archiveType: "tar"
+          tarCompression: "xz"
+          archiveFile: "$(Build.ArtifactStagingDirectory)/wimal-a64-linux-$(Build.BuildNumber).tar.xz"
+          replaceExistingArchive: true
+        displayName: "Create tarball"
+      - task: PublishBuildArtifacts@1
+        inputs:
+          PathtoPublish: "$(Build.ArtifactStagingDirectory)"
+          ArtifactName: "wimal-a64-linux-$(Build.BuildNumber)"
+        displayName: "Upload artifact"
   - job: macos
     timeoutInMinutes: 300
     pool:

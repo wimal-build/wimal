@@ -33,13 +33,13 @@ void Install::Run(const Context *context, std::vector<std::string> extraArgs) {
         {"llvm-strip", "strip"},
     };
     static const std::vector<link> cctools = {
-        {"apple-ar", "ar"},
+        {"llvm-ar", "ar"},
         {"apple-install-name-tool", "install_name_tool"},
         {"apple-ld", "ld"},
         {"apple-lipo", "lipo"},
         {"apple-nm", "nm"},
-        {"apple-ranlib", "ranlib"},
-        {"apple-readelf", "readelf"},
+        {"llvm-ranlib", "ranlib"},
+        {"llvm-readelf", "readelf"},
         {"apple-strip", "strip"},
         {"dsymutil", "dsymutil"},
         {"llvm-objcopy", "objcopy"},

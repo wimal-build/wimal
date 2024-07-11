@@ -48,78 +48,184 @@ jobs:
       - script: cmake -E make_directory
           cmake-build/darwin
           cmake-build/x64-linux
+          cmake-build/a64-linux
           cmake-build/arm-android
           cmake-build/a64-android
           cmake-build/x86-android
           cmake-build/x64-android
         displayName: "Prepare project"
       - script: cmake -E chdir cmake-build/x64-linux
-          cmake ../../compiler-rt/lib/builtins
+          cmake ../../compiler-rt
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
           -DCMAKE_TOOLCHAIN_FILE=../../cmake/MeToolchain.cmake
           -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=x86_64-linux-gnu
           -DWIMAL_TARGET=x64-linux
+          -DCOMPILER_RT_BUILD_BUILTINS=ON
+          -DCOMPILER_RT_BUILD_CRT=OFF
+          -DCOMPILER_RT_BUILD_SANITIZERS=ON
+          -DCOMPILER_RT_BUILD_XRAY=OFF
+          -DCOMPILER_RT_BUILD_LIBFUZZER=OFF
+          -DCOMPILER_RT_BUILD_PROFILE=OFF
+          -DCOMPILER_RT_BUILD_MEMPROF=OFF
+          -DCOMPILER_RT_INCLUDE_TESTS=OFF
+          -DCOMPILER_RT_SANITIZERS_TO_BUILD=asan
+          -DLLVM_USE_SANITIZER=OFF
         displayName: "(x64-linux) Configure project"
-      - script: cmake --build cmake-build/x64-linux --target install-builtins-stripped --
+      - script: cmake --build cmake-build/x64-linux --target
+          install-asan-stripped
+          install-builtins-stripped
+          install-compiler-rt-headers-stripped
+          --
+        displayName: "(a64-linux) Build project"
+      - script: cmake -E chdir cmake-build/a64-linux
+          cmake ../../compiler-rt
+          -GNinja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
+          -DCMAKE_TOOLCHAIN_FILE=../../cmake/MeToolchain.cmake
+          -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=aarch64-linux-gnu
+          -DWIMAL_TARGET=a64-linux
+          -DCOMPILER_RT_BUILD_BUILTINS=ON
+          -DCOMPILER_RT_BUILD_CRT=OFF
+          -DCOMPILER_RT_BUILD_SANITIZERS=ON
+          -DCOMPILER_RT_BUILD_XRAY=OFF
+          -DCOMPILER_RT_BUILD_LIBFUZZER=OFF
+          -DCOMPILER_RT_BUILD_PROFILE=OFF
+          -DCOMPILER_RT_BUILD_MEMPROF=OFF
+          -DCOMPILER_RT_INCLUDE_TESTS=OFF
+          -DCOMPILER_RT_SANITIZERS_TO_BUILD=asan
+          -DLLVM_USE_SANITIZER=OFF
+        displayName: "(a64-linux) Configure project"
+      - script: cmake --build cmake-build/a64-linux --target
+          install-asan-stripped
+          install-builtins-stripped
+          install-compiler-rt-headers-stripped
+          --
         displayName: "(x64-linux) Build project"
       - script: cmake -E chdir cmake-build/arm-android
-          cmake ../../compiler-rt/lib/builtins
+          cmake ../../compiler-rt
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
           -DCMAKE_TOOLCHAIN_FILE=../../cmake/MeToolchain.cmake
           -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=armv7-none-linux-androideabi
           -DWIMAL_TARGET=arm-android
-          -DANDROID=ON
+          -DCOMPILER_RT_BUILD_BUILTINS=ON
+          -DCOMPILER_RT_BUILD_CRT=OFF
+          -DCOMPILER_RT_BUILD_SANITIZERS=ON
+          -DCOMPILER_RT_BUILD_XRAY=OFF
+          -DCOMPILER_RT_BUILD_LIBFUZZER=OFF
+          -DCOMPILER_RT_BUILD_PROFILE=OFF
+          -DCOMPILER_RT_BUILD_MEMPROF=OFF
+          -DCOMPILER_RT_INCLUDE_TESTS=OFF
+          -DCOMPILER_RT_SANITIZERS_TO_BUILD=asan
+          -DLLVM_USE_SANITIZER=OFF
         displayName: "(arm-android) Configure project"
-      - script: cmake --build cmake-build/arm-android --target install-builtins-stripped --
+      - script: cmake --build cmake-build/arm-android --target
+          install-asan-stripped
+          install-builtins-stripped
+          install-compiler-rt-headers-stripped
+          --
         displayName: "(arm-android) Build project"
       - script: cmake -E chdir cmake-build/a64-android
-          cmake ../../compiler-rt/lib/builtins
+          cmake ../../compiler-rt
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
           -DCMAKE_TOOLCHAIN_FILE=../../cmake/MeToolchain.cmake
           -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=aarch64-none-linux-android
           -DWIMAL_TARGET=a64-android
-          -DANDROID=ON
+          -DCOMPILER_RT_BUILD_BUILTINS=ON
+          -DCOMPILER_RT_BUILD_CRT=OFF
+          -DCOMPILER_RT_BUILD_SANITIZERS=ON
+          -DCOMPILER_RT_BUILD_XRAY=OFF
+          -DCOMPILER_RT_BUILD_LIBFUZZER=OFF
+          -DCOMPILER_RT_BUILD_PROFILE=OFF
+          -DCOMPILER_RT_BUILD_MEMPROF=OFF
+          -DCOMPILER_RT_INCLUDE_TESTS=OFF
+          -DCOMPILER_RT_SANITIZERS_TO_BUILD=asan
+          -DLLVM_USE_SANITIZER=OFF
         displayName: "(a64-android) Configure project"
-      - script: cmake --build cmake-build/a64-android --target install-builtins-stripped --
+      - script: cmake --build cmake-build/a64-android --target
+          install-asan-stripped
+          install-builtins-stripped
+          install-compiler-rt-headers-stripped
+          --
         displayName: "(a64-android) Build project"
       - script: cmake -E chdir cmake-build/x86-android
-          cmake ../../compiler-rt/lib/builtins
+          cmake ../../compiler-rt
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
           -DCMAKE_TOOLCHAIN_FILE=../../cmake/MeToolchain.cmake
           -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=i686-none-linux-android
           -DWIMAL_TARGET=x86-android
-          -DANDROID=ON
+          -DCOMPILER_RT_BUILD_BUILTINS=ON
+          -DCOMPILER_RT_BUILD_CRT=OFF
+          -DCOMPILER_RT_BUILD_SANITIZERS=ON
+          -DCOMPILER_RT_BUILD_XRAY=OFF
+          -DCOMPILER_RT_BUILD_LIBFUZZER=OFF
+          -DCOMPILER_RT_BUILD_PROFILE=OFF
+          -DCOMPILER_RT_BUILD_MEMPROF=OFF
+          -DCOMPILER_RT_INCLUDE_TESTS=OFF
+          -DCOMPILER_RT_SANITIZERS_TO_BUILD=asan
+          -DLLVM_USE_SANITIZER=OFF
         displayName: "(x86-android) Configure project"
-      - script: cmake --build cmake-build/x86-android --target install-builtins-stripped --
+      - script: cmake --build cmake-build/x86-android --target
+          install-asan-stripped
+          install-builtins-stripped
+          install-compiler-rt-headers-stripped
+          --
         displayName: "(x86-android) Build project"
       - script: cmake -E chdir cmake-build/x64-android
-          cmake ../../compiler-rt/lib/builtins
+          cmake ../../compiler-rt
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
           -DCMAKE_TOOLCHAIN_FILE=../../cmake/MeToolchain.cmake
           -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=x86_64-none-linux-android
           -DWIMAL_TARGET=x64-android
-          -DANDROID=ON
+          -DCOMPILER_RT_BUILD_BUILTINS=ON
+          -DCOMPILER_RT_BUILD_CRT=OFF
+          -DCOMPILER_RT_BUILD_SANITIZERS=ON
+          -DCOMPILER_RT_BUILD_XRAY=OFF
+          -DCOMPILER_RT_BUILD_LIBFUZZER=OFF
+          -DCOMPILER_RT_BUILD_PROFILE=OFF
+          -DCOMPILER_RT_BUILD_MEMPROF=OFF
+          -DCOMPILER_RT_INCLUDE_TESTS=OFF
+          -DCOMPILER_RT_SANITIZERS_TO_BUILD=asan
+          -DLLVM_USE_SANITIZER=OFF
         displayName: "(x64-android) Configure project"
-      - script: cmake --build cmake-build/x64-android --target install-builtins-stripped --
+      - script: cmake --build cmake-build/x64-android --target
+          install-asan-stripped
+          install-builtins-stripped
+          install-compiler-rt-headers-stripped
+          --
         displayName: "(x64-android) Build project"
       - script: cmake -E chdir cmake-build/darwin
-          cmake ../../compiler-rt/lib/builtins
+          cmake ../../compiler-rt
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
           -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=x86_64-apple-darwin
+          -DCOMPILER_RT_BUILD_BUILTINS=ON
+          -DCOMPILER_RT_BUILD_CRT=OFF
+          -DCOMPILER_RT_BUILD_SANITIZERS=ON
+          -DCOMPILER_RT_BUILD_XRAY=OFF
+          -DCOMPILER_RT_BUILD_LIBFUZZER=OFF
+          -DCOMPILER_RT_BUILD_PROFILE=OFF
+          -DCOMPILER_RT_BUILD_MEMPROF=OFF
+          -DCOMPILER_RT_INCLUDE_TESTS=OFF
+          -DCOMPILER_RT_SANITIZERS_TO_BUILD=asan
+          -DLLVM_USE_SANITIZER=OFF
         displayName: "(Darwin) Configure project"
-      - script: cmake --build cmake-build/darwin --target install-builtins-stripped --
+      - script: cmake --build cmake-build/darwin --target
+          install-asan-stripped
+          install-builtins-stripped
+          install-compiler-rt-headers-stripped
+          --
         displayName: "(Darwin) Build project"
       - task: ArchiveFiles@2
         inputs:

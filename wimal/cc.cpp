@@ -281,6 +281,12 @@ void Cc::Run(const Context *context, std::vector<std::string> extraArgs) {
             break;
         }
     }
+    // Set env WIMAL_CC_ASAN=1 to enable address sanitizer.
+    auto env = getenv("WIMAL_CC_ASAN");
+    if (env && strcmp(env, "1") == 0) {
+        args.emplace_back("-fsanitize=address");
+        args.emplace_back("-fno-omit-frame-pointer");
+    }
     std::vector<char *> arguments;
     arguments.reserve(args.size() + context->args.size() + extraArgs.size() + 1);
     for (const auto &arg : args) {

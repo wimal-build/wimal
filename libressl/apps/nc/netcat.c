@@ -1,4 +1,4 @@
-/* $OpenBSD: netcat.c,v 1.205 2019/06/28 13:35:02 deraadt Exp $ */
+/* $OpenBSD: netcat.c,v 1.226 2023/08/14 08:07:27 tb Exp $ */
 /*
  * Copyright (c) 2001 Eric Jackson <ericj@monkey.org>
  * Copyright (c) 2015 Bob Beck.  All rights reserved.
@@ -107,7 +107,7 @@ const char    *Kflag;				/* Private key file */
 const char    *oflag;				/* OCSP stapling file */
 const char    *Rflag;				/* Root CA file */
 int	tls_cachanged;				/* Using non-default CA file */
-int     TLSopt;					/* TLS options */
+int	TLSopt;					/* TLS options */
 char	*tls_expectname;			/* required name in peer cert */
 char	*tls_expecthash;			/* required hash of peer cert */
 char	*tls_ciphers;				/* TLS ciphers */
@@ -129,12 +129,13 @@ void	help(void) __attribute__((noreturn));
 int	local_listen(const char *, const char *, struct addrinfo);
 void	readwrite(int, struct tls *);
 void	fdpass(int nfd) __attribute__((noreturn));
-int	remote_connect(const char *, const char *, struct addrinfo);
+int	remote_connect(const char *, const char *, struct addrinfo, char *);
 int	timeout_tls(int, struct tls *, int (*)(struct tls *));
 int	timeout_connect(int, const struct sockaddr *, socklen_t);
 int	socks_connect(const char *, const char *, struct addrinfo,
 	    const char *, const char *, struct addrinfo, int, const char *);
 int	udptest(int);
+void	connection_info(const char *, const char *, const char *, const char *);
 int	unix_bind(char *, int);
 int	unix_connect(char *);
 int	unix_listen(char *);
@@ -155,8 +156,8 @@ main(int argc, char *argv[])
 {
 	int ch, s = -1, ret, socksv;
 	char *host, *uport;
+	char ipaddr[NI_MAXHOST];
 	struct addrinfo hints;
-	struct servent *sv;
 	socklen_t len;
 	struct sockaddr_storage cliaddr;
 	char *proxy = NULL, *proxyport = NULL;
@@ -171,7 +172,6 @@ main(int argc, char *argv[])
 	socksv = 5;
 	host = NULL;
 	uport = NULL;
-	sv = NULL;
 	Rflag = tls_default_ca_cert_file();
 
 	signal(SIGPIPE, SIG_IGN);
@@ -361,15 +361,11 @@ main(int argc, char *argv[])
 #endif
 
 	/* Cruft to make sure options are clean, and used properly. */
-	if (argv[0] && !argv[1] && family == AF_UNIX) {
+	if (argc == 1 && family == AF_UNIX) {
 		host = argv[0];
-		uport = NULL;
-	} else if (argv[0] && !argv[1]) {
-		if (!lflag)
-			usage(1);
+	} else if (argc == 1 && lflag) {
 		uport = argv[0];
-		host = NULL;
-	} else if (argv[0] && argv[1]) {
+	} else if (argc == 2) {
 		host = argv[0];
 		uport = argv[1];
 	} else
@@ -377,24 +373,36 @@ main(int argc, char *argv[])
 
 	if (usetls) {
 		if (Cflag && unveil(Cflag, "r") == -1)
-			err(1, "unveil");
+			err(1, "unveil %s", Cflag);
 		if (unveil(Rflag, "r") == -1)
-			err(1, "unveil");
+			err(1, "unveil %s", Rflag);
 		if (Kflag && unveil(Kflag, "r") == -1)
-			err(1, "unveil");
+			err(1, "unveil %s", Kflag);
 		if (oflag && unveil(oflag, "r") == -1)
-			err(1, "unveil");
+			err(1, "unveil %s", oflag);
+	} else if (family == AF_UNIX && uflag && lflag && !kflag) {
+		/*
+		 * After recvfrom(2) from client, the server connects
+		 * to the client socket.  As the client path is determined
+		 * during runtime, we cannot unveil(2).
+		 */
 	} else {
 		if (family == AF_UNIX) {
 			if (unveil(host, "rwc") == -1)
-				err(1, "unveil");
-			if (uflag && !lflag) {
-				if (unveil(sflag ? sflag : "/tmp", "rwc") == -1)
-					err(1, "unveil");
+				err(1, "unveil %s", host);
+			if (uflag && !kflag) {
+				if (sflag) {
+					if (unveil(sflag, "rwc") == -1)
+						err(1, "unveil %s", sflag);
+				} else {
+					if (unveil("/tmp", "rwc") == -1)
+						err(1, "unveil /tmp");
+				}
 			}
 		} else {
+			/* no filesystem visibility */
 			if (unveil("/", "") == -1)
-				err(1, "unveil");
+				err(1, "unveil /");
 		}
 	}
 
@@ -581,6 +589,10 @@ main(int argc, char *argv[])
 			if (s == -1)
 				err(1, NULL);
 			if (uflag && kflag) {
+				if (family == AF_UNIX) {
+					if (pledge("stdio unix", NULL) == -1)
+						err(1, "pledge");
+				}
 				/*
 				 * For UDP and -k, don't connect the socket,
 				 * let it receive datagrams from multiple
@@ -607,9 +619,14 @@ main(int argc, char *argv[])
 				if (rv == -1)
 					err(1, "connect");
 
+				if (family == AF_UNIX) {
+					if (pledge("stdio unix", NULL) == -1)
+						err(1, "pledge");
+				}
 				if (vflag)
 					report_sock("Connection received",
-					    (struct sockaddr *)&z, len, NULL);
+					    (struct sockaddr *)&z, len,
+					    family == AF_UNIX ? host : NULL);
 
 				readwrite(s, NULL);
 			} else {
@@ -660,7 +677,6 @@ main(int argc, char *argv[])
 		if (uflag)
 			unlink(unix_dg_tmp_socket);
 		return ret;
-
 	} else {
 		int i = 0;
 
@@ -686,35 +702,27 @@ main(int argc, char *argv[])
 				    proxy, proxyport, proxyhints, socksv,
 				    Pflag);
 			else
-				s = remote_connect(host, portlist[i], hints);
+				s = remote_connect(host, portlist[i], hints,
+				    ipaddr);
 
 			if (s == -1)
 				continue;
 
 			ret = 0;
 			if (vflag || zflag) {
+				int print_info = 1;
+
 				/* For UDP, make sure we are connected. */
 				if (uflag) {
-					if (udptest(s) == -1) {
+					/* No info on failed or skipped test. */
+					if ((print_info = udptest(s)) == -1) {
 						ret = 1;
 						continue;
 					}
 				}
-
-				/* Don't look up port if -n. */
-				if (nflag)
-					sv = NULL;
-				else {
-					sv = getservbyport(
-					    ntohs(atoi(portlist[i])),
-					    uflag ? "udp" : "tcp");
-				}
-
-				fprintf(stderr,
-				    "Connection to %s %s port [%s/%s] "
-				    "succeeded!\n", host, portlist[i],
-				    uflag ? "udp" : "tcp",
-				    sv ? sv->s_name : "*");
+				if (print_info == 1)
+					connection_info(host, portlist[i],
+					    uflag ? "udp" : "tcp", ipaddr);
 			}
 			if (Fflag)
 				fdpass(s);
@@ -807,7 +815,7 @@ tls_setup_client(struct tls *tls_ctx, int s, char *host)
 	const char *errstr;
 
 	if (tls_connect_socket(tls_ctx, s,
-		tls_expectname ? tls_expectname : host) == -1) {
+	    tls_expectname ? tls_expectname : host) == -1) {
 		errx(1, "tls connection failed (%s)",
 		    tls_error(tls_ctx));
 	}
@@ -818,8 +826,8 @@ tls_setup_client(struct tls *tls_ctx, int s, char *host)
 	}
 	if (vflag)
 		report_tls(tls_ctx, host);
-	if (tls_expecthash && tls_peer_cert_hash(tls_ctx) &&
-	    strcmp(tls_expecthash, tls_peer_cert_hash(tls_ctx)) != 0)
+	if (tls_expecthash && (tls_peer_cert_hash(tls_ctx) == NULL ||
+	    strcmp(tls_expecthash, tls_peer_cert_hash(tls_ctx)) != 0))
 		errx(1, "peer certificate is not %s", tls_expecthash);
 	if (Zflag) {
 		save_peer_cert(tls_ctx, Zflag);
@@ -847,8 +855,9 @@ tls_setup_server(struct tls *tls_ctx, int connfd, char *host)
 			report_tls(tls_cctx, host);
 		if ((TLSopt & TLS_CCERT) && !gotcert)
 			warnx("No client certificate provided");
-		else if (gotcert && tls_peer_cert_hash(tls_ctx) && tls_expecthash &&
-		    strcmp(tls_expecthash, tls_peer_cert_hash(tls_ctx)) != 0)
+		else if (gotcert && tls_expecthash &&
+		    (tls_peer_cert_hash(tls_cctx) == NULL ||
+		    strcmp(tls_expecthash, tls_peer_cert_hash(tls_cctx)) != 0))
 			warnx("peer certificate is not %s", tls_expecthash);
 		else if (gotcert && tls_expectname &&
 		    (!tls_peer_cert_contains_name(tls_cctx, tls_expectname)))
@@ -895,7 +904,6 @@ unix_connect(char *path)
 		return -1;
 	}
 	return s;
-
 }
 
 /*
@@ -925,10 +933,11 @@ unix_listen(char *path)
  * port or source address if needed. Returns -1 on failure.
  */
 int
-remote_connect(const char *host, const char *port, struct addrinfo hints)
+remote_connect(const char *host, const char *port, struct addrinfo hints,
+    char *ipaddr)
 {
 	struct addrinfo *res, *res0;
-	int s = -1, error, save_errno;
+	int s = -1, error, herr, save_errno;
 #ifdef SO_BINDANY
 	int on = 1;
 #endif
@@ -966,11 +975,32 @@ remote_connect(const char *host, const char *port, struct addrinfo hints)
 
 		set_common_sockopts(s, res->ai_family);
 
+		if (ipaddr != NULL) {
+			herr = getnameinfo(res->ai_addr, res->ai_addrlen,
+			    ipaddr, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+			switch (herr) {
+			case 0:
+				break;
+			case EAI_SYSTEM:
+				err(1, "getnameinfo");
+			default:
+				errx(1, "getnameinfo: %s", gai_strerror(herr));
+			}
+		}
+
 		if (timeout_connect(s, res->ai_addr, res->ai_addrlen) == 0)
 			break;
-		if (vflag)
-			warn("connect to %s port %s (%s) failed", host, port,
-			    uflag ? "udp" : "tcp");
+
+		if (vflag) {
+			/* only print IP if there is something to report */
+			if (nflag || ipaddr == NULL ||
+			    (strncmp(host, ipaddr, NI_MAXHOST) == 0))
+				warn("connect to %s port %s (%s) failed", host,
+				    port, uflag ? "udp" : "tcp");
+			else
+				warn("connect to %s (%s) port %s (%s) failed",
+				    host, ipaddr, port, uflag ? "udp" : "tcp");
+		}
 
 		save_errno = errno;
 		close(s);
@@ -1167,7 +1197,7 @@ readwrite(int net_fd, struct tls *tls_ctx)
 			pfd[POLL_NETIN].fd = -1;
 
 		if (pfd[POLL_NETOUT].revents & POLLHUP) {
-			if (Nflag)
+			if (pfd[POLL_NETOUT].fd != -1 && Nflag)
 				shutdown(pfd[POLL_NETOUT].fd, SHUT_WR);
 			pfd[POLL_NETOUT].fd = -1;
 		}
@@ -1246,7 +1276,7 @@ readwrite(int net_fd, struct tls *tls_ctx)
 			if (netinbufpos == BUFSIZE)
 				pfd[POLL_NETIN].events = 0;
 			/* handle telnet */
-			if (tflag)
+			if (pfd[POLL_NETIN].fd != -1 && tflag)
 				atelnet(pfd[POLL_NETIN].fd, netinbuf,
 				    netinbufpos);
 		}
@@ -1287,6 +1317,9 @@ drainbuf(int fd, unsigned char *buf, size_t *bufpos, struct tls *tls)
 	ssize_t n;
 	ssize_t adjust;
 
+	if (fd == -1)
+		return -1;
+
 	if (tls) {
 		n = tls_write(tls, buf, *bufpos);
 		if (n == -1)
@@ -1312,6 +1345,9 @@ fillbuf(int fd, unsigned char *buf, size_t *bufpos, struct tls *tls)
 {
 	size_t num = BUFSIZE - *bufpos;
 	ssize_t n;
+
+	if (fd == -1)
+		return -1;
 
 	if (tls) {
 		n = tls_read(tls, buf + *bufpos, num);
@@ -1419,7 +1455,6 @@ atelnet(int nfd, unsigned char *buf, unsigned int size)
 	}
 }
 
-
 int
 strtoport(char *portstr, int udp)
 {
@@ -1504,6 +1539,10 @@ udptest(int s)
 {
 	int i, ret;
 
+	/* Only write to the socket in scan mode or interactive mode. */
+	if (!zflag && !isatty(STDIN_FILENO))
+		return 0;
+
 	for (i = 0; i <= 3; i++) {
 		if (write(s, "X", 1) == 1)
 			ret = 1;
@@ -1514,6 +1553,32 @@ udptest(int s)
 }
 
 void
+connection_info(const char *host, const char *port, const char *proto,
+    const char *ipaddr)
+{
+	struct servent *sv;
+	char *service = "*";
+
+	/* Look up service name unless -n. */
+	if (!nflag) {
+		sv = getservbyport(ntohs(atoi(port)), proto);
+		if (sv != NULL)
+			service = sv->s_name;
+	}
+
+	fprintf(stderr, "Connection to %s", host);
+
+	/*
+	 * if we aren't connecting thru a proxy and
+	 * there is something to report, print IP
+	 */
+	if (!nflag && !xflag && strcmp(host, ipaddr) != 0)
+		fprintf(stderr, " (%s)", ipaddr);
+
+	fprintf(stderr, " %s port [%s/%s] succeeded!\n", port, proto, service);
+}
+
+void
 set_common_sockopts(int s, int af)
 {
 	int x = 1;
@@ -1521,13 +1586,13 @@ set_common_sockopts(int s, int af)
 #ifdef TCP_MD5SIG
 	if (Sflag) {
 		if (setsockopt(s, IPPROTO_TCP, TCP_MD5SIG,
-			&x, sizeof(x)) == -1)
+		    &x, sizeof(x)) == -1)
 			err(1, NULL);
 	}
 #endif
 	if (Dflag) {
 		if (setsockopt(s, SOL_SOCKET, SO_DEBUG,
-			&x, sizeof(x)) == -1)
+		    &x, sizeof(x)) == -1)
 			err(1, NULL);
 	}
 	if (Tflag != -1) {
@@ -1687,7 +1752,7 @@ save_peer_cert(struct tls *tls_ctx, FILE *fp)
 }
 
 void
-report_tls(struct tls * tls_ctx, char * host)
+report_tls(struct tls *tls_ctx, char *host)
 {
 	time_t t;
 	const char *ocsp_url;
@@ -1715,7 +1780,7 @@ report_tls(struct tls * tls_ctx, char * host)
 	switch (tls_peer_ocsp_response_status(tls_ctx)) {
 	case TLS_OCSP_RESPONSE_SUCCESSFUL:
 		fprintf(stderr, "OCSP Stapling: %s\n",
-		    tls_peer_ocsp_result(tls_ctx) == NULL ?  "" :
+		    tls_peer_ocsp_result(tls_ctx) == NULL ? "" :
 		    tls_peer_ocsp_result(tls_ctx));
 		fprintf(stderr,
 		    "  response_status=%d cert_status=%d crl_reason=%d\n",
@@ -1725,22 +1790,22 @@ report_tls(struct tls * tls_ctx, char * host)
 		t = tls_peer_ocsp_this_update(tls_ctx);
 		fprintf(stderr, "  this update: %s",
 		    t != -1 ? ctime(&t) : "\n");
-		t =  tls_peer_ocsp_next_update(tls_ctx);
+		t = tls_peer_ocsp_next_update(tls_ctx);
 		fprintf(stderr, "  next update: %s",
 		    t != -1 ? ctime(&t) : "\n");
-		t =  tls_peer_ocsp_revocation_time(tls_ctx);
+		t = tls_peer_ocsp_revocation_time(tls_ctx);
 		fprintf(stderr, "  revocation: %s",
 		    t != -1 ? ctime(&t) : "\n");
 		break;
 	case -1:
 		break;
 	default:
-		fprintf(stderr, "OCSP Stapling:  failure - response_status %d (%s)\n",
+		fprintf(stderr,
+		    "OCSP Stapling:  failure - response_status %d (%s)\n",
 		    tls_peer_ocsp_response_status(tls_ctx),
-		    tls_peer_ocsp_result(tls_ctx) == NULL ?  "" :
+		    tls_peer_ocsp_result(tls_ctx) == NULL ? "" :
 		    tls_peer_ocsp_result(tls_ctx));
 		break;
-
 	}
 }
 
@@ -1760,12 +1825,15 @@ report_sock(const char *msg, const struct sockaddr *sa, socklen_t salen,
 	if (nflag)
 		flags |= NI_NUMERICHOST;
 
-	if ((herr = getnameinfo(sa, salen, host, sizeof(host),
-	    port, sizeof(port), flags)) != 0) {
-		if (herr == EAI_SYSTEM)
-			err(1, "getnameinfo");
-		else
-			errx(1, "getnameinfo: %s", gai_strerror(herr));
+	herr = getnameinfo(sa, salen, host, sizeof(host), port, sizeof(port),
+	    flags);
+	switch (herr) {
+	case 0:
+		break;
+	case EAI_SYSTEM:
+		err(1, "getnameinfo");
+	default:
+		errx(1, "getnameinfo: %s", gai_strerror(herr));
 	}
 
 	fprintf(stderr, "%s on %s %s\n", msg, host, port);
@@ -1802,21 +1870,17 @@ help(void)
 	\t-R CAfile	CA bundle\n\
 	\t-r		Randomize remote ports\n"
 #ifdef TCP_MD5SIG
-	"\
-	\t-S		Enable the TCP MD5 signature option\n"
+	"\t-S		Enable the TCP MD5 signature option\n"
 #endif
-	"\
-	\t-s source	Local source address\n\
+	"\t-s sourceaddr	Local source address\n\
 	\t-T keyword	TOS value or TLS options\n\
 	\t-t		Answer TELNET negotiation\n\
 	\t-U		Use UNIX domain socket\n\
 	\t-u		UDP mode\n"
 #ifdef SO_RTABLE
-	"\
-	\t-V rtable	Specify alternate routing table\n"
+	"\t-V rtable	Specify alternate routing table\n"
 #endif
-	"\
-	\t-v		Verbose\n\
+	"\t-v		Verbose\n\
 	\t-W recvlimit	Terminate after receiving a number of packets\n\
 	\t-w timeout	Timeout for connects and final net reads\n\
 	\t-X proto	Proxy protocol: \"4\", \"5\" (SOCKS) or \"connect\"\n\
@@ -1836,7 +1900,7 @@ usage(int ret)
 	    "\t  [-i interval] [-K keyfile] [-M ttl] [-m minttl] [-O length]\n"
 	    "\t  [-o staplefile] [-P proxy_username] [-p source_port] "
 	    "[-R CAfile]\n"
-	    "\t  [-s source] [-T keyword] [-V rtable] [-W recvlimit] "
+	    "\t  [-s sourceaddr] [-T keyword] [-V rtable] [-W recvlimit] "
 	    "[-w timeout]\n"
 	    "\t  [-X proxy_protocol] [-x proxy_address[:port]] "
 	    "[-Z peercertfile]\n"

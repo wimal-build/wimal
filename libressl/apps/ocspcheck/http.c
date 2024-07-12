@@ -1,4 +1,4 @@
-/*	$Id: http.c,v 1.12 2019/06/28 13:32:49 deraadt Exp $ */
+/*	$Id: http.c,v 1.17 2023/04/19 12:58:16 jsg Exp $ */
 /*
  * Copyright (c) 2016 Kristaps Dzonsons <kristaps@bsd.lv>
  *
@@ -33,7 +33,6 @@
 #include <unistd.h>
 
 #include "http.h"
-#include <tls.h>
 
 /*
  * A buffer for transferring HTTP/S data.
@@ -119,15 +118,10 @@ dotlswrite(const void *buf, size_t sz, const struct http *http)
 }
 
 int
-http_init()
+http_init(void)
 {
 	if (tlscfg != NULL)
 		return 0;
-
-	if (tls_init() == -1) {
-		warn("tls_init");
-		goto err;
-	}
 
 	tlscfg = tls_config_new();
 	if (tlscfg == NULL) {
@@ -349,6 +343,7 @@ http_open(const struct http *http, const void *p, size_t psz)
 		c = asprintf(&req,
 		    "POST %s HTTP/1.0\r\n"
 		    "Host: %s\r\n"
+		    "Content-Type: application/ocsp-request\r\n"
 		    "Content-Length: %zu\r\n"
 		    "\r\n",
 		    http->path, http->host, psz);
@@ -560,7 +555,7 @@ http_head_parse(const struct http *http, struct httpxfer *trans, size_t *sz)
 		}
 
 		*ccp++ = '\0';
-		while (isspace((int)*ccp))
+		while (isspace((unsigned char)*ccp))
 			ccp++;
 		h[hsz].key = cp;
 		h[hsz++].val = ccp;

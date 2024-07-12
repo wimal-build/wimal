@@ -1,10 +1,10 @@
-.\" $OpenBSD: ASN1_STRING_length.3,v 1.19 2019/06/14 13:59:32 schwarze Exp $
-.\" full merge up to: OpenSSL 4a56d2a3 Feb 25 16:49:27 2018 +0300
+.\" $OpenBSD: ASN1_STRING_length.3,v 1.29 2021/12/14 19:36:18 schwarze Exp $
+.\" full merge up to: OpenSSL 24a535ea Sep 22 13:14:20 2020 +0100
 .\"
 .\" This file is a derived work.
 .\" The changes are covered by the following Copyright and license:
 .\"
-.\" Copyright (c) 2018 Ingo Schwarze <schwarze@openbsd.org>
+.\" Copyright (c) 2018, 2019, 2021 Ingo Schwarze <schwarze@openbsd.org>
 .\"
 .\" Permission to use, copy, modify, and distribute this software for any
 .\" purpose with or without fee is hereby granted, provided that the above
@@ -66,19 +66,26 @@
 .\" ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
 .\" OF THE POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd $Mdocdate: June 14 2019 $
+.Dd $Mdocdate: December 14 2021 $
 .Dt ASN1_STRING_LENGTH 3
 .Os
 .Sh NAME
 .Nm ASN1_STRING_cmp ,
+.Nm ASN1_OCTET_STRING_cmp ,
 .Nm ASN1_STRING_data ,
 .Nm ASN1_STRING_dup ,
+.Nm ASN1_OCTET_STRING_dup ,
 .Nm ASN1_STRING_get0_data ,
 .Nm ASN1_STRING_length ,
 .Nm ASN1_STRING_length_set ,
+.Nm ASN1_STRING_set0 ,
 .Nm ASN1_STRING_set ,
+.Nm ASN1_OCTET_STRING_set ,
+.Nm ASN1_STRING_copy ,
 .Nm ASN1_STRING_to_UTF8 ,
 .Nm ASN1_STRING_type
+.\" deprecated aliases, intentionally undocumented:
+.\" M_ASN1_STRING_data, M_ASN1_STRING_length
 .Nd ASN1_STRING utility functions
 .Sh SYNOPSIS
 .In openssl/asn1.h
@@ -87,6 +94,11 @@
 .Fa "const ASN1_STRING *a"
 .Fa "const ASN1_STRING *b"
 .Fc
+.Ft int
+.Fo ASN1_OCTET_STRING_cmp
+.Fa "const ASN1_OCTET_STRING *a"
+.Fa "const ASN1_OCTET_STRING *b"
+.Fc
 .Ft unsigned char *
 .Fo ASN1_STRING_data
 .Fa "ASN1_STRING *x"
@@ -94,6 +106,10 @@
 .Ft ASN1_STRING *
 .Fo ASN1_STRING_dup
 .Fa "const ASN1_STRING *a"
+.Fc
+.Ft ASN1_OCTET_STRING *
+.Fo ASN1_OCTET_STRING_dup
+.Fa "const ASN1_OCTET_STRING *a"
 .Fc
 .Ft const unsigned char *
 .Fo ASN1_STRING_get0_data
@@ -108,11 +124,28 @@
 .Fa "ASN1_STRING *x"
 .Fa "int len"
 .Fc
+.Ft void
+.Fo ASN1_STRING_set0
+.Fa "ASN1_STRING *str"
+.Fa "void *data"
+.Fa "int len"
+.Fc
 .Ft int
 .Fo ASN1_STRING_set
 .Fa "ASN1_STRING *str"
 .Fa "const void *data"
 .Fa "int len"
+.Fc
+.Ft int
+.Fo ASN1_OCTET_STRING_set
+.Fa "ASN1_OCTET_STRING *str"
+.Fa "const unsigned char *data"
+.Fa "int len"
+.Fc
+.Ft int
+.Fo ASN1_STRING_copy
+.Fa "ASN1_STRING *dst"
+.Fa "const ASN1_STRING *src"
 .Fc
 .Ft int
 .Fo ASN1_STRING_to_UTF8
@@ -134,6 +167,11 @@ compares the type, the length, and the content of
 and
 .Fa b .
 .Pp
+.Fn ASN1_OCTET_STRING_cmp
+does exactly the same as
+.Fn ASN1_STRING_cmp
+without providing any type safety.
+.Pp
 .Fn ASN1_STRING_data
 is similar to
 .Fn ASN1_STRING_get0_data
@@ -144,8 +182,16 @@ Applications should use
 instead.
 .Pp
 .Fn ASN1_STRING_dup
-copies
-.Fa a .
+allocates a new
+.Vt ASN1_STRING
+object and copies the type, length, data, and flags from
+.Fa a
+into it.
+.Pp
+.Fn ASN1_OCTET_STRING_dup
+does exactly the same as
+.Fn ASN1_STRING_dup
+without providing any type safety.
 .Pp
 .Fn ASN1_STRING_get0_data
 returns an internal pointer to the data of
@@ -166,6 +212,15 @@ It may put
 .Fa x
 into an inconsistent internal state.
 .Pp
+.Fn ASN1_STRING_set0
+frees any data stored in
+.Fa str ,
+sets the length attribute to
+.Fa len
+bytes, and sets the data attribute to
+.Fa data ,
+transferring ownership, without doing any validation.
+.Pp
 .Fn ASN1_STRING_set
 sets the length attribute of
 .Fa str
@@ -174,10 +229,11 @@ to
 and copies that number of bytes from
 .Fa data
 into
-.Fa str .
+.Fa str ,
+overwriting any previous data.
 If
 .Fa len
-is -1, then
+is \-1, then
 .Fn strlen data
 is used instead of
 .Fa len .
@@ -190,6 +246,23 @@ the content of
 remains uninitialized; that is not considered an error unless
 .Fa len
 is negative.
+.Pp
+.Fn ASN1_OCTET_STRING_set
+does exactly the same as
+.Fn ASN1_STRING_set
+without providing any type safety.
+.Pp
+.Fn ASN1_STRING_copy
+copies the length and data of
+.Fa src
+into
+.Fa dst
+using
+.Fn ASN1_STRING_set
+and changes the type and flags of
+.Fa dst
+to match the type and flags of
+.Fa src .
 .Pp
 .Fn ASN1_STRING_to_UTF8
 converts the string
@@ -205,6 +278,11 @@ should be freed using
 .Fn ASN1_STRING_type
 returns the type of
 .Fa x .
+If the bit
+.Dv V_ASN1_NEG
+is set in the return value,
+.Fa x
+is an ASN.1 INTEGER or ENUMERATED object with a negative value.
 .Pp
 Almost all ASN.1 types are represented as
 .Vt ASN1_STRING
@@ -248,10 +326,14 @@ UTF-8 characters.
 .Pp
 Similar care should be taken to ensure the data is in the correct format
 when calling
-.Fn ASN1_STRING_set .
+.Fn ASN1_STRING_set
+or
+.Fn ASN1_STRING_set0 .
 .Sh RETURN VALUES
 .Fn ASN1_STRING_cmp
-returns 0 if the type, the length, and the content of
+and
+.Fn ASN1_OCTET_STRING_cmp
+return 0 if the type, the length, and the content of
 .Fa a
 and
 .Fa b
@@ -267,7 +349,9 @@ return an internal pointer to the data of
 .Fa x .
 .Pp
 .Fn ASN1_STRING_dup
-returns a pointer to a newly allocated
+and
+.Fn ASN1_OCTET_STRING_dup
+return a pointer to a newly allocated
 .Vt ASN1_STRING
 structure or
 .Dv NULL
@@ -276,8 +360,27 @@ if an error occurred.
 .Fn ASN1_STRING_length
 returns a number of bytes.
 .Pp
+.Fn ASN1_STRING_set ,
+.Fn ASN1_OCTET_STRING_set ,
+and
+.Fn ASN1_STRING_copy
+return 1 on success or 0 on failure.
+They fail if memory allocation fails.
 .Fn ASN1_STRING_set
-returns 1 on success or 0 on failure.
+and
+.Fn ASN1_OCTET_STRING_set
+also fail if
+.Fa data
+is
+.Dv NULL
+and
+.Fa len
+is \-1 in the same call.
+.Fn ASN1_STRING_copy
+also fails if
+.Fa src
+is
+.Dv NULL .
 .Pp
 .Fn ASN1_STRING_to_UTF8
 returns the number of bytes in the output buffer
@@ -286,7 +389,9 @@ or a negative number if an error occurred.
 .Pp
 .Fn ASN1_STRING_type
 returns an integer constant, for example
-.Dv V_ASN1_OCTET_STRING .
+.Dv V_ASN1_OCTET_STRING
+or
+.Dv V_ASN1_NEG_INTEGER .
 .Pp
 In some cases of failure of
 .Fn ASN1_STRING_dup ,
@@ -296,14 +401,21 @@ and
 the reason can be determined with
 .Xr ERR_get_error 3 .
 .Sh SEE ALSO
-.Xr ASN1_STRING_new 3
+.Xr ASN1_BIT_STRING_set 3 ,
+.Xr ASN1_mbstring_copy 3 ,
+.Xr ASN1_PRINTABLE_type 3 ,
+.Xr ASN1_STRING_new 3 ,
+.Xr ASN1_UNIVERSALSTRING_to_string 3
 .Sh HISTORY
 .Fn ASN1_STRING_cmp ,
 .Fn ASN1_STRING_dup ,
+.Fn ASN1_STRING_set ,
 and
-.Fn ASN1_STRING_set
+.Fn ASN1_OCTET_STRING_set
 first appeared in SSLeay 0.6.5.
-.Fn ASN1_STRING_data
+.Fn ASN1_OCTET_STRING_cmp ,
+.Fn ASN1_STRING_data ,
+.Fn ASN1_OCTET_STRING_dup ,
 and
 .Fn ASN1_STRING_type
 first appeared in SSLeay 0.8.0.
@@ -320,6 +432,27 @@ first appeared in OpenSSL 0.9.5 and has been available since
 first appeared in OpenSSL 0.9.6 and has been available since
 .Ox 2.9 .
 .Pp
+.Fn ASN1_STRING_set0
+first appeared in OpenSSL 0.9.8h and has been available since
+.Ox 4.5 .
+.Pp
+.Fn ASN1_STRING_copy
+first appeared in OpenSSL 1.0.0 and has been available since
+.Ox 4.9 .
+.Pp
 .Fn ASN1_STRING_get0_data
 first appeared in OpenSSL 1.1.0 and has been available since
 .Ox 6.3 .
+.Sh BUGS
+.Fn ASN1_OCTET_STRING_cmp ,
+.Fn ASN1_OCTET_STRING_dup ,
+and
+.Fn ASN1_OCTET_STRING_set
+do not check whether their arguments are really of the type
+.Dv V_ASN1_OCTET_STRING .
+They may report success even if their arguments are of a wrong type.
+Consequently, even in case of success, the return value of
+.Fn ASN1_OCTET_STRING_dup
+is not guaranteed to be of the type
+.Dv V_ASN1_OCTET_STRING
+either.

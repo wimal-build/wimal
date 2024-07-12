@@ -1,4 +1,4 @@
-/* $OpenBSD: dgst.c,v 1.14 2019/07/29 10:06:55 inoguchi Exp $ */
+/* $OpenBSD: dgst.c,v 1.21 2023/03/06 14:32:05 tb Exp $ */
 /* Copyright (C) 1995-1998 Eric Young (eay@cryptsoft.com)
  * All rights reserved.
  *
@@ -96,7 +96,200 @@ static struct {
 	char *sigfile;
 	STACK_OF(OPENSSL_STRING) *sigopts;
 	int want_pub;
-} dgst_config;
+} cfg;
+
+static int
+dgst_opt_macopt(char *arg)
+{
+	if (arg == NULL)
+		return (1);
+
+	if (cfg.macopts == NULL &&
+	    (cfg.macopts = sk_OPENSSL_STRING_new_null()) == NULL)
+		return (1);
+
+	if (!sk_OPENSSL_STRING_push(cfg.macopts, arg))
+		return (1);
+
+	return (0);
+}
+
+static int
+dgst_opt_md(int argc, char **argv, int *argsused)
+{
+	char *name = argv[0];
+
+	if (*name++ != '-')
+		return (1);
+
+	if ((cfg.m = EVP_get_digestbyname(name)) == NULL)
+		return (1);
+
+	cfg.md = cfg.m;
+
+	*argsused = 1;
+	return (0);
+}
+
+static int
+dgst_opt_prverify(char *arg)
+{
+	if (arg == NULL)
+		return (1);
+
+	cfg.keyfile = arg;
+	cfg.do_verify = 1;
+	return (0);
+}
+
+static int
+dgst_opt_sigopt(char *arg)
+{
+	if (arg == NULL)
+		return (1);
+
+	if (cfg.sigopts == NULL &&
+	    (cfg.sigopts = sk_OPENSSL_STRING_new_null()) == NULL)
+		return (1);
+
+	if (!sk_OPENSSL_STRING_push(cfg.sigopts, arg))
+		return (1);
+
+	return (0);
+}
+
+static int
+dgst_opt_verify(char *arg)
+{
+	if (arg == NULL)
+		return (1);
+
+	cfg.keyfile = arg;
+	cfg.want_pub = 1;
+	cfg.do_verify = 1;
+	return (0);
+}
+
+static const struct option dgst_options[] = {
+	{
+		.name = "binary",
+		.desc = "Output the digest or signature in binary form",
+		.type = OPTION_VALUE,
+		.opt.value = &cfg.out_bin,
+		.value = 1,
+	},
+	{
+		.name = "c",
+		.desc = "Print the digest in two-digit groups separated by colons",
+		.type = OPTION_VALUE,
+		.opt.value = &cfg.separator,
+		.value = 1,
+	},
+	{
+		.name = "d",
+		.desc = "Print BIO debugging information",
+		.type = OPTION_FLAG,
+		.opt.flag = &cfg.debug,
+	},
+	{
+		.name = "hex",
+		.desc = "Output as hex dump",
+		.type = OPTION_VALUE,
+		.opt.value = &cfg.out_bin,
+		.value = 0,
+	},
+	{
+		.name = "hmac",
+		.argname = "key",
+		.desc = "Create hashed MAC with key",
+		.type = OPTION_ARG,
+		.opt.arg = &cfg.hmac_key,
+	},
+	{
+		.name = "keyform",
+		.argname = "format",
+		.desc = "Key file format (PEM)",
+		.type = OPTION_ARG_FORMAT,
+		.opt.value = &cfg.keyform,
+	},
+	{
+		.name = "mac",
+		.argname = "algorithm",
+		.desc = "Create MAC (not necessarily HMAC)",
+		.type = OPTION_ARG,
+		.opt.arg = &cfg.mac_name,
+	},
+	{
+		.name = "macopt",
+		.argname = "nm:v",
+		.desc = "MAC algorithm parameters or key",
+		.type = OPTION_ARG_FUNC,
+		.opt.argfunc = dgst_opt_macopt,
+	},
+	{
+		.name = "out",
+		.argname = "file",
+		.desc = "Output to file rather than stdout",
+		.type = OPTION_ARG,
+		.opt.arg = &cfg.outfile,
+	},
+	{
+		.name = "passin",
+		.argname = "arg",
+		.desc = "Input file passphrase source",
+		.type = OPTION_ARG,
+		.opt.arg = &cfg.passargin,
+	},
+	{
+		.name = "prverify",
+		.argname = "file",
+		.desc = "Verify a signature using private key in file",
+		.type = OPTION_ARG_FUNC,
+		.opt.argfunc = dgst_opt_prverify,
+	},
+	{
+		.name = "r",
+		.desc = "Output the digest in coreutils format",
+		.type = OPTION_VALUE,
+		.opt.value = &cfg.separator,
+		.value = 2,
+	},
+	{
+		.name = "sign",
+		.argname = "file",
+		.desc = "Sign digest using private key in file",
+		.type = OPTION_ARG,
+		.opt.arg = &cfg.keyfile,
+	},
+	{
+		.name = "signature",
+		.argname = "file",
+		.desc = "Signature to verify",
+		.type = OPTION_ARG,
+		.opt.arg = &cfg.sigfile,
+	},
+	{
+		.name = "sigopt",
+		.argname = "nm:v",
+		.desc = "Signature parameter",
+		.type = OPTION_ARG_FUNC,
+		.opt.argfunc = dgst_opt_sigopt,
+	},
+	{
+		.name = "verify",
+		.argname = "file",
+		.desc = "Verify a signature using public key in file",
+		.type = OPTION_ARG_FUNC,
+		.opt.argfunc = dgst_opt_verify,
+	},
+	{
+		.name = NULL,
+		.desc = "",
+		.type = OPTION_ARGV_FUNC,
+		.opt.argvfunc = dgst_opt_md,
+	},
+	{ NULL },
+};
 
 static void
 list_md_fn(const EVP_MD * m, const char *from, const char *to, void *arg)
@@ -109,13 +302,25 @@ list_md_fn(const EVP_MD * m, const char *from, const char *to, void *arg)
 	/* Skip shortnames */
 	if (strcmp(from, mname))
 		return;
-	/* Skip clones */
-	if (EVP_MD_flags(m) & EVP_MD_FLAG_PKEY_DIGEST)
-		return;
 	if (strchr(mname, ' '))
 		mname = EVP_MD_name(m);
-	BIO_printf(arg, "-%-14s to use the %s message digest algorithm\n",
+	BIO_printf(arg, " -%-17s To use the %s message digest algorithm\n",
 	    mname, mname);
+}
+
+static void
+dgst_usage(void)
+{
+	fprintf(stderr, "usage: dgst [-cdr] [-binary] [-digest] [-hex]");
+	fprintf(stderr, " [-hmac key] [-keyform fmt]\n");
+	fprintf(stderr, "    [-mac algorithm] [-macopt nm:v] [-out file]");
+	fprintf(stderr, " [-passin arg]\n");
+	fprintf(stderr, "    [-prverify file] [-sign file]");
+	fprintf(stderr, " [-signature file]\n");
+	fprintf(stderr, "    [-sigopt nm:v] [-verify file] [file ...]\n\n");
+	options_usage(dgst_options);
+	EVP_MD_do_all_sorted(list_md_fn, bio_err);
+	fprintf(stderr, "\n");
 }
 
 int
@@ -133,11 +338,9 @@ dgst_main(int argc, char **argv)
 	int siglen = 0;
 	char *passin = NULL;
 
-	if (single_execution) {
-		if (pledge("stdio cpath wpath rpath tty", NULL) == -1) {
-			perror("pledge");
-			exit(1);
-		}
+	if (pledge("stdio cpath wpath rpath tty", NULL) == -1) {
+		perror("pledge");
+		exit(1);
 	}
 
 	if ((buf = malloc(BUFSIZE)) == NULL) {
@@ -145,116 +348,26 @@ dgst_main(int argc, char **argv)
 		goto end;
 	}
 
-	memset(&dgst_config, 0, sizeof(dgst_config));
-	dgst_config.keyform = FORMAT_PEM;
-	dgst_config.out_bin = -1;
+	memset(&cfg, 0, sizeof(cfg));
+	cfg.keyform = FORMAT_PEM;
+	cfg.out_bin = -1;
 
 	/* first check the program name */
 	program_name(argv[0], pname, sizeof pname);
 
-	dgst_config.md = EVP_get_digestbyname(pname);
+	cfg.md = EVP_get_digestbyname(pname);
 
-	argc--;
-	argv++;
-	while (argc > 0) {
-		if ((*argv)[0] != '-')
-			break;
-		if (strcmp(*argv, "-c") == 0)
-			dgst_config.separator = 1;
-		else if (strcmp(*argv, "-r") == 0)
-			dgst_config.separator = 2;
-		else if (strcmp(*argv, "-out") == 0) {
-			if (--argc < 1)
-				break;
-			dgst_config.outfile = *(++argv);
-		} else if (strcmp(*argv, "-sign") == 0) {
-			if (--argc < 1)
-				break;
-			dgst_config.keyfile = *(++argv);
-		} else if (!strcmp(*argv, "-passin")) {
-			if (--argc < 1)
-				break;
-			dgst_config.passargin = *++argv;
-		} else if (strcmp(*argv, "-verify") == 0) {
-			if (--argc < 1)
-				break;
-			dgst_config.keyfile = *(++argv);
-			dgst_config.want_pub = 1;
-			dgst_config.do_verify = 1;
-		} else if (strcmp(*argv, "-prverify") == 0) {
-			if (--argc < 1)
-				break;
-			dgst_config.keyfile = *(++argv);
-			dgst_config.do_verify = 1;
-		} else if (strcmp(*argv, "-signature") == 0) {
-			if (--argc < 1)
-				break;
-			dgst_config.sigfile = *(++argv);
-		} else if (strcmp(*argv, "-keyform") == 0) {
-			if (--argc < 1)
-				break;
-			dgst_config.keyform = str2fmt(*(++argv));
-		}
-		else if (strcmp(*argv, "-hex") == 0)
-			dgst_config.out_bin = 0;
-		else if (strcmp(*argv, "-binary") == 0)
-			dgst_config.out_bin = 1;
-		else if (strcmp(*argv, "-d") == 0)
-			dgst_config.debug = 1;
-		else if (!strcmp(*argv, "-hmac")) {
-			if (--argc < 1)
-				break;
-			dgst_config.hmac_key = *++argv;
-		} else if (!strcmp(*argv, "-mac")) {
-			if (--argc < 1)
-				break;
-			dgst_config.mac_name = *++argv;
-		} else if (strcmp(*argv, "-sigopt") == 0) {
-			if (--argc < 1)
-				break;
-			if (!dgst_config.sigopts)
-				dgst_config.sigopts = sk_OPENSSL_STRING_new_null();
-			if (!dgst_config.sigopts || !sk_OPENSSL_STRING_push(dgst_config.sigopts, *(++argv)))
-				break;
-		} else if (strcmp(*argv, "-macopt") == 0) {
-			if (--argc < 1)
-				break;
-			if (!dgst_config.macopts)
-				dgst_config.macopts = sk_OPENSSL_STRING_new_null();
-			if (!dgst_config.macopts || !sk_OPENSSL_STRING_push(dgst_config.macopts, *(++argv)))
-				break;
-		} else if ((dgst_config.m = EVP_get_digestbyname(&((*argv)[1]))) != NULL)
-			dgst_config.md = dgst_config.m;
-		else
-			break;
-		argc--;
-		argv++;
-	}
-
-	if (dgst_config.do_verify && !dgst_config.sigfile) {
-		BIO_printf(bio_err, "No signature to verify: use the -signature option\n");
+	if (options_parse(argc, argv, dgst_options, NULL,
+	    &cfg.argsused) != 0) {
+		dgst_usage();
 		goto end;
 	}
-	if ((argc > 0) && (argv[0][0] == '-')) {	/* bad option */
-		BIO_printf(bio_err, "unknown option '%s'\n", *argv);
-		BIO_printf(bio_err, "options are\n");
-		BIO_printf(bio_err, "-c              to output the digest with separating colons\n");
-		BIO_printf(bio_err, "-r              to output the digest in coreutils format\n");
-		BIO_printf(bio_err, "-d              to output debug info\n");
-		BIO_printf(bio_err, "-hex            output as hex dump\n");
-		BIO_printf(bio_err, "-binary         output in binary form\n");
-		BIO_printf(bio_err, "-sign   file    sign digest using private key in file\n");
-		BIO_printf(bio_err, "-verify file    verify a signature using public key in file\n");
-		BIO_printf(bio_err, "-prverify file  verify a signature using private key in file\n");
-		BIO_printf(bio_err, "-keyform arg    key file format (PEM)\n");
-		BIO_printf(bio_err, "-out filename   output to filename rather than stdout\n");
-		BIO_printf(bio_err, "-signature file signature to verify\n");
-		BIO_printf(bio_err, "-sigopt nm:v    signature parameter\n");
-		BIO_printf(bio_err, "-hmac key       create hashed MAC with key\n");
-		BIO_printf(bio_err, "-mac algorithm  create MAC (not neccessarily HMAC)\n");
-		BIO_printf(bio_err, "-macopt nm:v    MAC algorithm parameters or key\n");
+	argc -= cfg.argsused;
+	argv += cfg.argsused;
 
-		EVP_MD_do_all_sorted(list_md_fn, bio_err);
+	if (cfg.do_verify && !cfg.sigfile) {
+		BIO_printf(bio_err,
+		    "No signature to verify: use the -signature option\n");
 		goto end;
 	}
 
@@ -265,48 +378,50 @@ dgst_main(int argc, char **argv)
 		goto end;
 	}
 
-	if (dgst_config.debug) {
+	if (cfg.debug) {
 		BIO_set_callback(in, BIO_debug_callback);
 		/* needed for windows 3.1 */
 		BIO_set_callback_arg(in, (char *) bio_err);
 	}
-	if (!app_passwd(bio_err, dgst_config.passargin, NULL, &passin, NULL)) {
+	if (!app_passwd(bio_err, cfg.passargin, NULL, &passin, NULL)) {
 		BIO_printf(bio_err, "Error getting password\n");
 		goto end;
 	}
-	if (dgst_config.out_bin == -1) {
-		if (dgst_config.keyfile)
-			dgst_config.out_bin = 1;
+	if (cfg.out_bin == -1) {
+		if (cfg.keyfile)
+			cfg.out_bin = 1;
 		else
-			dgst_config.out_bin = 0;
+			cfg.out_bin = 0;
 	}
 
-	if (dgst_config.outfile) {
-		if (dgst_config.out_bin)
-			out = BIO_new_file(dgst_config.outfile, "wb");
+	if (cfg.outfile) {
+		if (cfg.out_bin)
+			out = BIO_new_file(cfg.outfile, "wb");
 		else
-			out = BIO_new_file(dgst_config.outfile, "w");
+			out = BIO_new_file(cfg.outfile, "w");
 	} else {
 		out = BIO_new_fp(stdout, BIO_NOCLOSE);
 	}
 
 	if (!out) {
 		BIO_printf(bio_err, "Error opening output file %s\n",
-		    dgst_config.outfile ? dgst_config.outfile : "(stdout)");
+		    cfg.outfile ? cfg.outfile : "(stdout)");
 		ERR_print_errors(bio_err);
 		goto end;
 	}
-	if ((!!dgst_config.mac_name + !!dgst_config.keyfile + !!dgst_config.hmac_key) > 1) {
-		BIO_printf(bio_err, "MAC and Signing key cannot both be specified\n");
+	if ((!!cfg.mac_name + !!cfg.keyfile +
+	    !!cfg.hmac_key) > 1) {
+		BIO_printf(bio_err,
+		    "MAC and Signing key cannot both be specified\n");
 		goto end;
 	}
-	if (dgst_config.keyfile) {
-		if (dgst_config.want_pub)
-			sigkey = load_pubkey(bio_err, dgst_config.keyfile, dgst_config.keyform, 0, NULL,
-			    "key file");
+	if (cfg.keyfile) {
+		if (cfg.want_pub)
+			sigkey = load_pubkey(bio_err, cfg.keyfile,
+			    cfg.keyform, 0, NULL, "key file");
 		else
-			sigkey = load_key(bio_err, dgst_config.keyfile, dgst_config.keyform, 0, passin,
-			    "key file");
+			sigkey = load_key(bio_err, cfg.keyfile,
+			    cfg.keyform, 0, passin, "key file");
 		if (!sigkey) {
 			/*
 			 * load_[pub]key() has already printed an appropriate
@@ -315,15 +430,17 @@ dgst_main(int argc, char **argv)
 			goto end;
 		}
 	}
-	if (dgst_config.mac_name) {
+	if (cfg.mac_name) {
 		EVP_PKEY_CTX *mac_ctx = NULL;
 		int r = 0;
-		if (!init_gen_str(bio_err, &mac_ctx, dgst_config.mac_name, 0))
+		if (!init_gen_str(bio_err, &mac_ctx, cfg.mac_name, 0))
 			goto mac_end;
-		if (dgst_config.macopts) {
+		if (cfg.macopts) {
 			char *macopt;
-			for (i = 0; i < sk_OPENSSL_STRING_num(dgst_config.macopts); i++) {
-				macopt = sk_OPENSSL_STRING_value(dgst_config.macopts, i);
+			for (i = 0; i < sk_OPENSSL_STRING_num(
+			    cfg.macopts); i++) {
+				macopt = sk_OPENSSL_STRING_value(
+				    cfg.macopts, i);
 				if (pkey_ctrl_string(mac_ctx, macopt) <= 0) {
 					BIO_printf(bio_err,
 					    "MAC parameter error \"%s\"\n",
@@ -339,15 +456,14 @@ dgst_main(int argc, char **argv)
 			goto mac_end;
 		}
 		r = 1;
-mac_end:
-		if (mac_ctx)
-			EVP_PKEY_CTX_free(mac_ctx);
+ mac_end:
+		EVP_PKEY_CTX_free(mac_ctx);
 		if (r == 0)
 			goto end;
 	}
-	if (dgst_config.hmac_key) {
+	if (cfg.hmac_key) {
 		sigkey = EVP_PKEY_new_mac_key(EVP_PKEY_HMAC, NULL,
-		    (unsigned char *) dgst_config.hmac_key, -1);
+		    (unsigned char *) cfg.hmac_key, -1);
 		if (!sigkey)
 			goto end;
 	}
@@ -360,19 +476,23 @@ mac_end:
 			ERR_print_errors(bio_err);
 			goto end;
 		}
-		if (dgst_config.do_verify)
-			r = EVP_DigestVerifyInit(mctx, &pctx, dgst_config.md, NULL, sigkey);
+		if (cfg.do_verify)
+			r = EVP_DigestVerifyInit(mctx, &pctx, cfg.md,
+			    NULL, sigkey);
 		else
-			r = EVP_DigestSignInit(mctx, &pctx, dgst_config.md, NULL, sigkey);
+			r = EVP_DigestSignInit(mctx, &pctx, cfg.md,
+			    NULL, sigkey);
 		if (!r) {
 			BIO_printf(bio_err, "Error setting context\n");
 			ERR_print_errors(bio_err);
 			goto end;
 		}
-		if (dgst_config.sigopts) {
+		if (cfg.sigopts) {
 			char *sigopt;
-			for (i = 0; i < sk_OPENSSL_STRING_num(dgst_config.sigopts); i++) {
-				sigopt = sk_OPENSSL_STRING_value(dgst_config.sigopts, i);
+			for (i = 0; i < sk_OPENSSL_STRING_num(
+			    cfg.sigopts); i++) {
+				sigopt = sk_OPENSSL_STRING_value(
+				    cfg.sigopts, i);
 				if (pkey_ctrl_string(pctx, sigopt) <= 0) {
 					BIO_printf(bio_err,
 					    "parameter error \"%s\"\n",
@@ -385,16 +505,16 @@ mac_end:
 	}
 	/* we use md as a filter, reading from 'in' */
 	else {
-		if (dgst_config.md == NULL)
-			dgst_config.md = EVP_sha256();
-		if (!BIO_set_md(bmd, dgst_config.md)) {
+		if (cfg.md == NULL)
+			cfg.md = EVP_sha256();
+		if (!BIO_set_md(bmd, cfg.md)) {
 			BIO_printf(bio_err, "Error setting digest %s\n", pname);
 			ERR_print_errors(bio_err);
 			goto end;
 		}
 	}
 
-	if (dgst_config.sigfile && sigkey) {
+	if (cfg.sigfile && sigkey) {
 		BIO *sigbio;
 		siglen = EVP_PKEY_size(sigkey);
 		sigbuf = malloc(siglen);
@@ -403,10 +523,10 @@ mac_end:
 			ERR_print_errors(bio_err);
 			goto end;
 		}
-		sigbio = BIO_new_file(dgst_config.sigfile, "rb");
+		sigbio = BIO_new_file(cfg.sigfile, "rb");
 		if (!sigbio) {
 			BIO_printf(bio_err, "Error opening signature file %s\n",
-			    dgst_config.sigfile);
+			    cfg.sigfile);
 			ERR_print_errors(bio_err);
 			goto end;
 		}
@@ -414,25 +534,26 @@ mac_end:
 		BIO_free(sigbio);
 		if (siglen <= 0) {
 			BIO_printf(bio_err, "Error reading signature file %s\n",
-			    dgst_config.sigfile);
+			    cfg.sigfile);
 			ERR_print_errors(bio_err);
 			goto end;
 		}
 	}
 	inp = BIO_push(bmd, in);
 
-	if (dgst_config.md == NULL) {
+	if (cfg.md == NULL) {
 		EVP_MD_CTX *tctx;
 		BIO_get_md_ctx(bmd, &tctx);
-		dgst_config.md = EVP_MD_CTX_md(tctx);
+		cfg.md = EVP_MD_CTX_md(tctx);
 	}
 	if (argc == 0) {
 		BIO_set_fp(in, stdin, BIO_NOCLOSE);
-		err = do_fp(out, buf, inp, dgst_config.separator, dgst_config.out_bin, sigkey, sigbuf,
-		    siglen, NULL, NULL, "stdin", bmd);
+		err = do_fp(out, buf, inp, cfg.separator,
+		    cfg.out_bin, sigkey, sigbuf, siglen, NULL, NULL,
+		    "stdin", bmd);
 	} else {
 		const char *md_name = NULL, *sig_name = NULL;
-		if (!dgst_config.out_bin) {
+		if (!cfg.out_bin) {
 			if (sigkey) {
 				const EVP_PKEY_ASN1_METHOD *ameth;
 				ameth = EVP_PKEY_get0_asn1(sigkey);
@@ -440,7 +561,7 @@ mac_end:
 					EVP_PKEY_asn1_get0_info(NULL, NULL,
 					    NULL, NULL, &sig_name, ameth);
 			}
-			md_name = EVP_MD_name(dgst_config.md);
+			md_name = EVP_MD_name(cfg.md);
 		}
 		err = 0;
 		for (i = 0; i < argc; i++) {
@@ -450,9 +571,9 @@ mac_end:
 				err++;
 				continue;
 			} else {
-				r = do_fp(out, buf, inp, dgst_config.separator, dgst_config.out_bin,
-				    sigkey, sigbuf, siglen, sig_name, md_name,
-				    argv[i], bmd);
+				r = do_fp(out, buf, inp, cfg.separator,
+				    cfg.out_bin, sigkey, sigbuf, siglen,
+				    sig_name, md_name, argv[i], bmd);
 			}
 			if (r)
 				err = r;
@@ -462,18 +583,14 @@ mac_end:
 
  end:
 	freezero(buf, BUFSIZE);
-	if (in != NULL)
-		BIO_free(in);
+	BIO_free(in);
 	free(passin);
 	BIO_free_all(out);
 	EVP_PKEY_free(sigkey);
-	if (dgst_config.sigopts)
-		sk_OPENSSL_STRING_free(dgst_config.sigopts);
-	if (dgst_config.macopts)
-		sk_OPENSSL_STRING_free(dgst_config.macopts);
+	sk_OPENSSL_STRING_free(cfg.sigopts);
+	sk_OPENSSL_STRING_free(cfg.macopts);
 	free(sigbuf);
-	if (bmd != NULL)
-		BIO_free(bmd);
+	BIO_free(bmd);
 
 	return (err);
 }

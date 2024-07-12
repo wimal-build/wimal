@@ -1,4 +1,4 @@
-/* $OpenBSD: s_cb.c,v 1.11 2018/11/06 05:45:50 jsing Exp $ */
+/* $OpenBSD: s_cb.c,v 1.21 2023/04/14 15:27:13 tb Exp $ */
 /* Copyright (C) 1995-1998 Eric Young (eay@cryptsoft.com)
  * All rights reserved.
  *
@@ -189,11 +189,8 @@ verify_callback(int ok, X509_STORE_CTX * ctx)
 		BIO_printf(bio_err, "\n");
 		break;
 	case X509_V_ERR_NO_EXPLICIT_POLICY:
-		policies_print(bio_err, ctx);
 		break;
 	}
-	if (err == X509_V_OK && ok == 2)
-		policies_print(bio_err, ctx);
 
 	BIO_printf(bio_err, "verify return:%d\n", ok);
 	return (ok);
@@ -202,60 +199,33 @@ verify_callback(int ok, X509_STORE_CTX * ctx)
 int
 set_cert_stuff(SSL_CTX * ctx, char *cert_file, char *key_file)
 {
-	if (cert_file != NULL) {
-		/*
-		SSL *ssl;
-		X509 *x509;
-		*/
+	if (cert_file == NULL)
+		return 1;
 
-		if (SSL_CTX_use_certificate_file(ctx, cert_file,
-		    SSL_FILETYPE_PEM) <= 0) {
-			BIO_printf(bio_err,
-			    "unable to get certificate from '%s'\n", cert_file);
-			ERR_print_errors(bio_err);
-			return (0);
-		}
-		if (key_file == NULL)
-			key_file = cert_file;
-		if (SSL_CTX_use_PrivateKey_file(ctx, key_file,
-		    SSL_FILETYPE_PEM) <= 0) {
-			BIO_printf(bio_err,
-			    "unable to get private key from '%s'\n", key_file);
-			ERR_print_errors(bio_err);
-			return (0);
-		}
-		/*
-		In theory this is no longer needed
-		ssl=SSL_new(ctx);
-		x509=SSL_get_certificate(ssl);
+	if (key_file == NULL)
+		key_file = cert_file;
 
-		if (x509 != NULL) {
-			EVP_PKEY *pktmp;
-			pktmp = X509_get_pubkey(x509);
-			EVP_PKEY_copy_parameters(pktmp,
-						SSL_get_privatekey(ssl));
-			EVP_PKEY_free(pktmp);
-		}
-		SSL_free(ssl);
-		*/
-
-		/*
-		 * If we are using DSA, we can copy the parameters from the
-		 * private key
-		 */
-
-
-		/*
-		 * Now we know that a key and cert have been set against the
-		 * SSL context
-		 */
-		if (!SSL_CTX_check_private_key(ctx)) {
-			BIO_printf(bio_err,
-			    "Private key does not match the certificate public key\n");
-			return (0);
-		}
+	if (SSL_CTX_use_certificate_file(ctx, cert_file, SSL_FILETYPE_PEM) <= 0) {
+		BIO_printf(bio_err,
+		    "unable to get certificate from '%s'\n", cert_file);
+		ERR_print_errors(bio_err);
+		return 0;
 	}
-	return (1);
+	if (SSL_CTX_use_PrivateKey_file(ctx, key_file, SSL_FILETYPE_PEM) <= 0) {
+		BIO_printf(bio_err, "unable to get private key from '%s'\n",
+		    key_file);
+		ERR_print_errors(bio_err);
+		return 0;
+	}
+
+	/* Now we know that a key and cert have been set against the context. */
+	if (!SSL_CTX_check_private_key(ctx)) {
+		BIO_printf(bio_err,
+		    "Private key does not match the certificate public key\n");
+		return 0;
+	}
+
+	return 1;
 }
 
 int
@@ -291,6 +261,7 @@ ssl_print_tmp_key(BIO *out, SSL *s)
 	const char *cname;
 	EVP_PKEY *pkey;
 	EC_KEY *ec;
+	const EC_GROUP *group;
 	int nid;
 
 	if (!SSL_get_server_tmp_key(s, &pkey))
@@ -303,9 +274,12 @@ ssl_print_tmp_key(BIO *out, SSL *s)
 		break;
 
 	case EVP_PKEY_EC:
-		ec = EVP_PKEY_get1_EC_KEY(pkey);
-		nid = EC_GROUP_get_curve_name(EC_KEY_get0_group(ec));
-		EC_KEY_free(ec);
+		if ((ec = EVP_PKEY_get0_EC_KEY(pkey)) == NULL)
+			goto err;
+		if ((group = EC_KEY_get0_group(ec)) == NULL)
+			goto err;
+
+		nid = EC_GROUP_get_curve_name(group);
 
 		if ((cname = EC_curve_nid2nist(nid)) == NULL)
 			cname = OBJ_nid2sn(nid);
@@ -318,6 +292,7 @@ ssl_print_tmp_key(BIO *out, SSL *s)
 		    EVP_PKEY_bits(pkey));
 	}
 
+ err:
 	EVP_PKEY_free(pkey);
 	return 1;
 }
@@ -390,6 +365,7 @@ msg_cb(int write_p, int version, int content_type, const void *buf, size_t len, 
 
 	str_write_p = write_p ? ">>>" : "<<<";
 
+	/* XXX convert to using ssl_get_version */
 	switch (version) {
 	case SSL2_VERSION:
 		str_version = "SSL 2.0";
@@ -406,8 +382,14 @@ msg_cb(int write_p, int version, int content_type, const void *buf, size_t len, 
 	case TLS1_2_VERSION:
 		str_version = "TLS 1.2 ";
 		break;
+	case TLS1_3_VERSION:
+		str_version = "TLS 1.3 ";
+		break;
 	case DTLS1_VERSION:
 		str_version = "DTLS 1.0 ";
+		break;
+	case DTLS1_2_VERSION:
+		str_version = "DTLS 1.2 ";
 		break;
 	default:
 		str_version = "???";
@@ -417,6 +399,7 @@ msg_cb(int write_p, int version, int content_type, const void *buf, size_t len, 
 		str_details1 = "???";
 
 		if (len > 0) {
+			/* XXX magic numbers */
 			switch (((const unsigned char *) buf)[0]) {
 			case 0:
 				str_details1 = ", ERROR:";
@@ -469,7 +452,9 @@ msg_cb(int write_p, int version, int content_type, const void *buf, size_t len, 
 	}
 	if (version == SSL3_VERSION || version == TLS1_VERSION ||
 	    version == TLS1_1_VERSION || version == TLS1_2_VERSION ||
-	    version == DTLS1_VERSION) {
+	    version == TLS1_3_VERSION || version == DTLS1_VERSION ||
+	    version == DTLS1_2_VERSION) {
+		/* XXX magic numbers are in ssl3.h */
 		switch (content_type) {
 		case 20:
 			str_content_type = "ChangeCipherSpec";
@@ -604,6 +589,15 @@ msg_cb(int write_p, int version, int content_type, const void *buf, size_t len, 
 				case 3:
 					str_details1 = ", HelloVerifyRequest";
 					break;
+				case 4:
+					str_details1 = ", NewSessionTicket";
+					break;
+				case 5:
+					str_details1 = ", EndOfEarlyData";
+					break;
+				case 8:
+					str_details1 = ", EncryptedExtensions";
+					break;
 				case 11:
 					str_details1 = ", Certificate";
 					break;
@@ -624,6 +618,9 @@ msg_cb(int write_p, int version, int content_type, const void *buf, size_t len, 
 					break;
 				case 20:
 					str_details1 = ", Finished";
+					break;
+				case 24:
+					str_details1 = ", KeyUpdate";
 					break;
 				}
 			}
@@ -724,20 +721,62 @@ tlsext_cb(SSL * s, int client_server, int type, unsigned char *data, int len,
 		extname = "heartbeat";
 		break;
 
-	case TLSEXT_TYPE_session_ticket:
-		extname = "session ticket";
-		break;
-
-	case TLSEXT_TYPE_renegotiate:
-		extname = "renegotiation info";
-		break;
-
 	case TLSEXT_TYPE_application_layer_protocol_negotiation:
 		extname = "application layer protocol negotiation";
 		break;
 
 	case TLSEXT_TYPE_padding:
 		extname = "TLS padding";
+		break;
+
+	case TLSEXT_TYPE_session_ticket:
+		extname = "session ticket";
+		break;
+
+#if defined(LIBRESSL_HAS_TLS1_3) || defined(LIBRESSL_INTERNAL)
+	case TLSEXT_TYPE_pre_shared_key:
+		extname = "pre shared key";
+		break;
+
+	case TLSEXT_TYPE_early_data:
+		extname = "early data";
+		break;
+
+	case TLSEXT_TYPE_supported_versions:
+		extname = "supported versions";
+		break;
+
+	case TLSEXT_TYPE_cookie:
+		extname = "cookie";
+		break;
+
+	case TLSEXT_TYPE_psk_key_exchange_modes:
+		extname = "PSK key exchange modes";
+		break;
+
+	case TLSEXT_TYPE_certificate_authorities:
+		extname = "certificate authorities";
+		break;
+
+	case TLSEXT_TYPE_oid_filters:
+		extname = "OID filters";
+		break;
+
+	case TLSEXT_TYPE_post_handshake_auth:
+		extname = "post handshake auth";
+		break;
+
+	case TLSEXT_TYPE_signature_algorithms_cert:
+		extname = "signature algorithms cert";
+		break;
+
+	case TLSEXT_TYPE_key_share:
+		extname = "key share";
+		break;
+#endif
+
+	case TLSEXT_TYPE_renegotiate:
+		extname = "renegotiation info";
 		break;
 
 	default:
@@ -877,8 +916,12 @@ verify_cookie_callback(SSL * ssl, const unsigned char *cookie,
 	}
 
 	/* Calculate HMAC of buffer using the secret */
-	HMAC(EVP_sha1(), cookie_secret, COOKIE_SECRET_LENGTH,
-	    buffer, length, result, &resultlength);
+	if (HMAC(EVP_sha1(), cookie_secret, COOKIE_SECRET_LENGTH,
+	    buffer, length, result, &resultlength) == NULL) {
+		free(buffer);
+		return 0;
+	}
+
 	free(buffer);
 
 	if (cookie_len == resultlength &&

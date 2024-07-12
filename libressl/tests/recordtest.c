@@ -1,3 +1,4 @@
+/* $OpenBSD: recordtest.c,v 1.5 2022/06/10 22:00:15 tb Exp $ */
 /*
  * Copyright (c) 2019 Joel Sing <jsing@openbsd.org>
  *
@@ -240,7 +241,7 @@ struct record_recv_test record_recv_tests[] = {
 		.rt = {
 			{
 				.rw_len = sizeof(test_record_3),
-				.want_ret = TLS13_IO_FAILURE,
+				.want_ret = TLS13_IO_RECORD_OVERFLOW,
 			},
 		},
 	},
@@ -388,7 +389,7 @@ test_record_recv(size_t test_no, struct record_recv_test *rrt)
 		ret = tls13_record_recv(rec, read_cb, &rs);
 		if (ret != rrt->rt[i].want_ret) {
 			fprintf(stderr, "FAIL: Test %zu/%zu - tls_record_recv "
-			    "returned %zi, want %zi\n", test_no, i, ret,
+			    "returned %zd, want %zd\n", test_no, i, ret,
 			    rrt->rt[i].want_ret);
 			goto failure;
 		}
@@ -493,7 +494,7 @@ test_record_send(size_t test_no, struct record_send_test *rst)
 		ret = tls13_record_send(rec, write_cb, &ws);
 		if (ret != rst->rt[i].want_ret) {
 			fprintf(stderr, "FAIL: Test %zu/%zu - tls_record_send "
-			    "returned %zi, want %zi\n", test_no, i, ret,
+			    "returned %zd, want %zd\n", test_no, i, ret,
 			    rst->rt[i].want_ret);
 			goto failure;
 		}

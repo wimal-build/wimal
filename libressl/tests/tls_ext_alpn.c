@@ -1,4 +1,4 @@
-/*	$OpenBSD: tls_ext_alpn.c,v 1.6 2019/01/18 00:55:15 jsing Exp $	*/
+/*	$OpenBSD: tls_ext_alpn.c,v 1.9 2022/11/26 16:08:57 tb Exp $	*/
 /*
  * Copyright (c) 2015 Doug Hogan <doug@openbsd.org>
  *
@@ -21,7 +21,7 @@
 #include <stdio.h>
 #include <openssl/ssl.h>
 
-#include "ssl_locl.h"
+#include "ssl_local.h"
 #include "ssl_tlsext.h"
 
 #include "tests.h"
@@ -321,9 +321,9 @@ static uint8_t proto_invalid_missing9[] = {
 		int al;							\
 									\
 		CBS_init(&cbs, proto, sizeof(proto));			\
-		CHECK(c_val == tlsext_server_parse(s, &cbs, &al, SSL_TLSEXT_MSG_CH)); \
+		CHECK(c_val == tlsext_server_parse(s, SSL_TLSEXT_MSG_CH, &cbs, &al)); \
 		CBS_init(&cbs, proto, sizeof(proto));			\
-		CHECK(s_val == tlsext_client_parse(s, &cbs, &al, SSL_TLSEXT_MSG_SH)); \
+		CHECK(s_val == tlsext_client_parse(s, SSL_TLSEXT_MSG_SH, &cbs, &al)); \
 	}								\
 } while (0)
 
@@ -344,8 +344,8 @@ check_valid_alpn(SSL *s)
 	SSL_CTX_set_alpn_select_cb(s->ctx, dummy_alpn_cb, NULL);
 
 	/* Prerequisites to test these. */
-	CHECK(s->internal->alpn_client_proto_list != NULL);
-	CHECK(s->ctx->internal->alpn_select_cb != NULL);
+	CHECK(s->alpn_client_proto_list != NULL);
+	CHECK(s->ctx->alpn_select_cb != NULL);
 	//CHECK(s->s3->tmp.finish_md_len == 0);
 
 	CHECK_BOTH(1, 1, proto_single);
@@ -376,8 +376,8 @@ check_invalid_alpn(SSL *s)
 	SSL_CTX_set_alpn_select_cb(s->ctx, dummy_alpn_cb, NULL);
 
 	/* Prerequisites to test these. */
-	CHECK(s->internal->alpn_client_proto_list != NULL);
-	CHECK(s->ctx->internal->alpn_select_cb != NULL);
+	CHECK(s->alpn_client_proto_list != NULL);
+	CHECK(s->ctx->alpn_select_cb != NULL);
 	//CHECK(s->s3->tmp.finish_md_len == 0);
 
 	/* None of these are valid for client or server */

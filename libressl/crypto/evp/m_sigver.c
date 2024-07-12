@@ -1,4 +1,4 @@
-/* $OpenBSD: m_sigver.c,v 1.7 2018/05/13 06:35:10 tb Exp $ */
+/* $OpenBSD: m_sigver.c,v 1.15 2024/02/18 15:45:42 tb Exp $ */
 /* Written by Dr Stephen N Henson (steve@openssl.org) for the OpenSSL
  * project 2006.
  */
@@ -63,26 +63,35 @@
 #include <openssl/objects.h>
 #include <openssl/x509.h>
 
-#include "evp_locl.h"
+#include "evp_local.h"
+
+static int
+update_oneshot_only(EVP_MD_CTX *ctx, const void *data, size_t datalen)
+{
+	EVPerror(EVP_R_ONLY_ONESHOT_SUPPORTED);
+	return 0;
+}
 
 static int
 do_sigver_init(EVP_MD_CTX *ctx, EVP_PKEY_CTX **pctx, const EVP_MD *type,
-    ENGINE *e, EVP_PKEY *pkey, int ver)
+    EVP_PKEY *pkey, int ver)
 {
 	if (ctx->pctx == NULL)
-		ctx->pctx = EVP_PKEY_CTX_new(pkey, e);
+		ctx->pctx = EVP_PKEY_CTX_new(pkey, NULL);
 	if (ctx->pctx == NULL)
 		return 0;
 
-	if (type == NULL) {
-		int def_nid;
-		if (EVP_PKEY_get_default_digest_nid(pkey, &def_nid) > 0)
-			type = EVP_get_digestbynid(def_nid);
-	}
+	if (!(ctx->pctx->pmeth->flags & EVP_PKEY_FLAG_SIGCTX_CUSTOM)) {
+		if (type == NULL) {
+			int def_nid;
+			if (EVP_PKEY_get_default_digest_nid(pkey, &def_nid) > 0)
+				type = EVP_get_digestbynid(def_nid);
+		}
 
-	if (type == NULL) {
-		EVPerror(EVP_R_NO_DEFAULT_DIGEST);
-		return 0;
+		if (type == NULL) {
+			EVPerror(EVP_R_NO_DEFAULT_DIGEST);
+			return 0;
+		}
 	}
 
 	if (ver) {
@@ -91,6 +100,9 @@ do_sigver_init(EVP_MD_CTX *ctx, EVP_PKEY_CTX **pctx, const EVP_MD *type,
 			    ctx) <=0)
 				return 0;
 			ctx->pctx->operation = EVP_PKEY_OP_VERIFYCTX;
+		} else if (ctx->pctx->pmeth->digestverify != NULL) {
+			ctx->pctx->operation = EVP_PKEY_OP_VERIFY;
+			ctx->update = update_oneshot_only;
 		} else if (EVP_PKEY_verify_init(ctx->pctx) <= 0)
 			return 0;
 	} else {
@@ -98,6 +110,9 @@ do_sigver_init(EVP_MD_CTX *ctx, EVP_PKEY_CTX **pctx, const EVP_MD *type,
 			if (ctx->pctx->pmeth->signctx_init(ctx->pctx, ctx) <= 0)
 				return 0;
 			ctx->pctx->operation = EVP_PKEY_OP_SIGNCTX;
+		} else if (ctx->pctx->pmeth->digestsign != NULL) {
+			ctx->pctx->operation = EVP_PKEY_OP_SIGN;
+			ctx->update = update_oneshot_only;
 		} else if (EVP_PKEY_sign_init(ctx->pctx) <= 0)
 			return 0;
 	}
@@ -105,7 +120,9 @@ do_sigver_init(EVP_MD_CTX *ctx, EVP_PKEY_CTX **pctx, const EVP_MD *type,
 		return 0;
 	if (pctx)
 		*pctx = ctx->pctx;
-	if (!EVP_DigestInit_ex(ctx, type, e))
+	if (ctx->pctx->pmeth->flags & EVP_PKEY_FLAG_SIGCTX_CUSTOM)
+		return 1;
+	if (!EVP_DigestInit_ex(ctx, type, NULL))
 		return 0;
 	return 1;
 }
@@ -114,20 +131,37 @@ int
 EVP_DigestSignInit(EVP_MD_CTX *ctx, EVP_PKEY_CTX **pctx, const EVP_MD *type,
     ENGINE *e, EVP_PKEY *pkey)
 {
-	return do_sigver_init(ctx, pctx, type, e, pkey, 0);
+	return do_sigver_init(ctx, pctx, type, pkey, 0);
 }
 
 int
 EVP_DigestVerifyInit(EVP_MD_CTX *ctx, EVP_PKEY_CTX **pctx, const EVP_MD *type,
     ENGINE *e, EVP_PKEY *pkey)
 {
-	return do_sigver_init(ctx, pctx, type, e, pkey, 1);
+	return do_sigver_init(ctx, pctx, type, pkey, 1);
 }
 
 int
 EVP_DigestSignFinal(EVP_MD_CTX *ctx, unsigned char *sigret, size_t *siglen)
 {
-	int sctx, r = 0;
+	EVP_PKEY_CTX *pctx = ctx->pctx;
+	int sctx;
+	int r = 0;
+
+	if (pctx->pmeth->flags & EVP_PKEY_FLAG_SIGCTX_CUSTOM) {
+		EVP_PKEY_CTX *dctx;
+
+		if (sigret == NULL)
+			return pctx->pmeth->signctx(pctx, sigret, siglen, ctx);
+
+		/* XXX - support EVP_MD_CTX_FLAG_FINALISE? */
+		if ((dctx = EVP_PKEY_CTX_dup(ctx->pctx)) == NULL)
+			return 0;
+		r = dctx->pmeth->signctx(dctx, sigret, siglen, ctx);
+		EVP_PKEY_CTX_free(dctx);
+
+		return r;
+	}
 
 	if (ctx->pctx->pmeth->signctx)
 		sctx = 1;
@@ -137,7 +171,7 @@ EVP_DigestSignFinal(EVP_MD_CTX *ctx, unsigned char *sigret, size_t *siglen)
 		EVP_MD_CTX tmp_ctx;
 		unsigned char md[EVP_MAX_MD_SIZE];
 		unsigned int mdlen = 0;
-		EVP_MD_CTX_init(&tmp_ctx);
+		EVP_MD_CTX_legacy_clear(&tmp_ctx);
 		if (!EVP_MD_CTX_copy_ex(&tmp_ctx, ctx))
 			return 0;
 		if (sctx)
@@ -166,6 +200,22 @@ EVP_DigestSignFinal(EVP_MD_CTX *ctx, unsigned char *sigret, size_t *siglen)
 }
 
 int
+EVP_DigestSign(EVP_MD_CTX *ctx, unsigned char *sigret, size_t *siglen,
+    const unsigned char *tbs, size_t tbslen)
+{
+	if (ctx->pctx->pmeth->digestsign != NULL)
+		return ctx->pctx->pmeth->digestsign(ctx, sigret, siglen,
+		    tbs, tbslen);
+
+	if (sigret != NULL) {
+		if (EVP_DigestSignUpdate(ctx, tbs, tbslen) <= 0)
+			return 0;
+	}
+
+	return EVP_DigestSignFinal(ctx, sigret, siglen);
+}
+
+int
 EVP_DigestVerifyFinal(EVP_MD_CTX *ctx, const unsigned char *sig, size_t siglen)
 {
 	EVP_MD_CTX tmp_ctx;
@@ -178,7 +228,7 @@ EVP_DigestVerifyFinal(EVP_MD_CTX *ctx, const unsigned char *sig, size_t siglen)
 		vctx = 1;
 	else
 		vctx = 0;
-	EVP_MD_CTX_init(&tmp_ctx);
+	EVP_MD_CTX_legacy_clear(&tmp_ctx);
 	if (!EVP_MD_CTX_copy_ex(&tmp_ctx, ctx))
 		return -1;
 	if (vctx) {
@@ -190,4 +240,18 @@ EVP_DigestVerifyFinal(EVP_MD_CTX *ctx, const unsigned char *sig, size_t siglen)
 	if (vctx || !r)
 		return r;
 	return EVP_PKEY_verify(ctx->pctx, sig, siglen, md, mdlen);
+}
+
+int
+EVP_DigestVerify(EVP_MD_CTX *ctx, const unsigned char *sigret, size_t siglen,
+    const unsigned char *tbs, size_t tbslen)
+{
+	if (ctx->pctx->pmeth->digestverify != NULL)
+		return ctx->pctx->pmeth->digestverify(ctx, sigret, siglen,
+		    tbs, tbslen);
+
+	if (EVP_DigestVerifyUpdate(ctx, tbs, tbslen) <= 0)
+		return -1;
+
+	return EVP_DigestVerifyFinal(ctx, sigret, siglen);
 }

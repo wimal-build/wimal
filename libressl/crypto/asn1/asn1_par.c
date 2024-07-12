@@ -1,4 +1,4 @@
-/* $OpenBSD: asn1_par.c,v 1.27 2019/03/24 16:07:25 beck Exp $ */
+/* $OpenBSD: asn1_par.c,v 1.35 2023/07/05 21:23:36 beck Exp $ */
 /* Copyright (C) 1995-1998 Eric Young (eay@cryptsoft.com)
  * All rights reserved.
  *
@@ -80,7 +80,8 @@ asn1_print_info(BIO *bp, int tag, int xclass, int constructed,
 		p="prim: ";
 	if (BIO_write(bp, p, 6) < 6)
 		goto err;
-	BIO_indent(bp, indent, 128);
+	if (!BIO_indent(bp, indent, 128))
+		goto err;
 
 	p = str;
 	if ((xclass & V_ASN1_PRIVATE) == V_ASN1_PRIVATE)
@@ -97,7 +98,7 @@ asn1_print_info(BIO *bp, int tag, int xclass, int constructed,
 	if (BIO_printf(bp, "%-18s", p) <= 0)
 		goto err;
 	return (1);
-err:
+ err:
 	return (0);
 }
 
@@ -106,12 +107,14 @@ ASN1_parse(BIO *bp, const unsigned char *pp, long len, int indent)
 {
 	return (asn1_parse2(bp, &pp, len, 0, 0, indent, 0));
 }
+LCRYPTO_ALIAS(ASN1_parse);
 
 int
 ASN1_parse_dump(BIO *bp, const unsigned char *pp, long len, int indent, int dump)
 {
 	return (asn1_parse2(bp, &pp, len, 0, 0, indent, dump));
 }
+LCRYPTO_ALIAS(ASN1_parse_dump);
 
 static int
 asn1_parse2(BIO *bp, const unsigned char **pp, long length, int offset,
@@ -123,6 +126,8 @@ asn1_parse2(BIO *bp, const unsigned char **pp, long length, int offset,
 	int nl, hl, j, r;
 	ASN1_OBJECT *o = NULL;
 	ASN1_OCTET_STRING *os = NULL;
+	ASN1_INTEGER *ai = NULL;
+	ASN1_ENUMERATED *ae = NULL;
 	/* ASN1_BMPSTRING *bmp=NULL;*/
 	int dump_indent;
 
@@ -230,16 +235,13 @@ asn1_parse2(BIO *bp, const unsigned char **pp, long length, int offset,
 						goto end;
 				}
 			} else if (tag == V_ASN1_BOOLEAN) {
-				int ii;
-
-				opp = op;
-				ii = d2i_ASN1_BOOLEAN(NULL, &opp, len + hl);
-				if (ii < 0) {
+				if (len == 1 && p < tot) {
+					BIO_printf(bp, ":%u", p[0]);
+				} else {
 					if (BIO_write(bp, "Bad boolean\n",
 					    12) <= 0)
 						goto end;
 				}
-				BIO_printf(bp, ":%d", ii);
 			} else if (tag == V_ASN1_BMPSTRING) {
 				/* do the BMP thang */
 			} else if (tag == V_ASN1_OCTET_STRING) {
@@ -296,23 +298,22 @@ asn1_parse2(BIO *bp, const unsigned char **pp, long length, int offset,
 				ASN1_OCTET_STRING_free(os);
 				os = NULL;
 			} else if (tag == V_ASN1_INTEGER) {
-				ASN1_INTEGER *bs;
 				int i;
 
 				opp = op;
-				bs = d2i_ASN1_INTEGER(NULL, &opp, len + hl);
-				if (bs != NULL) {
+				ai = d2i_ASN1_INTEGER(NULL, &opp, len + hl);
+				if (ai != NULL) {
 					if (BIO_write(bp, ":", 1) <= 0)
 						goto end;
-					if (bs->type == V_ASN1_NEG_INTEGER)
+					if (ai->type == V_ASN1_NEG_INTEGER)
 						if (BIO_write(bp, "-", 1) <= 0)
 							goto end;
-					for (i = 0; i < bs->length; i++) {
+					for (i = 0; i < ai->length; i++) {
 						if (BIO_printf(bp, "%02X",
-						    bs->data[i]) <= 0)
+						    ai->data[i]) <= 0)
 							goto end;
 					}
-					if (bs->length == 0) {
+					if (ai->length == 0) {
 						if (BIO_write(bp, "00", 2) <= 0)
 							goto end;
 					}
@@ -320,25 +321,25 @@ asn1_parse2(BIO *bp, const unsigned char **pp, long length, int offset,
 					if (BIO_write(bp, "BAD INTEGER", 11) <= 0)
 						goto end;
 				}
-				ASN1_INTEGER_free(bs);
+				ASN1_INTEGER_free(ai);
+				ai = NULL;
 			} else if (tag == V_ASN1_ENUMERATED) {
-				ASN1_ENUMERATED *bs;
 				int i;
 
 				opp = op;
-				bs = d2i_ASN1_ENUMERATED(NULL, &opp, len + hl);
-				if (bs != NULL) {
+				ae = d2i_ASN1_ENUMERATED(NULL, &opp, len + hl);
+				if (ae != NULL) {
 					if (BIO_write(bp, ":", 1) <= 0)
 						goto end;
-					if (bs->type == V_ASN1_NEG_ENUMERATED)
+					if (ae->type == V_ASN1_NEG_ENUMERATED)
 						if (BIO_write(bp, "-", 1) <= 0)
 							goto end;
-					for (i = 0; i < bs->length; i++) {
+					for (i = 0; i < ae->length; i++) {
 						if (BIO_printf(bp, "%02X",
-						    bs->data[i]) <= 0)
+						    ae->data[i]) <= 0)
 							goto end;
 					}
-					if (bs->length == 0) {
+					if (ae->length == 0) {
 						if (BIO_write(bp, "00", 2) <= 0)
 							goto end;
 					}
@@ -346,7 +347,8 @@ asn1_parse2(BIO *bp, const unsigned char **pp, long length, int offset,
 					if (BIO_write(bp, "BAD ENUMERATED", 14) <= 0)
 						goto end;
 				}
-				ASN1_ENUMERATED_free(bs);
+				ASN1_ENUMERATED_free(ae);
+				ae = NULL;
 			} else if (len > 0 && dump) {
 				if (!nl) {
 					if (BIO_write(bp, "\n", 1) <= 0)
@@ -373,32 +375,12 @@ asn1_parse2(BIO *bp, const unsigned char **pp, long length, int offset,
 	}
 	ret = 1;
 
-end:
+ end:
 	if (o != NULL)
 		ASN1_OBJECT_free(o);
 	ASN1_OCTET_STRING_free(os);
+	ASN1_INTEGER_free(ai);
+	ASN1_ENUMERATED_free(ae);
 	*pp = p;
 	return (ret);
-}
-
-const char *
-ASN1_tag2str(int tag)
-{
-	static const char * const tag2str[] = {
-		"EOC", "BOOLEAN", "INTEGER", "BIT STRING", "OCTET STRING", /* 0-4 */
-		"NULL", "OBJECT", "OBJECT DESCRIPTOR", "EXTERNAL", "REAL", /* 5-9 */
-		"ENUMERATED", "<ASN1 11>", "UTF8STRING", "<ASN1 13>", 	    /* 10-13 */
-		"<ASN1 14>", "<ASN1 15>", "SEQUENCE", "SET", 		    /* 15-17 */
-		"NUMERICSTRING", "PRINTABLESTRING", "T61STRING",	    /* 18-20 */
-		"VIDEOTEXSTRING", "IA5STRING", "UTCTIME", "GENERALIZEDTIME", /* 21-24 */
-		"GRAPHICSTRING", "VISIBLESTRING", "GENERALSTRING",	    /* 25-27 */
-		"UNIVERSALSTRING", "<ASN1 29>", "BMPSTRING"		    /* 28-30 */
-	};
-
-	if ((tag == V_ASN1_NEG_INTEGER) || (tag == V_ASN1_NEG_ENUMERATED))
-		tag &= ~0x100;
-
-	if (tag < 0 || tag > 30)
-		return "(unknown)";
-	return tag2str[tag];
 }

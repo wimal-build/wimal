@@ -46,6 +46,9 @@
 #include <CommonCrypto/CommonDigestSPI.h>
 #else
 #include <openssl/evp.h>
+#define __BEGIN_HIDDEN_DECLS
+#define __END_HIDDEN_DECLS
+#include "../../../libressl/crypto/evp/evp_local.h"
 #endif
 
 #include "xar.h"

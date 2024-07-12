@@ -1,4 +1,4 @@
-/* $OpenBSD: tls_conninfo.c,v 1.20 2018/02/10 04:48:44 jsing Exp $ */
+/* $OpenBSD: tls_conninfo.c,v 1.24 2023/11/13 10:51:49 tb Exp $ */
 /*
  * Copyright (c) 2015 Joel Sing <jsing@openbsd.org>
  * Copyright (c) 2015 Bob Beck <beck@openbsd.org>
@@ -17,6 +17,7 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 
 #include <openssl/x509.h>
 
@@ -112,16 +113,13 @@ tls_get_peer_cert_times(struct tls *ctx, time_t *notbefore,
 	if (ctx->ssl_peer_cert == NULL)
 		return (-1);
 
-	memset(&before_tm, 0, sizeof(before_tm));
-	memset(&after_tm, 0, sizeof(after_tm));
-
 	if ((before = X509_get_notBefore(ctx->ssl_peer_cert)) == NULL)
 		goto err;
 	if ((after = X509_get_notAfter(ctx->ssl_peer_cert)) == NULL)
 		goto err;
-	if (ASN1_time_parse(before->data, before->length, &before_tm, 0) == -1)
+	if (!ASN1_TIME_to_tm(before, &before_tm))
 		goto err;
-	if (ASN1_time_parse(after->data, after->length, &after_tm, 0) == -1)
+	if (!ASN1_TIME_to_tm(after, &after_tm))
 		goto err;
 	if (!ASN1_time_tm_clamp_notafter(&after_tm))
 		goto err;
@@ -246,6 +244,7 @@ tls_conninfo_populate(struct tls *ctx)
 		goto err;
 	if ((ctx->conninfo->cipher = strdup(tmp)) == NULL)
 		goto err;
+	ctx->conninfo->cipher_strength = SSL_get_cipher_bits(ctx->ssl_conn, NULL);
 
 	if (ctx->servername != NULL) {
 		if ((ctx->conninfo->servername =
@@ -310,6 +309,14 @@ tls_conn_cipher(struct tls *ctx)
 	if (ctx->conninfo == NULL)
 		return (NULL);
 	return (ctx->conninfo->cipher);
+}
+
+int
+tls_conn_cipher_strength(struct tls *ctx)
+{
+	if (ctx->conninfo == NULL)
+		return (0);
+	return (ctx->conninfo->cipher_strength);
 }
 
 const char *

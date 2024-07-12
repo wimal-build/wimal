@@ -78,6 +78,9 @@ add_subdirectory(jsoncpp)
 # Add libuv
 add_subdirectory(libuv)
 
+# Add zsign
+add_subdirectory(zsign)
+
 # Disable terminfo
 set(LLVM_ENABLE_TERMINFO OFF CACHE BOOL LLVM_ENABLE_TERMINFO)
 
@@ -232,6 +235,9 @@ target_include_directories(lldMachO2 PRIVATE ld64/port)
 # Fix dependencies
 add_dependencies(LLVMSupport zlibstatic)
 
+# Add install targets for zsign
+add_llvm_install_targets(install-zsign COMPONENT zsign DEPENDS zsign)
+
 # Add install targets for wimal
 add_llvm_install_targets(install-wimal COMPONENT wimal DEPENDS wimal)
 
@@ -271,6 +277,8 @@ add_custom_target(
     install-LLVMgold-stripped
 
     install-wimal-stripped
+
+    install-zsign-stripped
 
     install-llvm-ar-stripped
     install-llvm-nm-stripped

@@ -71,6 +71,7 @@ jobs:
           -DCOMPILER_RT_BUILD_MEMPROF=OFF
           -DCOMPILER_RT_INCLUDE_TESTS=OFF
           -DCOMPILER_RT_SANITIZERS_TO_BUILD=asan
+          -DCOMPILER_RT_BUILD_SHARED_ASAN=ON
           -DLLVM_USE_SANITIZER=OFF
         displayName: "(x64-linux) Configure project"
       - script: cmake --build cmake-build/x64-linux --target
@@ -96,6 +97,7 @@ jobs:
           -DCOMPILER_RT_BUILD_MEMPROF=OFF
           -DCOMPILER_RT_INCLUDE_TESTS=OFF
           -DCOMPILER_RT_SANITIZERS_TO_BUILD=asan
+          -DCOMPILER_RT_BUILD_SHARED_ASAN=ON
           -DLLVM_USE_SANITIZER=OFF
         displayName: "(a64-linux) Configure project"
       - script: cmake --build cmake-build/a64-linux --target
@@ -121,6 +123,7 @@ jobs:
           -DCOMPILER_RT_BUILD_MEMPROF=OFF
           -DCOMPILER_RT_INCLUDE_TESTS=OFF
           -DCOMPILER_RT_SANITIZERS_TO_BUILD=asan
+          -DCOMPILER_RT_BUILD_SHARED_ASAN=ON
           -DLLVM_USE_SANITIZER=OFF
         displayName: "(arm-android) Configure project"
       - script: cmake --build cmake-build/arm-android --target
@@ -146,6 +149,7 @@ jobs:
           -DCOMPILER_RT_BUILD_MEMPROF=OFF
           -DCOMPILER_RT_INCLUDE_TESTS=OFF
           -DCOMPILER_RT_SANITIZERS_TO_BUILD=asan
+          -DCOMPILER_RT_BUILD_SHARED_ASAN=ON
           -DLLVM_USE_SANITIZER=OFF
         displayName: "(a64-android) Configure project"
       - script: cmake --build cmake-build/a64-android --target
@@ -171,6 +175,7 @@ jobs:
           -DCOMPILER_RT_BUILD_MEMPROF=OFF
           -DCOMPILER_RT_INCLUDE_TESTS=OFF
           -DCOMPILER_RT_SANITIZERS_TO_BUILD=asan
+          -DCOMPILER_RT_BUILD_SHARED_ASAN=ON
           -DLLVM_USE_SANITIZER=OFF
         displayName: "(x86-android) Configure project"
       - script: cmake --build cmake-build/x86-android --target
@@ -196,6 +201,7 @@ jobs:
           -DCOMPILER_RT_BUILD_MEMPROF=OFF
           -DCOMPILER_RT_INCLUDE_TESTS=OFF
           -DCOMPILER_RT_SANITIZERS_TO_BUILD=asan
+          -DCOMPILER_RT_BUILD_SHARED_ASAN=ON
           -DLLVM_USE_SANITIZER=OFF
         displayName: "(x64-android) Configure project"
       - script: cmake --build cmake-build/x64-android --target
@@ -219,6 +225,7 @@ jobs:
           -DCOMPILER_RT_BUILD_MEMPROF=OFF
           -DCOMPILER_RT_INCLUDE_TESTS=OFF
           -DCOMPILER_RT_SANITIZERS_TO_BUILD=asan
+          -DCOMPILER_RT_BUILD_SHARED_ASAN=ON
           -DLLVM_USE_SANITIZER=OFF
         displayName: "(Darwin) Configure project"
       - script: cmake --build cmake-build/darwin --target
@@ -241,7 +248,7 @@ jobs:
           PathtoPublish: "$(Build.ArtifactStagingDirectory)"
           ArtifactName: "wimal-compiler-rt-$(Build.BuildNumber)"
         displayName: "Upload artifact"
-  - job: linux
+  - job: x64_linux
     timeoutInMinutes: 300
     pool:
       vmImage: "Ubuntu-latest"
@@ -273,13 +280,13 @@ jobs:
           includeRootFolder: true
           archiveType: "tar"
           tarCompression: "xz"
-          archiveFile: "$(Build.ArtifactStagingDirectory)/wimal-linux-$(Build.BuildNumber).tar.xz"
+          archiveFile: "$(Build.ArtifactStagingDirectory)/wimal-x64-linux-$(Build.BuildNumber).tar.xz"
           replaceExistingArchive: true
         displayName: "Create tarball"
       - task: PublishBuildArtifacts@1
         inputs:
           PathtoPublish: "$(Build.ArtifactStagingDirectory)"
-          ArtifactName: "wimal-linux-$(Build.BuildNumber)"
+          ArtifactName: "wimal-x64-linux-$(Build.BuildNumber)"
         displayName: "Upload artifact"
   - job: a64_linux
     timeoutInMinutes: 300
@@ -321,7 +328,7 @@ jobs:
           PathtoPublish: "$(Build.ArtifactStagingDirectory)"
           ArtifactName: "wimal-a64-linux-$(Build.BuildNumber)"
         displayName: "Upload artifact"
-  - job: macos
+  - job: x64_macos
     timeoutInMinutes: 300
     pool:
       vmImage: "macOS-latest"
@@ -353,15 +360,15 @@ jobs:
           includeRootFolder: true
           archiveType: "tar"
           tarCompression: "xz"
-          archiveFile: "$(Build.ArtifactStagingDirectory)/wimal-macos-$(Build.BuildNumber).tar.xz"
+          archiveFile: "$(Build.ArtifactStagingDirectory)/wimal-x64-macos-$(Build.BuildNumber).tar.xz"
           replaceExistingArchive: true
         displayName: "Create tarball"
       - task: PublishBuildArtifacts@1
         inputs:
           PathtoPublish: "$(Build.ArtifactStagingDirectory)"
-          ArtifactName: "wimal-macos-$(Build.BuildNumber)"
+          ArtifactName: "wimal-x64-macos-$(Build.BuildNumber)"
         displayName: "Upload artifact"
-  - job: arm64_macos
+  - job: a64_macos
     timeoutInMinutes: 300
     pool:
       vmImage: "macOS-latest"
@@ -393,11 +400,11 @@ jobs:
           includeRootFolder: true
           archiveType: "tar"
           tarCompression: "xz"
-          archiveFile: "$(Build.ArtifactStagingDirectory)/wimal-arm64_macos-$(Build.BuildNumber).tar.xz"
+          archiveFile: "$(Build.ArtifactStagingDirectory)/wimal-a64-macos-$(Build.BuildNumber).tar.xz"
           replaceExistingArchive: true
         displayName: "Create tarball"
       - task: PublishBuildArtifacts@1
         inputs:
           PathtoPublish: "$(Build.ArtifactStagingDirectory)"
-          ArtifactName: "wimal-arm64_macos-$(Build.BuildNumber)"
+          ArtifactName: "wimal-a64-macos-$(Build.BuildNumber)"
         displayName: "Upload artifact"

@@ -81,6 +81,9 @@ add_subdirectory(libuv)
 # Add zsign
 add_subdirectory(zsign)
 
+# Add apple-codesign
+add_subdirectory(apple-codesign)
+
 # Disable terminfo
 set(LLVM_ENABLE_TERMINFO OFF CACHE BOOL LLVM_ENABLE_TERMINFO)
 

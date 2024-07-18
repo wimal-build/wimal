@@ -287,6 +287,12 @@ void Cc::Run(const Context *context, std::vector<std::string> extraArgs) {
         args.emplace_back("-fsanitize=address");
         args.emplace_back("-fno-omit-frame-pointer");
     }
+    // Set env WIMAL_CC_ASAN_DSO=1 to enable address sanitizer with shared
+    // library.
+    env = getenv("WIMAL_CC_ASAN_DSO");
+    if (env && strcmp(env, "1") == 0) {
+        args.emplace_back("-shared-libasan");
+    }
     std::vector<char *> arguments;
     arguments.reserve(args.size() + context->args.size() + extraArgs.size() + 1);
     for (const auto &arg : args) {

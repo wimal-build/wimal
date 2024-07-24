@@ -215,9 +215,8 @@ static inline std::string CcForAction(const std::string &action) {
 
 void Cc::Run(const Context *context, std::vector<std::string> extraArgs) {
     auto cc = context->clang / "bin" / CcForAction(context->action);
-    auto filename = cc.filename();
     std::vector<std::string> args = {
-        cc.filename().string(),
+        cc.c_str(),
         "-target", context->triple,
         "--sysroot", context->sysroot.string(),
         // Avoid clang using system c++ include path.
@@ -306,7 +305,12 @@ void Cc::Run(const Context *context, std::vector<std::string> extraArgs) {
     }
     arguments.emplace_back(nullptr);
     BearReport(context, cc.string().data(), arguments);
-    execvp(cc.c_str(), arguments.data());
+    auto command = cc.c_str();
+    if (auto ccache = getenv("WIMAL_CCACHE")) {
+        command = ccache;
+        arguments.insert(arguments.begin(), const_cast<char *>(ccache));
+    }
+    execvp(command, arguments.data());
 }
 
 }

@@ -40,6 +40,7 @@ out/
 !/llvm/lib/Target/X86/**
 !/llvm/lib/Target/AArch64/**
 !/llvm/lib/Target/ARM/**
+!/llvm/lib/Target/WebAssembly/**
 !/llvm/lib/Target/**/LLVMBuild.txt
 
 ### libcxxabi

@@ -1,3 +1,2 @@
-backports.lzma
 requests
 setuptools

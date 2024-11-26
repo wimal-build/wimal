@@ -109,3 +109,6 @@ __pycache__/
 
 ### compiler-rt
 /compiler-rt/test
+
+### binaryen
+/binaryen/test

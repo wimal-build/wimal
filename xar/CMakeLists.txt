@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.10)
 
 project(xar)
 
@@ -9,11 +9,9 @@ set(XAR_VERSION ${MAJOR_VERSION}.${MINOR_VERSION})
 
 # Generate header
 configure_file(
-    xar/include/xar.h.in
-    "${CMAKE_CURRENT_BINARY_DIR}/include/xar/xar.h"
-    @ONLY
+  xar/include/xar.h.in "${CMAKE_CURRENT_BINARY_DIR}/include/xar/xar.h" @ONLY
 )
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/include/config.h")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/include/config.h" )
 
 # Include directories
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/include)
@@ -26,106 +24,102 @@ include_directories($<TARGET_PROPERTY:xml2,INCLUDE_DIRECTORIES>)
 # Checks
 include(MeChecks)
 me_checks(
-    SET
-
-    HEADERS
-    ext2fs/ext2_fs.h
-    libutil.h
-    sys/acl.h
-    sys/attr.h
-    sys/extattr.h
-    sys/param.h
-    sys/statfs.h
-    sys/xattr.h
-    unistd.h
-
-    FUNCS
-    asprintf
-    lgetxattr
-    lsetxattr
-    getxattr
-    setxattr
-    getattrlist
-    setattrlist
-    lchmod
-    lchown
-    chflags
-    statvfs
-    statfs
-    strmode
-    safe_dirname
+  SET
+  HEADERS
+  ext2fs/ext2_fs.h
+  libutil.h
+  sys/acl.h
+  sys/attr.h
+  sys/extattr.h
+  sys/param.h
+  sys/statfs.h
+  sys/xattr.h
+  unistd.h
+  FUNCS
+  asprintf
+  lgetxattr
+  lsetxattr
+  getxattr
+  setxattr
+  getattrlist
+  setattrlist
+  lchmod
+  lchown
+  chflags
+  statvfs
+  statfs
+  strmode
+  safe_dirname
 )
 
 if(NOT HAVE_SAFE_DIRNAME)
-    add_definitions(-Dsafe_dirname=dirname)
+  add_definitions(-Dsafe_dirname=dirname)
 endif()
 
 me_checks(
-    SET
-
-    HEADERS
-    sys/types.h
-    sys/param.h
-    sys/mount.h
-    sys/statvfs.h
-    sys/stat.h
-
-    MEMBERS
-    statfs.f_fstypename
-    statvfs.f_fstypename
-    stat.st_flags
+  SET
+  HEADERS
+  sys/types.h
+  sys/param.h
+  sys/mount.h
+  sys/statvfs.h
+  sys/stat.h
+  MEMBERS
+  statfs.f_fstypename
+  statvfs.f_fstypename
+  stat.st_flags
 )
 
 if(NOT HAVE_STRUCT_STAT_ST_FLAGS)
-    add_definitions("-DXAR_FLAG_FORK=\"flags\"")
+  add_definitions("-DXAR_FLAG_FORK=\"flags\"")
 endif()
 
 me_checks(SET SIZES uid_t)
 if(SIZEOF_UID_T EQUAL 4)
-    add_definitions(-DUID_STRING=RId32)
-    add_definitions("-DUID_CAST=(uint32_t)")
+  add_definitions(-DUID_STRING=RId32)
+  add_definitions("-DUID_CAST=(uint32_t)")
 elseif(SIZEOF_UID_T EQUAL 8)
-    add_definitions(-DUID_STRING=PRId64)
-    add_definitions("-DUID_CAST=(uint64_t)")
+  add_definitions(-DUID_STRING=PRId64)
+  add_definitions("-DUID_CAST=(uint64_t)")
 else()
-    message(FATAL_ERROR "can not detect the size of your system's uid_t type")
+  message(FATAL_ERROR "can not detect the size of your system's uid_t type")
 endif()
 
 me_checks(SET SIZES gid_t)
 if(SIZEOF_GID_T EQUAL 4)
-    add_definitions(-DGID_STRING=PRId32)
-    add_definitions("-DGID_CAST=(uint32_t)")
+  add_definitions(-DGID_STRING=PRId32)
+  add_definitions("-DGID_CAST=(uint32_t)")
 elseif(SIZEOF_GID_T EQUAL 8)
-    add_definitions(-DGID_STRING=PRId64)
-    add_definitions("-DGID_CAST=(uint64_t)")
+  add_definitions(-DGID_STRING=PRId64)
+  add_definitions("-DGID_CAST=(uint64_t)")
 else()
-    message(FATAL_ERROR "can not detect the size of your system's gid_t type")
+  message(FATAL_ERROR "can not detect the size of your system's gid_t type")
 endif()
 
 me_checks(SET SIZES ino_t)
 if(SIZEOF_INO_T EQUAL 4)
-    add_definitions(-DINO_STRING=PRId32)
-    add_definitions(-DINO_HEXSTRING=PRIx32)
-    add_definitions("-DINO_CAST=(uint32_t)")
+  add_definitions(-DINO_STRING=PRId32)
+  add_definitions(-DINO_HEXSTRING=PRIx32)
+  add_definitions("-DINO_CAST=(uint32_t)")
 elseif(SIZEOF_INO_T EQUAL 8)
-    add_definitions(-DINO_STRING=PRId64)
-    add_definitions(-DINO_HEXSTRING=PRIx64)
-    add_definitions("-DINO_CAST=(uint64_t)")
+  add_definitions(-DINO_STRING=PRId64)
+  add_definitions(-DINO_HEXSTRING=PRIx64)
+  add_definitions("-DINO_CAST=(uint64_t)")
 else()
-    message(FATAL_ERROR "can not detect the size of your system's ino_t type")
+  message(FATAL_ERROR "can not detect the size of your system's ino_t type")
 endif()
 
 me_checks(SET SIZES dev_t)
 if(SIZEOF_DEV_T EQUAL 4)
-    add_definitions(-DDEV_STRING=PRId32)
-    add_definitions(-DDEV_HEXSTRING=PRIx32)
-    add_definitions("-DDEV_CAST=(uint32_t)")
+  add_definitions(-DDEV_STRING=PRId32)
+  add_definitions(-DDEV_HEXSTRING=PRIx32)
+  add_definitions("-DDEV_CAST=(uint32_t)")
 elseif(SIZEOF_DEV_T EQUAL 8)
-    add_definitions(-DDEV_STRING=PRId64)
-    add_definitions(-DDEV_HEXSTRING=PRIx64)
-    add_definitions("-DDEV_CAST=(uint64_t)")
+  add_definitions(-DDEV_STRING=PRId64)
+  add_definitions(-DDEV_HEXSTRING=PRIx64)
+  add_definitions("-DDEV_CAST=(uint64_t)")
 else()
-    message(FATAL_ERROR "can not detect the size of your system's dev_t type")
+  message(FATAL_ERROR "can not detect the size of your system's dev_t type")
 endif()
 
 me_compile_options(-Wno-format -Wno-implicit-function-declaration)
@@ -134,31 +128,33 @@ add_definitions(-DHAVE_LIBPTHREAD=1)
 
 # Sources
 set(
-    XAR_SOURCES
-    xar/lib/hash.c
-    xar/lib/fbsdattr.c
-    xar/lib/ext2.c
-    xar/lib/arcmod.c
-    xar/lib/data.c
-    xar/lib/io.c
-    xar/lib/err.c
-    xar/lib/script.c
-    xar/lib/ea.c
-    xar/lib/macho.c
-    xar/lib/lzmaxar.c
-    xar/lib/archive.c
-    xar/lib/b64.c
-    xar/lib/darwinattr.c
-    xar/lib/linuxattr.c
-    xar/lib/filetree.c
-    xar/lib/bzxar.c
-    xar/lib/signature.c
-    xar/lib/stat.c
-    xar/lib/subdoc.c
-    xar/lib/util.c
-    xar/lib/zxar.c
+  XAR_SOURCES
+  xar/lib/hash.c
+  xar/lib/fbsdattr.c
+  xar/lib/ext2.c
+  xar/lib/arcmod.c
+  xar/lib/data.c
+  xar/lib/io.c
+  xar/lib/err.c
+  xar/lib/script.c
+  xar/lib/ea.c
+  xar/lib/macho.c
+  xar/lib/lzmaxar.c
+  xar/lib/archive.c
+  xar/lib/b64.c
+  xar/lib/darwinattr.c
+  xar/lib/linuxattr.c
+  xar/lib/filetree.c
+  xar/lib/bzxar.c
+  xar/lib/signature.c
+  xar/lib/stat.c
+  xar/lib/subdoc.c
+  xar/lib/util.c
+  xar/lib/zxar.c
 )
 
 add_library(xar ${XAR_SOURCES})
 target_link_libraries(xar xml2 ssl crypto zlibstatic)
-target_include_directories(xar PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/include/xar")
+target_include_directories(
+  xar PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/include/xar"
+)

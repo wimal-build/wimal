@@ -27,20 +27,25 @@ find_program(RUSTUP rustup)
 
 if(NOT RUSTUP)
   message(WARNING "Rustup is required")
-  file(DOWNLOAD "https://sh.rustup.rs"
-       "${CMAKE_CURRENT_BINARY_DIR}/rustup-init.sh" STATUS RUSTUP_INIT_RESULT)
+  file(
+    DOWNLOAD "https://sh.rustup.rs" "${CMAKE_CURRENT_BINARY_DIR}/rustup-init.sh"
+    STATUS RUSTUP_INIT_RESULT
+  )
   if(NOT RUSTUP_INIT_RESULT EQUAL 0)
     message(WARNING "Failed to download rustup-init.sh")
     return()
   endif()
-  set(RUSTUP_ENV "RUSTUP_HOME=${CMAKE_CURRENT_BINARY_DIR}/rustup"
-                 "CARGO_HOME=${CMAKE_CURRENT_BINARY_DIR}/cargo")
+  set(
+    RUSTUP_ENV "RUSTUP_HOME=${CMAKE_CURRENT_BINARY_DIR}/rustup"
+               "CARGO_HOME=${CMAKE_CURRENT_BINARY_DIR}/cargo"
+  )
   execute_process(
     COMMAND
       ${CMAKE_COMMAND} -E env ${RUSTUP_ENV} bash
       "${CMAKE_CURRENT_BINARY_DIR}/rustup-init.sh" "-y"
       "--default-toolchain=stable" "--profile=minimal" "--no-modify-path"
-    RESULT_VARIABLE RUSTUP_INIT_RESULT)
+    RESULT_VARIABLE RUSTUP_INIT_RESULT
+  )
   if(NOT RUSTUP_INIT_RESULT EQUAL 0)
     message(WARNING "Failed to install Rustup")
     return()
@@ -66,28 +71,31 @@ add_custom_command(
     rcodesign apple-codesign --target ${CARGO_TARGET} --force
   DEPENDS ${CARGO_SOURCES}
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  VERBATIM)
+  VERBATIM
+)
 
-add_custom_target(apple-codesign
-                  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/bin/rcodesign)
+add_custom_target(
+  apple-codesign DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/bin/rcodesign
+)
 
 if(CMAKE_STRIP)
   add_custom_command(
-    TARGET apple-codesign
-    POST_BUILD
+    TARGET apple-codesign POST_BUILD
     COMMAND ${CMAKE_STRIP} ${CMAKE_CURRENT_BINARY_DIR}/bin/rcodesign
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    VERBATIM)
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} VERBATIM
+  )
 endif()
 
 install(
-  PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/bin/rcodesign
-  DESTINATION bin
-  COMPONENT apple-codesign)
+  PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/bin/rcodesign DESTINATION bin
+  COMPONENT apple-codesign
+)
 
 add_custom_target(
   install-apple-codesign
   DEPENDS apple-codesign
-  COMMAND "${CMAKE_COMMAND}" -DCMAKE_INSTALL_COMPONENT=apple-codesign -P
-          "${CMAKE_BINARY_DIR}/cmake_install.cmake"
-  USES_TERMINAL)
+  COMMAND
+    "${CMAKE_COMMAND}" -DCMAKE_INSTALL_COMPONENT=apple-codesign -P
+    "${CMAKE_BINARY_DIR}/cmake_install.cmake"
+  USES_TERMINAL
+)

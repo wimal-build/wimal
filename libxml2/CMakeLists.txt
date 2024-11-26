@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.10)
 
 project(libxml2)
 
@@ -10,13 +10,13 @@ set(MINOR_VERSION 9)
 set(MICRO_VERSION 9)
 set(MICRO_VERSION_SUFFIX)
 set(
-	VERSION
-	${MAJOR_VERSION}.${MINOR_VERSION}.${MICRO_VERSION}${MICRO_VERSION_SUFFIX}
+  VERSION
+  ${MAJOR_VERSION}.${MINOR_VERSION}.${MICRO_VERSION}${MICRO_VERSION_SUFFIX}
 )
 set(LIBXML_VERSION ${VERSION})
 math(
-	EXPR LIBXML_VERSION_NUMBER
-	"${MAJOR_VERSION} * 10000 + ${MINOR_VERSION} * 100 + ${MICRO_VERSION}"
+  EXPR LIBXML_VERSION_NUMBER
+  "${MAJOR_VERSION} * 10000 + ${MINOR_VERSION} * 100 + ${MICRO_VERSION}"
 )
 set(LIBXML_VERSION_EXTRA)
 
@@ -57,104 +57,99 @@ set(WITH_LZMA 0)
 
 # Generate xmlversion.h
 configure_file(
-	include/libxml/xmlversion.h.in
-	"${CMAKE_CURRENT_BINARY_DIR}/libxml/xmlversion.h"
-	@ONLY
+  include/libxml/xmlversion.h.in
+  "${CMAKE_CURRENT_BINARY_DIR}/libxml/xmlversion.h" @ONLY
 )
 
 # Check headers and functions
 include(MeChecks)
 me_checks(
-    SET
-
-    HEADERS
-	arpa/inet.h
-	arpa/nameser.h
-	ctype.h
-	dirent.h
-	dl.h
-	dlfcn.h
-	errno.h
-	fcntl.h
-	float.h
-	inttypes.h
-	limits.h
-	malloc.h
-	math.h
-	netdb.h
-	netinet/in.h
-	poll.h
-	resolv.h
-	signal.h
-	stdint.h
-	stdlib.h
-	string.h
-	strings.h
-	sys/mman.h
-	sys/select.h
-	sys/socket.h
-	sys/stat.h
-	sys/time.h
-	sys/timeb.h
-	sys/types.h
-	time.h
-	unistd.h
-    stdarg.h
-
-    FUNCS
-	fprintf
-	ftime
-	gettimeofday
-	isascii
-	localtime
-	mmap
-	munmap
-	printf
-	putenv
-	rand
-	rand_r
-	signal
-	snprintf
-	sprintf
-	srand
-	sscanf
-	stat
-	strftime
-	time
-	vfprintf
-	vsnprintf
-	vsprintf
+  SET
+  HEADERS
+  arpa/inet.h
+  arpa/nameser.h
+  ctype.h
+  dirent.h
+  dl.h
+  dlfcn.h
+  errno.h
+  fcntl.h
+  float.h
+  inttypes.h
+  limits.h
+  malloc.h
+  math.h
+  netdb.h
+  netinet/in.h
+  poll.h
+  resolv.h
+  signal.h
+  stdint.h
+  stdlib.h
+  string.h
+  strings.h
+  sys/mman.h
+  sys/select.h
+  sys/socket.h
+  sys/stat.h
+  sys/time.h
+  sys/timeb.h
+  sys/types.h
+  time.h
+  unistd.h
+  stdarg.h
+  FUNCS
+  fprintf
+  ftime
+  gettimeofday
+  isascii
+  localtime
+  mmap
+  munmap
+  printf
+  putenv
+  rand
+  rand_r
+  signal
+  snprintf
+  sprintf
+  srand
+  sscanf
+  stat
+  strftime
+  time
+  vfprintf
+  vsnprintf
+  vsprintf
 )
 
 include(CheckCSourceCompiles)
 
 # Check va_copy
 check_c_source_compiles(
-    "
+  "
         #include <stdarg.h>
         va_list ap1, ap2;
         int main() { va_copy(ap1, ap2); }
-    "
-    HAVE_VA_COPY
+    " HAVE_VA_COPY
 )
 if(HAVE_VA_COPY)
-    add_definitions(-DHAVE_VA_COPY)
+  add_definitions(-DHAVE_VA_COPY)
 endif()
 check_c_source_compiles(
-    "
+  "
         #include <stdarg.h>
         va_list ap1, ap2;
         int main() { __va_copy(ap1, ap2); }
-    "
-    HAVE___VA_COPY
+    " HAVE___VA_COPY
 )
 if(HAVE___VA_COPY)
-    add_definitions(-DHAVE___VA_COPY)
+  add_definitions(-DHAVE___VA_COPY)
 endif()
 
 # Check whether va_list is array
 check_c_source_compiles(
-    "
+  "
         #include <stdarg.h>
         void a(va_list *ap) {}
         int main() {
@@ -162,66 +157,62 @@ check_c_source_compiles(
             a(&ap1);
             ap2 = (va_list) ap1;
         }
-    "
-    VA_LIST_IS_ARRAY
+    " VA_LIST_IS_ARRAY
 )
 if(VA_LIST_IS_ARRAY)
-    add_definitions(-DVA_LIST_IS_ARRAY)
+  add_definitions(-DVA_LIST_IS_ARRAY)
 endif()
 
 # Sources
 set(
-    XML2_SOURCES
-    SAX.c
-	entities.c
-	encoding.c
-	error.c
-	parserInternals.c
-	parser.c
-	tree.c
-	hash.c
-	list.c
-	xmlIO.c
-	xmlmemory.c
-	uri.c
-	valid.c
-	xlink.c
-	HTMLparser.c
-	HTMLtree.c
-	debugXML.c
-	xpath.c
-    xpointer.c
-	xinclude.c
-	nanohttp.c
-	nanoftp.c
-	catalog.c
-	globals.c
-	threads.c
-	c14n.c
-	xmlstring.c
-	buf.c
-	xmlregexp.c
-	xmlschemas.c
-	xmlschemastypes.c
-	xmlunicode.c
-	xmlreader.c
-	relaxng.c
-	dict.c
-	SAX2.c
-	xmlwriter.c
-	legacy.c
-	chvalid.c
-	pattern.c
-	xmlsave.c
-	xmlmodule.c
-	schematron.c
-	xzlib.c
+  XML2_SOURCES
+  SAX.c
+  entities.c
+  encoding.c
+  error.c
+  parserInternals.c
+  parser.c
+  tree.c
+  hash.c
+  list.c
+  xmlIO.c
+  xmlmemory.c
+  uri.c
+  valid.c
+  xlink.c
+  HTMLparser.c
+  HTMLtree.c
+  debugXML.c
+  xpath.c
+  xpointer.c
+  xinclude.c
+  nanohttp.c
+  nanoftp.c
+  catalog.c
+  globals.c
+  threads.c
+  c14n.c
+  xmlstring.c
+  buf.c
+  xmlregexp.c
+  xmlschemas.c
+  xmlschemastypes.c
+  xmlunicode.c
+  xmlreader.c
+  relaxng.c
+  dict.c
+  SAX2.c
+  xmlwriter.c
+  legacy.c
+  chvalid.c
+  pattern.c
+  xmlsave.c
+  xmlmodule.c
+  schematron.c
+  xzlib.c
 )
 
-include_directories(
-	include
-	${CMAKE_CURRENT_BINARY_DIR}
-)
-file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/config.h)
+include_directories(include ${CMAKE_CURRENT_BINARY_DIR})
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/config.h )
 
 add_library(xml2 ${XML2_SOURCES})

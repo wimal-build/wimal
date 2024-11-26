@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.10)
 
 project(wimal-build)
 
@@ -6,6 +6,9 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # Suppress warnings of policy CMP0042
 set(CMAKE_POLICY_DEFAULT_CMP0042 NEW CACHE STRING CMAKE_POLICY_DEFAULT_CMP0042)
+
+# Suppress warnings of policy CMP0116
+set(CMAKE_POLICY_DEFAULT_CMP0116 NEW CACHE STRING CMAKE_POLICY_DEFAULT_CMP0116)
 
 # Enable PIC
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -18,24 +21,16 @@ add_subdirectory(zlib)
 
 # Find table-gen
 message(STATUS "Found wimal: ${WIMAL_HOME}")
-find_program(
-    PROGRAM_LLVM_TBLGEN
-    llvm-tblgen
-    HINTS ${WIMAL_HOME}/bin
-)
-find_program(
-    PROGRAM_CLANG_TBLGEN
-    clang-tblgen
-    HINTS ${WIMAL_HOME}/bin
-)
+find_program(PROGRAM_LLVM_TBLGEN llvm-tblgen HINTS ${WIMAL_HOME}/bin)
+find_program(PROGRAM_CLANG_TBLGEN clang-tblgen HINTS ${WIMAL_HOME}/bin)
 
 if(NOT PROGRAM_LLVM_TBLGEN STREQUAL PROGRAM_LLVM_TBLGEN-NOTFOUND)
-    message(STATUS "Found llvm-tblgen: ${PROGRAM_LLVM_TBLGEN}")
-    set(LLVM_TABLEGEN ${PROGRAM_LLVM_TBLGEN} CACHE PATH LLVM_TABLEGEN)
+  message(STATUS "Found llvm-tblgen: ${PROGRAM_LLVM_TBLGEN}")
+  set(LLVM_TABLEGEN ${PROGRAM_LLVM_TBLGEN} CACHE PATH LLVM_TABLEGEN)
 endif()
 if(NOT PROGRAM_CLANG_TBLGEN STREQUAL PROGRAM_CLANG_TBLGEN-NOTFOUND)
-    message(STATUS "Found clang-tblgen: ${PROGRAM_CLANG_TBLGEN}")
-    set(CLANG_TABLEGEN ${PROGRAM_CLANG_TBLGEN} CACHE PATH CLANG_TABLEGEN)
+  message(STATUS "Found clang-tblgen: ${PROGRAM_CLANG_TBLGEN}")
+  set(CLANG_TABLEGEN ${PROGRAM_CLANG_TBLGEN} CACHE PATH CLANG_TABLEGEN)
 endif()
 
 # Enable zlib
@@ -68,9 +63,14 @@ add_subdirectory(uuid)
 
 # Add jsoncpp
 set(JSONCPP_WITH_TESTS OFF CACHE BOOL JSONCPP_WITH_TESTS)
-set(JSONCPP_WITH_POST_BUILD_UNITTEST OFF CACHE BOOL JSONCPP_WITH_POST_BUILD_UNITTEST)
+set(
+  JSONCPP_WITH_POST_BUILD_UNITTEST OFF CACHE BOOL
+                                             JSONCPP_WITH_POST_BUILD_UNITTEST
+)
 set(JSONCPP_WITH_WARNING_AS_ERROR OFF CACHE BOOL JSONCPP_WITH_WARNING_AS_ERROR)
-set(JSONCPP_WITH_PKGCONFIG_SUPPORT OFF CACHE BOOL JSONCPP_WITH_PKGCONFIG_SUPPORT)
+set(
+  JSONCPP_WITH_PKGCONFIG_SUPPORT OFF CACHE BOOL JSONCPP_WITH_PKGCONFIG_SUPPORT
+)
 set(JSONCPP_WITH_CMAKE_PACKAGE OFF CACHE BOOL JSONCPP_WITH_CMAKE_PACKAGE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL BUILD_SHARED_LIBS)
 add_subdirectory(jsoncpp)
@@ -112,51 +112,49 @@ set(LLVM_BUILD_EXAMPLES OFF CACHE BOOL LLVM_BUILD_EXAMPLES)
 set(LLVM_ENABLE_BINDINGS OFF CACHE BOOL LLVM_ENABLE_BINDINGS)
 
 # Disable unnecessary targets
-set(LLVM_TARGETS_TO_BUILD X86 AArch64 ARM WebAssembly CACHE STRING LLVM_TARGETS_TO_BUILD)
+set(
+  LLVM_TARGETS_TO_BUILD X86 AArch64 ARM WebAssembly #
+  CACHE STRING LLVM_TARGETS_TO_BUILD
+)
 
 # Enable tools
 set(LLVM_BUILD_TOOLS ON CACHE BOOL LLVM_BUILD_TOOLS)
 set(
-    LLVM_TOOLCHAIN_TOOLS
-    llvm-ar
-    llvm-nm
-    llvm-objcopy
-    llvm-objdump
-    llvm-ranlib
-    llvm-readelf
-    llvm-readobj
-    llvm-strip
-    CACHE STRING
-    LLVM_TOOLCHAIN_TOOLS
+  LLVM_TOOLCHAIN_TOOLS
+  llvm-ar
+  llvm-nm
+  llvm-objcopy
+  llvm-objdump
+  llvm-ranlib
+  llvm-readelf
+  llvm-readobj
+  llvm-strip
+  CACHE STRING LLVM_TOOLCHAIN_TOOLS
 )
 
 # Include external projects
-set(LLVM_EXTERNAL_PROJECTS
-    wimal
-    libcxx
-    clang
-    lld
-    tapi
-    ld64
-    cctools
-    CACHE STRING
-    LLVM_EXTERNAL_PROJECTS
+set(
+  LLVM_EXTERNAL_PROJECTS
+  wimal
+  libcxx
+  clang
+  lld
+  tapi
+  ld64
+  cctools
+  CACHE STRING LLVM_EXTERNAL_PROJECTS
 )
 
 # Enable wimal
 set(
-    LLVM_EXTERNAL_WIMAL_SOURCE_DIR
-    "${CMAKE_CURRENT_SOURCE_DIR}/wimal"
-    CACHE STRING
-    LLVM_EXTERNAL_WIMAL_SOURCE_DIR
+  LLVM_EXTERNAL_WIMAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/wimal"
+  CACHE STRING LLVM_EXTERNAL_WIMAL_SOURCE_DIR
 )
 
 # Enable libcxx
 set(
-    LLVM_EXTERNAL_LIBCXX_SOURCE_DIR
-    "${CMAKE_CURRENT_SOURCE_DIR}/libcxx"
-    CACHE STRING
-    LLVM_EXTERNAL_LIBCXX_SOURCE_DIR
+  LLVM_EXTERNAL_LIBCXX_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libcxx"
+  CACHE STRING LLVM_EXTERNAL_LIBCXX_SOURCE_DIR
 )
 
 # Disable libcxx tests
@@ -175,10 +173,8 @@ set(LIBCXX_INSTALL_LIBRARY OFF CACHE BOOL LIBCXX_INSTALL_LIBRARY)
 # Enable clang
 set(LLVM_TOOL_CLANG_BUILD ON CACHE BOOL LLVM_TOOL_CLANG_BUILD)
 set(
-    LLVM_EXTERNAL_CLANG_SOURCE_DIR
-    "${CMAKE_CURRENT_SOURCE_DIR}/clang"
-    CACHE STRING
-    LLVM_EXTERNAL_CLANG_SOURCE_DIR
+  LLVM_EXTERNAL_CLANG_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/clang"
+  CACHE STRING LLVM_EXTERNAL_CLANG_SOURCE_DIR
 )
 # Disable clang dylib
 set(CLANG_LINK_CLANG_DYLIB OFF CACHE BOOL CLANG_LINK_CLANG_DYLIB)
@@ -186,34 +182,26 @@ set(CLANG_LINK_CLANG_DYLIB OFF CACHE BOOL CLANG_LINK_CLANG_DYLIB)
 # Enable lld
 set(LLVM_TOOL_LLD_BUILD ON CACHE BOOL LLVM_TOOL_LLD_BUILD)
 set(
-    LLVM_EXTERNAL_LLD_SOURCE_DIR
-    "${CMAKE_CURRENT_SOURCE_DIR}/lld"
-    CACHE STRING
-    LLVM_EXTERNAL_LLD_SOURCE_DIR
+  LLVM_EXTERNAL_LLD_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lld"
+  CACHE STRING LLVM_EXTERNAL_LLD_SOURCE_DIR
 )
 
 # Enable tapi
 set(
-    LLVM_EXTERNAL_TAPI_SOURCE_DIR
-    "${CMAKE_CURRENT_SOURCE_DIR}/tapi"
-    CACHE STRING
-    LLVM_EXTERNAL_TAPI_SOURCE_DIR
+  LLVM_EXTERNAL_TAPI_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tapi"
+  CACHE STRING LLVM_EXTERNAL_TAPI_SOURCE_DIR
 )
 
 # Enable ld64
 set(
-    LLVM_EXTERNAL_LD64_SOURCE_DIR
-    "${CMAKE_CURRENT_SOURCE_DIR}/ld64"
-    CACHE STRING
-    LLVM_EXTERNAL_LD64_SOURCE_DIR
+  LLVM_EXTERNAL_LD64_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/ld64"
+  CACHE STRING LLVM_EXTERNAL_LD64_SOURCE_DIR
 )
 
 # Enable cctools
 set(
-    LLVM_EXTERNAL_CCTOOLS_SOURCE_DIR
-    "${CMAKE_CURRENT_SOURCE_DIR}/cctools"
-    CACHE STRING
-    LLVM_EXTERNAL_CCTOOLS_SOURCE_DIR
+  LLVM_EXTERNAL_CCTOOLS_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cctools"
+  CACHE STRING LLVM_EXTERNAL_CCTOOLS_SOURCE_DIR
 )
 
 # Skip unnecessary components
@@ -227,7 +215,10 @@ set(CLANG_BUILD_EXAMPLES OFF CACHE BOOL CLANG_BUILD_EXAMPLES)
 set(LLVM_ENABLE_Z3_SOLVER OFF CACHE BOOL LLVM_ENABLE_Z3_SOLVER)
 
 # Disable linker color diagnostics
-set(LINKER_SUPPORTS_COLOR_DIAGNOSTICS OFF CACHE BOOL LINKER_SUPPORTS_COLOR_DIAGNOSTICS)
+set(
+  LINKER_SUPPORTS_COLOR_DIAGNOSTICS OFF #
+  CACHE BOOL LINKER_SUPPORTS_COLOR_DIAGNOSTICS
+)
 
 # Add LLVM
 add_subdirectory(llvm)
@@ -252,37 +243,72 @@ add_llvm_install_targets(install-cctools COMPONENT cctools DEPENDS cctools)
 
 # Add install target for llvm-tblgen
 install(
-    FILES
-    ${CMAKE_BINARY_DIR}/llvm/bin/llvm-tblgen
-    ${CMAKE_BINARY_DIR}/llvm/bin/clang-tblgen
-    PERMISSIONS
+  FILES ${CMAKE_BINARY_DIR}/llvm/bin/llvm-tblgen
+        ${CMAKE_BINARY_DIR}/llvm/bin/clang-tblgen
+  PERMISSIONS
     OWNER_WRITE
-    OWNER_READ GROUP_READ WORLD_READ
-    OWNER_EXECUTE GROUP_EXECUTE WORLD_EXECUTE
-    DESTINATION bin
-    COMPONENT tablegen
+    OWNER_READ
+    GROUP_READ
+    WORLD_READ
+    OWNER_EXECUTE
+    GROUP_EXECUTE
+    WORLD_EXECUTE
+  DESTINATION bin
+  COMPONENT tablegen
 )
-add_llvm_install_targets(install-tablegen COMPONENT tablegen DEPENDS llvm-tblgen clang-tblgen)
+add_llvm_install_targets(
+  install-tablegen COMPONENT tablegen DEPENDS llvm-tblgen clang-tblgen
+)
 
 # Fix cross-compiling issues
 execute_process(
-    COMMAND cmake -E create_symlink "${CMAKE_BINARY_DIR}/llvm/bin" "${CMAKE_BINARY_DIR}/bin"
+  COMMAND
+    cmake -E create_symlink "${CMAKE_BINARY_DIR}/llvm/bin"
+    "${CMAKE_BINARY_DIR}/bin"
+)
+
+set(CMAKE_CXX_STANDARD 17)
+
+set(BYN_ENABLE_ASSERTIONS OFF CACHE BOOL BYN_ENABLE_ASSERTIONS)
+set(BUILD_EMSCRIPTEN_TOOLS_ONLY ON CACHE BOOL BUILD_EMSCRIPTEN_TOOLS_ONLY)
+set(ENABLE_WERROR OFF CACHE BOOL ENABLE_WERROR)
+set(BUILD_TESTS OFF CACHE BOOL BUILD_TESTS FORCE)
+
+file(MAKE_DIRECTORY binaryen/test/lit)
+file(WRITE binaryen/test/lit/CMakeLists.txt "")
+
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/llvm/bin)
+set(
+  CMAKE_INSTALL_DEFAULT_COMPONENT_NAME binaryen
+  CACHE STRING CMAKE_INSTALL_DEFAULT_COMPONENT_NAME FORCE
+)
+add_subdirectory(binaryen)
+
+add_llvm_install_targets(
+  install-binaryen
+  COMPONENT
+  binaryen
+  DEPENDS
+  wasm-as
+  wasm-ctor-eval
+  wasm-dis
+  wasm-emscripten-finalize
+  wasm-metadce
+  wasm-opt
+  wasm-split
+  wasm2js
 )
 
 # Add all install targets
 add_custom_target(
-    installation DEPENDS
-
+  installation
+  DEPENDS
+    install-binaryen-stripped
     install-tablegen-stripped
-
     install-LLVM-stripped
-
     install-LLVMgold-stripped
-
     install-wimal-stripped
-
     install-zsign-stripped
-
     install-llvm-ar-stripped
     install-llvm-nm-stripped
     install-llvm-objcopy-stripped
@@ -295,19 +321,12 @@ add_custom_target(
     install-dsymutil-stripped
     install-llvm-lipo-stripped
     install-llvm-install-name-tool-stripped
-
     install-cxx-headers-stripped
-
     install-clang-stripped
     install-clang-resource-headers-stripped
-    
     install-lld-stripped
-
     install-ld64-stripped
-
     install-LTO-stripped
-    
     install-llvm-ifs-stripped
-
     install-cctools-stripped
 )

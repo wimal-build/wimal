@@ -19,6 +19,7 @@
 #include "llvm/Support/CBindingWrapping.h"
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace llvm {
@@ -32,11 +33,9 @@ class Module;
 class OptPassGate;
 template <typename T> class SmallVectorImpl;
 template <typename T> class StringMapEntry;
-class SMDiagnostic;
 class StringRef;
 class Twine;
 class LLVMRemarkStreamer;
-class raw_ostream;
 
 namespace remarks {
 class RemarkStreamer;
@@ -69,7 +68,7 @@ class LLVMContext {
 public:
   LLVMContextImpl *const pImpl;
   LLVMContext();
-  LLVMContext(LLVMContext &) = delete;
+  LLVMContext(const LLVMContext &) = delete;
   LLVMContext &operator=(const LLVMContext &) = delete;
   ~LLVMContext();
 
@@ -87,12 +86,16 @@ public:
   /// operand bundle tags without comparing strings. Keep this in sync with
   /// LLVMContext::LLVMContext().
   enum : unsigned {
-    OB_deopt = 0,         // "deopt"
-    OB_funclet = 1,       // "funclet"
-    OB_gc_transition = 2, // "gc-transition"
-    OB_cfguardtarget = 3, // "cfguardtarget"
-    OB_preallocated = 4,  // "preallocated"
-    OB_gc_live = 5,       // "gc-live"
+    OB_deopt = 0,                  // "deopt"
+    OB_funclet = 1,                // "funclet"
+    OB_gc_transition = 2,          // "gc-transition"
+    OB_cfguardtarget = 3,          // "cfguardtarget"
+    OB_preallocated = 4,           // "preallocated"
+    OB_gc_live = 5,                // "gc-live"
+    OB_clang_arc_attachedcall = 6, // "clang.arc.attachedcall"
+    OB_ptrauth = 7,                // "ptrauth"
+    OB_kcfi = 8,                   // "kcfi"
+    OB_convergencectrl = 9,        // "convergencectrl"
   };
 
   /// getMDKindID - Return a unique non-zero ID for the specified metadata kind.
@@ -152,30 +155,13 @@ public:
   void enableDebugTypeODRUniquing();
   void disableDebugTypeODRUniquing();
 
-  using InlineAsmDiagHandlerTy = void (*)(const SMDiagnostic&, void *Context,
-                                          unsigned LocCookie);
+  /// generateMachineFunctionNum - Get a unique number for MachineFunction
+  /// that associated with the given Function.
+  unsigned generateMachineFunctionNum(Function &);
 
   /// Defines the type of a yield callback.
   /// \see LLVMContext::setYieldCallback.
   using YieldCallbackTy = void (*)(LLVMContext *Context, void *OpaqueHandle);
-
-  /// setInlineAsmDiagnosticHandler - This method sets a handler that is invoked
-  /// when problems with inline asm are detected by the backend.  The first
-  /// argument is a function pointer and the second is a context pointer that
-  /// gets passed into the DiagHandler.
-  ///
-  /// LLVMContext doesn't take ownership or interpret either of these
-  /// pointers.
-  void setInlineAsmDiagnosticHandler(InlineAsmDiagHandlerTy DiagHandler,
-                                     void *DiagContext = nullptr);
-
-  /// getInlineAsmDiagnosticHandler - Return the diagnostic handler set by
-  /// setInlineAsmDiagnosticHandler.
-  InlineAsmDiagHandlerTy getInlineAsmDiagnosticHandler() const;
-
-  /// getInlineAsmDiagnosticContext - Return the diagnostic context set by
-  /// setInlineAsmDiagnosticHandler.
-  void *getInlineAsmDiagnosticContext() const;
 
   /// setDiagnosticHandlerCallBack - This method sets a handler call back
   /// that is invoked when the backend needs to report anything to the user.
@@ -189,10 +175,11 @@ public:
       DiagnosticHandler::DiagnosticHandlerTy DiagHandler,
       void *DiagContext = nullptr, bool RespectFilters = false);
 
-  /// setDiagnosticHandler - This method sets unique_ptr to object of DiagnosticHandler
-  /// to provide custom diagnostic handling. The first argument is unique_ptr of object
-  /// of type DiagnosticHandler or a derived of that.   The third argument should be
-  /// set to true if the handler only expects enabled diagnostics.
+  /// setDiagnosticHandler - This method sets unique_ptr to object of
+  /// DiagnosticHandler to provide custom diagnostic handling. The first
+  /// argument is unique_ptr of object of type DiagnosticHandler or a derived
+  /// of that. The second argument should be set to true if the handler only
+  /// expects enabled diagnostics.
   ///
   /// Ownership of this pointer is moved to LLVMContextImpl.
   void setDiagnosticHandler(std::unique_ptr<DiagnosticHandler> &&DH,
@@ -210,7 +197,7 @@ public:
   /// setDiagnosticHandler.
   const DiagnosticHandler *getDiagHandlerPtr() const;
 
-  /// getDiagnosticHandler - transfers owenership of DiagnosticHandler unique_ptr
+  /// getDiagnosticHandler - transfers ownership of DiagnosticHandler unique_ptr
   /// to caller.
   std::unique_ptr<DiagnosticHandler> getDiagnosticHandler();
 
@@ -220,6 +207,11 @@ public:
   /// Set if a code hotness metric should be included in optimization
   /// diagnostics.
   void setDiagnosticsHotnessRequested(bool Requested);
+
+  bool getMisExpectWarningRequested() const;
+  void setMisExpectWarningRequested(bool Requested);
+  void setDiagnosticsMisExpectTolerance(std::optional<uint32_t> Tolerance);
+  uint32_t getDiagnosticsMisExpectTolerance() const;
 
   /// Return the minimum hotness value a diagnostic would need in order
   /// to be included in optimization diagnostics.
@@ -235,7 +227,7 @@ public:
 
   /// Set the minimum hotness value a diagnostic needs in order to be
   /// included in optimization diagnostics.
-  void setDiagnosticsHotnessThreshold(Optional<uint64_t> Threshold);
+  void setDiagnosticsHotnessThreshold(std::optional<uint64_t> Threshold);
 
   /// Return if hotness threshold is requested from PSI.
   bool isDiagnosticsHotnessThresholdSetFromPSI() const;
@@ -309,7 +301,7 @@ public:
   /// be prepared to drop the erroneous construct on the floor and "not crash".
   /// The generated code need not be correct.  The error message will be
   /// implicitly prefixed with "error: " and should not end with a ".".
-  void emitError(unsigned LocCookie, const Twine &ErrorStr);
+  void emitError(uint64_t LocCookie, const Twine &ErrorStr);
   void emitError(const Instruction *I, const Twine &ErrorStr);
   void emitError(const Twine &ErrorStr);
 
@@ -324,6 +316,33 @@ public:
   /// LLVMContext is used by compilation.
   void setOptPassGate(OptPassGate&);
 
+  /// Set whether opaque pointers are enabled. The method may be called multiple
+  /// times, but only with the same value. Note that creating a pointer type or
+  /// otherwise querying the opaque pointer mode performs an implicit set to
+  /// the default value.
+  [[deprecated("Opaque pointers are always enabled")]]
+  void setOpaquePointers(bool Enable) const;
+
+  /// Whether typed pointers are supported. If false, all pointers are opaque.
+  [[deprecated("Always returns false")]]
+  bool supportsTypedPointers() const;
+
+  /// Get or set the current "default" target CPU (target-cpu function
+  /// attribute). The intent is that compiler frontends will set this to a value
+  /// that reflects the attribute that a function would get "by default" without
+  /// any specific function attributes, and compiler passes will attach the
+  /// attribute to newly created functions that are not associated with a
+  /// particular function, such as global initializers.
+  /// Function::createWithDefaultAttr() will create functions with this
+  /// attribute. This function should only be called by passes that run at
+  /// compile time and not by the backend or LTO passes.
+  StringRef getDefaultTargetCPU();
+  void setDefaultTargetCPU(StringRef CPU);
+
+  /// Similar to {get,set}DefaultTargetCPU() but for default target-features.
+  StringRef getDefaultTargetFeatures();
+  void setDefaultTargetFeatures(StringRef Features);
+
 private:
   // Module needs access to the add/removeModule methods.
   friend class Module;
@@ -333,7 +352,7 @@ private:
   void addModule(Module*);
 
   /// removeModule - Unregister a module from this context.
-  void removeModule(Module*);
+  void removeModule(Module *);
 };
 
 // Create wrappers for C Binding types (see CBindingWrapping.h).

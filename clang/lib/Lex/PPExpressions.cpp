@@ -44,7 +44,7 @@ namespace {
 /// conditional and the source range covered by it.
 class PPValue {
   SourceRange Range;
-  IdentifierInfo *II;
+  IdentifierInfo *II = nullptr;
 
 public:
   llvm::APSInt Val;
@@ -132,6 +132,10 @@ static bool EvaluateDefined(PPValue &Result, Token &PeekTok, DefinedTracker &DT,
   Result.Val = !!Macro;
   Result.Val.setIsUnsigned(false); // Result is signed intmax_t.
   DT.IncludedUndefinedIds = !Macro;
+
+  PP.emitMacroExpansionWarnings(
+      PeekTok,
+      (II->getName() == "INFINITY" || II->getName() == "NAN") ? true : false);
 
   // If there is a macro, mark it used.
   if (Result.Val != 0 && ValueLive)
@@ -265,7 +269,7 @@ static bool EvaluateValue(PPValue &Result, Token &PeekTok, DefinedTracker &DT,
             const StringRef IdentifierName = II->getName();
             if (llvm::any_of(UndefPrefixes,
                              [&IdentifierName](const std::string &Prefix) {
-                               return IdentifierName.startswith(Prefix);
+                               return IdentifierName.starts_with(Prefix);
                              }))
               PP.Diag(PeekTok, diag::warn_pp_undef_prefix)
                   << AddFlagValue{llvm::join(UndefPrefixes, ",")} << II;
@@ -320,6 +324,22 @@ static bool EvaluateValue(PPValue &Result, Token &PeekTok, DefinedTracker &DT,
       else
         PP.Diag(PeekTok, diag::ext_c99_longlong);
     }
+
+    // 'z/uz' literals are a C++23 feature.
+    if (Literal.isSizeT)
+      PP.Diag(PeekTok, PP.getLangOpts().CPlusPlus
+                           ? PP.getLangOpts().CPlusPlus23
+                                 ? diag::warn_cxx20_compat_size_t_suffix
+                                 : diag::ext_cxx23_size_t_suffix
+                           : diag::err_cxx23_size_t_suffix);
+
+    // 'wb/uwb' literals are a C23 feature.
+    // '__wb/__uwb' are a C++ extension.
+    if (Literal.isBitInt)
+      PP.Diag(PeekTok, PP.getLangOpts().CPlusPlus ? diag::ext_cxx_bitint_suffix
+                       : PP.getLangOpts().C23
+                           ? diag::warn_c23_compat_bitint_suffix
+                           : diag::ext_c23_bitint_suffix);
 
     // Parse the integer literal into Result.
     if (Literal.GetIntegerValue(Result.Val)) {
@@ -390,9 +410,18 @@ static bool EvaluateValue(PPValue &Result, Token &PeekTok, DefinedTracker &DT,
     // Set the value.
     Val = Literal.getValue();
     // Set the signedness. UTF-16 and UTF-32 are always unsigned
+    // UTF-8 is unsigned if -fchar8_t is specified.
     if (Literal.isWide())
       Val.setIsUnsigned(!TargetInfo::isTypeSigned(TI.getWCharType()));
-    else if (!Literal.isUTF16() && !Literal.isUTF32())
+    else if (Literal.isUTF16() || Literal.isUTF32())
+      Val.setIsUnsigned(true);
+    else if (Literal.isUTF8()) {
+      if (PP.getLangOpts().CPlusPlus)
+        Val.setIsUnsigned(
+            PP.getLangOpts().Char8 ? true : !PP.getLangOpts().CharIsSigned);
+      else
+        Val.setIsUnsigned(true);
+    } else
       Val.setIsUnsigned(!PP.getLangOpts().CharIsSigned);
 
     if (Result.Val.getBitWidth() > Val.getBitWidth()) {
@@ -652,19 +681,19 @@ static bool EvaluateDirectiveSubExpr(PPValue &LHS, unsigned MinPrec,
     case tok::ampamp:         // Logical && does not do UACs.
       break;                  // No UAC
     default:
-      Res.setIsUnsigned(LHS.isUnsigned()|RHS.isUnsigned());
+      Res.setIsUnsigned(LHS.isUnsigned() || RHS.isUnsigned());
       // If this just promoted something from signed to unsigned, and if the
       // value was negative, warn about it.
       if (ValueLive && Res.isUnsigned()) {
         if (!LHS.isUnsigned() && LHS.Val.isNegative())
           PP.Diag(OpLoc, diag::warn_pp_convert_to_positive) << 0
-            << LHS.Val.toString(10, true) + " to " +
-               LHS.Val.toString(10, false)
+            << toString(LHS.Val, 10, true) + " to " +
+               toString(LHS.Val, 10, false)
             << LHS.getRange() << RHS.getRange();
         if (!RHS.isUnsigned() && RHS.Val.isNegative())
           PP.Diag(OpLoc, diag::warn_pp_convert_to_positive) << 1
-            << RHS.Val.toString(10, true) + " to " +
-               RHS.Val.toString(10, false)
+            << toString(RHS.Val, 10, true) + " to " +
+               toString(RHS.Val, 10, false)
             << LHS.getRange() << RHS.getRange();
       }
       LHS.Val.setIsUnsigned(Res.isUnsigned());
@@ -812,7 +841,7 @@ static bool EvaluateDirectiveSubExpr(PPValue &LHS, unsigned MinPrec,
 
       // Usual arithmetic conversions (C99 6.3.1.8p1): result is unsigned if
       // either operand is unsigned.
-      Res.setIsUnsigned(RHS.isUnsigned() | AfterColonVal.isUnsigned());
+      Res.setIsUnsigned(RHS.isUnsigned() || AfterColonVal.isUnsigned());
 
       // Figure out the precedence of the token after the : part.
       PeekPrec = getPrecedence(PeekTok.getKind());
@@ -841,8 +870,10 @@ static bool EvaluateDirectiveSubExpr(PPValue &LHS, unsigned MinPrec,
 /// may occur after a #if or #elif directive.  If the expression is equivalent
 /// to "!defined(X)" return X in IfNDefMacro.
 Preprocessor::DirectiveEvalResult
-Preprocessor::EvaluateDirectiveExpression(IdentifierInfo *&IfNDefMacro) {
-  SaveAndRestore<bool> PPDir(ParsingIfOrElifDirective, true);
+Preprocessor::EvaluateDirectiveExpression(IdentifierInfo *&IfNDefMacro,
+                                          Token &Tok, bool &EvaluatedDefined,
+                                          bool CheckForEoD) {
+  SaveAndRestore PPDir(ParsingIfOrElifDirective, true);
   // Save the current state of 'DisableMacroExpansion' and reset it to false. If
   // 'DisableMacroExpansion' is true, then we must be in a macro argument list
   // in which case a directive is undefined behavior.  We want macros to be able
@@ -853,7 +884,6 @@ Preprocessor::EvaluateDirectiveExpression(IdentifierInfo *&IfNDefMacro) {
   DisableMacroExpansion = false;
 
   // Peek ahead one token.
-  Token Tok;
   LexNonComment(Tok);
 
   // C99 6.10.1p3 - All expressions are evaluated as intmax_t or uintmax_t.
@@ -866,7 +896,7 @@ Preprocessor::EvaluateDirectiveExpression(IdentifierInfo *&IfNDefMacro) {
     // Parse error, skip the rest of the macro line.
     SourceRange ConditionRange = ExprStartLoc;
     if (Tok.isNot(tok::eod))
-      ConditionRange = DiscardUntilEndOfDirective();
+      ConditionRange = DiscardUntilEndOfDirective(Tok);
 
     // Restore 'DisableMacroExpansion'.
     DisableMacroExpansion = DisableMacroExpansionAtStartOfDirective;
@@ -874,10 +904,13 @@ Preprocessor::EvaluateDirectiveExpression(IdentifierInfo *&IfNDefMacro) {
     // We cannot trust the source range from the value because there was a
     // parse error. Track the range manually -- the end of the directive is the
     // end of the condition range.
-    return {false,
+    return {std::nullopt,
+            false,
             DT.IncludedUndefinedIds,
             {ExprStartLoc, ConditionRange.getEnd()}};
   }
+
+  EvaluatedDefined = DT.State != DefinedTracker::Unknown;
 
   // If we are at the end of the expression after just parsing a value, there
   // must be no (unparenthesized) binary operators involved, so we can exit
@@ -890,7 +923,10 @@ Preprocessor::EvaluateDirectiveExpression(IdentifierInfo *&IfNDefMacro) {
 
     // Restore 'DisableMacroExpansion'.
     DisableMacroExpansion = DisableMacroExpansionAtStartOfDirective;
-    return {ResVal.Val != 0, DT.IncludedUndefinedIds, ResVal.getRange()};
+    bool IsNonZero = ResVal.Val != 0;
+    SourceRange ValRange = ResVal.getRange();
+    return {std::move(ResVal.Val), IsNonZero, DT.IncludedUndefinedIds,
+            ValRange};
   }
 
   // Otherwise, we must have a binary operator (e.g. "#if 1 < 2"), so parse the
@@ -899,21 +935,37 @@ Preprocessor::EvaluateDirectiveExpression(IdentifierInfo *&IfNDefMacro) {
                                Tok, true, DT.IncludedUndefinedIds, *this)) {
     // Parse error, skip the rest of the macro line.
     if (Tok.isNot(tok::eod))
-      DiscardUntilEndOfDirective();
+      DiscardUntilEndOfDirective(Tok);
 
     // Restore 'DisableMacroExpansion'.
     DisableMacroExpansion = DisableMacroExpansionAtStartOfDirective;
-    return {false, DT.IncludedUndefinedIds, ResVal.getRange()};
+    SourceRange ValRange = ResVal.getRange();
+    return {std::nullopt, false, DT.IncludedUndefinedIds, ValRange};
   }
 
-  // If we aren't at the tok::eod token, something bad happened, like an extra
-  // ')' token.
-  if (Tok.isNot(tok::eod)) {
-    Diag(Tok, diag::err_pp_expected_eol);
-    DiscardUntilEndOfDirective();
+  if (CheckForEoD) {
+    // If we aren't at the tok::eod token, something bad happened, like an extra
+    // ')' token.
+    if (Tok.isNot(tok::eod)) {
+      Diag(Tok, diag::err_pp_expected_eol);
+      DiscardUntilEndOfDirective(Tok);
+    }
   }
+
+  EvaluatedDefined = EvaluatedDefined || DT.State != DefinedTracker::Unknown;
 
   // Restore 'DisableMacroExpansion'.
   DisableMacroExpansion = DisableMacroExpansionAtStartOfDirective;
-  return {ResVal.Val != 0, DT.IncludedUndefinedIds, ResVal.getRange()};
+  bool IsNonZero = ResVal.Val != 0;
+  SourceRange ValRange = ResVal.getRange();
+  return {std::move(ResVal.Val), IsNonZero, DT.IncludedUndefinedIds, ValRange};
+}
+
+Preprocessor::DirectiveEvalResult
+Preprocessor::EvaluateDirectiveExpression(IdentifierInfo *&IfNDefMacro,
+                                          bool CheckForEoD) {
+  Token Tok;
+  bool EvaluatedDefined;
+  return EvaluateDirectiveExpression(IfNDefMacro, Tok, EvaluatedDefined,
+                                     CheckForEoD);
 }

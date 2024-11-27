@@ -15,13 +15,14 @@
 #ifndef LLVM_LIB_FILECHECK_FILECHECKIMPL_H
 #define LLVM_LIB_FILECHECK_FILECHECKIMPL_H
 
-#include "llvm/ADT/Optional.h"
+#include "llvm/ADT/APInt.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/FileCheck/FileCheck.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/SourceMgr.h"
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -30,8 +31,6 @@ namespace llvm {
 //===----------------------------------------------------------------------===//
 // Numeric substitution handling code.
 //===----------------------------------------------------------------------===//
-
-class ExpressionValue;
 
 /// Type representing the format an expression value should be textualized into
 /// for matching. Used to represent both explicit format specifiers as well as
@@ -54,6 +53,8 @@ struct ExpressionFormat {
 private:
   Kind Value;
   unsigned Precision = 0;
+  /// printf-like "alternate form" selected.
+  bool AlternateForm = false;
 
 public:
   /// Evaluates a format to true if it can be used in a match.
@@ -63,7 +64,7 @@ public:
   /// their kinds and precision are the same.
   bool operator==(const ExpressionFormat &Other) const {
     return Value != Kind::NoFormat && Value == Other.Value &&
-           Precision == Other.Precision;
+           Precision == Other.Precision && AlternateForm == Other.AlternateForm;
   }
 
   bool operator!=(const ExpressionFormat &Other) const {
@@ -81,6 +82,8 @@ public:
   explicit ExpressionFormat(Kind Value) : Value(Value), Precision(0){};
   explicit ExpressionFormat(Kind Value, unsigned Precision)
       : Value(Value), Precision(Precision){};
+  explicit ExpressionFormat(Kind Value, unsigned Precision, bool AlternateForm)
+      : Value(Value), Precision(Precision), AlternateForm(AlternateForm){};
 
   /// \returns a wildcard regular expression string that matches any value in
   /// the format represented by this instance and no other value, or an error
@@ -90,14 +93,11 @@ public:
   /// \returns the string representation of \p Value in the format represented
   /// by this instance, or an error if conversion to this format failed or the
   /// format is NoFormat.
-  Expected<std::string> getMatchingString(ExpressionValue Value) const;
+  Expected<std::string> getMatchingString(APInt Value) const;
 
   /// \returns the value corresponding to string representation \p StrVal
-  /// according to the matching format represented by this instance or an error
-  /// with diagnostic against \p SM if \p StrVal does not correspond to a valid
-  /// and representable value.
-  Expected<ExpressionValue> valueFromStringRepr(StringRef StrVal,
-                                                const SourceMgr &SM) const;
+  /// according to the matching format represented by this instance.
+  APInt valueFromStringRepr(StringRef StrVal, const SourceMgr &SM) const;
 };
 
 /// Class to represent an overflow error that might result when manipulating a
@@ -113,57 +113,14 @@ public:
   void log(raw_ostream &OS) const override { OS << "overflow error"; }
 };
 
-/// Class representing a numeric value.
-class ExpressionValue {
-private:
-  uint64_t Value;
-  bool Negative;
-
-public:
-  template <class T>
-  explicit ExpressionValue(T Val) : Value(Val), Negative(Val < 0) {}
-
-  bool operator==(const ExpressionValue &Other) const {
-    return Value == Other.Value && isNegative() == Other.isNegative();
-  }
-
-  bool operator!=(const ExpressionValue &Other) const {
-    return !(*this == Other);
-  }
-
-  /// Returns true if value is signed and negative, false otherwise.
-  bool isNegative() const {
-    assert((Value != 0 || !Negative) && "Unexpected negative zero!");
-    return Negative;
-  }
-
-  /// \returns the value as a signed integer or an error if the value is out of
-  /// range.
-  Expected<int64_t> getSignedValue() const;
-
-  /// \returns the value as an unsigned integer or an error if the value is out
-  /// of range.
-  Expected<uint64_t> getUnsignedValue() const;
-
-  /// \returns an unsigned ExpressionValue instance whose value is the absolute
-  /// value to this object's value.
-  ExpressionValue getAbsolute() const;
-};
-
 /// Performs operation and \returns its result or an error in case of failure,
 /// such as if an overflow occurs.
-Expected<ExpressionValue> operator+(const ExpressionValue &Lhs,
-                                    const ExpressionValue &Rhs);
-Expected<ExpressionValue> operator-(const ExpressionValue &Lhs,
-                                    const ExpressionValue &Rhs);
-Expected<ExpressionValue> operator*(const ExpressionValue &Lhs,
-                                    const ExpressionValue &Rhs);
-Expected<ExpressionValue> operator/(const ExpressionValue &Lhs,
-                                    const ExpressionValue &Rhs);
-Expected<ExpressionValue> max(const ExpressionValue &Lhs,
-                              const ExpressionValue &Rhs);
-Expected<ExpressionValue> min(const ExpressionValue &Lhs,
-                              const ExpressionValue &Rhs);
+Expected<APInt> exprAdd(const APInt &Lhs, const APInt &Rhs, bool &Overflow);
+Expected<APInt> exprSub(const APInt &Lhs, const APInt &Rhs, bool &Overflow);
+Expected<APInt> exprMul(const APInt &Lhs, const APInt &Rhs, bool &Overflow);
+Expected<APInt> exprDiv(const APInt &Lhs, const APInt &Rhs, bool &Overflow);
+Expected<APInt> exprMax(const APInt &Lhs, const APInt &Rhs, bool &Overflow);
+Expected<APInt> exprMin(const APInt &Lhs, const APInt &Rhs, bool &Overflow);
 
 /// Base class representing the AST of a given expression.
 class ExpressionAST {
@@ -179,7 +136,7 @@ public:
 
   /// Evaluates and \returns the value of the expression represented by this
   /// AST or an error if evaluation fails.
-  virtual Expected<ExpressionValue> eval() const = 0;
+  virtual Expected<APInt> eval() const = 0;
 
   /// \returns either the implicit format of this AST, a diagnostic against
   /// \p SM if implicit formats of the AST's components conflict, or NoFormat
@@ -195,15 +152,14 @@ public:
 class ExpressionLiteral : public ExpressionAST {
 private:
   /// Actual value of the literal.
-  ExpressionValue Value;
+  APInt Value;
 
 public:
-  template <class T>
-  explicit ExpressionLiteral(StringRef ExpressionStr, T Val)
+  explicit ExpressionLiteral(StringRef ExpressionStr, APInt Val)
       : ExpressionAST(ExpressionStr), Value(Val) {}
 
   /// \returns the literal's value.
-  Expected<ExpressionValue> eval() const override { return Value; }
+  Expected<APInt> eval() const override { return Value; }
 };
 
 /// Class to represent an undefined variable error, which quotes that
@@ -225,8 +181,7 @@ public:
 
   /// Print name of variable associated with this error.
   void log(raw_ostream &OS) const override {
-    OS << "\"";
-    OS.write_escaped(VarName) << "\"";
+    OS << "undefined variable: " << VarName;
   }
 };
 
@@ -262,24 +217,24 @@ private:
   /// format.
   ExpressionFormat ImplicitFormat;
 
-  /// Value of numeric variable, if defined, or None otherwise.
-  Optional<ExpressionValue> Value;
+  /// Value of numeric variable, if defined, or std::nullopt otherwise.
+  std::optional<APInt> Value;
 
-  /// The input buffer's string from which Value was parsed, or None.  See
-  /// comments on getStringValue for a discussion of the None case.
-  Optional<StringRef> StrValue;
+  /// The input buffer's string from which Value was parsed, or std::nullopt.
+  /// See comments on getStringValue for a discussion of the std::nullopt case.
+  std::optional<StringRef> StrValue;
 
-  /// Line number where this variable is defined, or None if defined before
-  /// input is parsed. Used to determine whether a variable is defined on the
-  /// same line as a given use.
-  Optional<size_t> DefLineNumber;
+  /// Line number where this variable is defined, or std::nullopt if defined
+  /// before input is parsed. Used to determine whether a variable is defined on
+  /// the same line as a given use.
+  std::optional<size_t> DefLineNumber;
 
 public:
   /// Constructor for a variable \p Name with implicit format \p ImplicitFormat
   /// defined at line \p DefLineNumber or defined before input is parsed if
-  /// \p DefLineNumber is None.
+  /// \p DefLineNumber is std::nullopt.
   explicit NumericVariable(StringRef Name, ExpressionFormat ImplicitFormat,
-                           Optional<size_t> DefLineNumber = None)
+                           std::optional<size_t> DefLineNumber = std::nullopt)
       : Name(Name), ImplicitFormat(ImplicitFormat),
         DefLineNumber(DefLineNumber) {}
 
@@ -290,20 +245,20 @@ public:
   ExpressionFormat getImplicitFormat() const { return ImplicitFormat; }
 
   /// \returns this variable's value.
-  Optional<ExpressionValue> getValue() const { return Value; }
+  std::optional<APInt> getValue() const { return Value; }
 
   /// \returns the input buffer's string from which this variable's value was
-  /// parsed, or None if the value is not yet defined or was not parsed from the
-  /// input buffer.  For example, the value of @LINE is not parsed from the
-  /// input buffer, and some numeric variables are parsed from the command
+  /// parsed, or std::nullopt if the value is not yet defined or was not parsed
+  /// from the input buffer.  For example, the value of @LINE is not parsed from
+  /// the input buffer, and some numeric variables are parsed from the command
   /// line instead.
-  Optional<StringRef> getStringValue() const { return StrValue; }
+  std::optional<StringRef> getStringValue() const { return StrValue; }
 
   /// Sets value of this numeric variable to \p NewValue, and sets the input
   /// buffer string from which it was parsed to \p NewStrValue.  See comments on
-  /// getStringValue for a discussion of when the latter can be None.
-  void setValue(ExpressionValue NewValue,
-                Optional<StringRef> NewStrValue = None) {
+  /// getStringValue for a discussion of when the latter can be std::nullopt.
+  void setValue(APInt NewValue,
+                std::optional<StringRef> NewStrValue = std::nullopt) {
     Value = NewValue;
     StrValue = NewStrValue;
   }
@@ -311,13 +266,13 @@ public:
   /// Clears value of this numeric variable, regardless of whether it is
   /// currently defined or not.
   void clearValue() {
-    Value = None;
-    StrValue = None;
+    Value = std::nullopt;
+    StrValue = std::nullopt;
   }
 
-  /// \returns the line number where this variable is defined, if any, or None
-  /// if defined before input is parsed.
-  Optional<size_t> getDefLineNumber() const { return DefLineNumber; }
+  /// \returns the line number where this variable is defined, if any, or
+  /// std::nullopt if defined before input is parsed.
+  std::optional<size_t> getDefLineNumber() const { return DefLineNumber; }
 };
 
 /// Class representing the use of a numeric variable in the AST of an
@@ -331,7 +286,7 @@ public:
   NumericVariableUse(StringRef Name, NumericVariable *Variable)
       : ExpressionAST(Name), Variable(Variable) {}
   /// \returns the value of the variable referenced by this instance.
-  Expected<ExpressionValue> eval() const override;
+  Expected<APInt> eval() const override;
 
   /// \returns implicit format of this numeric variable.
   Expected<ExpressionFormat>
@@ -341,8 +296,7 @@ public:
 };
 
 /// Type of functions evaluating a given binary operation.
-using binop_eval_t = Expected<ExpressionValue> (*)(const ExpressionValue &,
-                                                   const ExpressionValue &);
+using binop_eval_t = Expected<APInt> (*)(const APInt &, const APInt &, bool &);
 
 /// Class representing a single binary operation in the AST of an expression.
 class BinaryOperation : public ExpressionAST {
@@ -369,7 +323,7 @@ public:
   /// using EvalBinop on the result of recursively evaluating the operands.
   /// \returns the expression value or an error if an undefined numeric
   /// variable is used in one of the operands.
-  Expected<ExpressionValue> eval() const override;
+  Expected<APInt> eval() const override;
 
   /// \returns the implicit format of this AST, if any, a diagnostic against
   /// \p SM if the implicit formats of the AST's components conflict, or no
@@ -533,11 +487,13 @@ private:
 class ErrorDiagnostic : public ErrorInfo<ErrorDiagnostic> {
 private:
   SMDiagnostic Diagnostic;
+  SMRange Range;
 
 public:
   static char ID;
 
-  ErrorDiagnostic(SMDiagnostic &&Diag) : Diagnostic(Diag) {}
+  ErrorDiagnostic(SMDiagnostic &&Diag, SMRange Range)
+      : Diagnostic(Diag), Range(Range) {}
 
   std::error_code convertToErrorCode() const override {
     return inconvertibleErrorCode();
@@ -546,13 +502,19 @@ public:
   /// Print diagnostic associated with this error when printing the error.
   void log(raw_ostream &OS) const override { Diagnostic.print(nullptr, OS); }
 
-  static Error get(const SourceMgr &SM, SMLoc Loc, const Twine &ErrMsg) {
+  StringRef getMessage() const { return Diagnostic.getMessage(); }
+  SMRange getRange() const { return Range; }
+
+  static Error get(const SourceMgr &SM, SMLoc Loc, const Twine &ErrMsg,
+                   SMRange Range = std::nullopt) {
     return make_error<ErrorDiagnostic>(
-        SM.GetMessage(Loc, SourceMgr::DK_Error, ErrMsg));
+        SM.GetMessage(Loc, SourceMgr::DK_Error, ErrMsg), Range);
   }
 
   static Error get(const SourceMgr &SM, StringRef Buffer, const Twine &ErrMsg) {
-    return get(SM, SMLoc::getFromPointer(Buffer.data()), ErrMsg);
+    SMLoc Start = SMLoc::getFromPointer(Buffer.data());
+    SMLoc End = SMLoc::getFromPointer(Buffer.data() + Buffer.size());
+    return get(SM, Start, ErrMsg, SMRange(Start, End));
   }
 };
 
@@ -567,6 +529,36 @@ public:
   /// Print diagnostic associated with this error when printing the error.
   void log(raw_ostream &OS) const override {
     OS << "String not found in input";
+  }
+};
+
+/// An error that has already been reported.
+///
+/// This class is designed to support a function whose callers may need to know
+/// whether the function encountered and reported an error but never need to
+/// know the nature of that error.  For example, the function has a return type
+/// of \c Error and always returns either \c ErrorReported or \c ErrorSuccess.
+/// That interface is similar to that of a function returning bool to indicate
+/// an error except, in the former case, (1) there is no confusion over polarity
+/// and (2) the caller must either check the result or explicitly ignore it with
+/// a call like \c consumeError.
+class ErrorReported final : public ErrorInfo<ErrorReported> {
+public:
+  static char ID;
+
+  std::error_code convertToErrorCode() const override {
+    return inconvertibleErrorCode();
+  }
+
+  /// Print diagnostic associated with this error when printing the error.
+  void log(raw_ostream &OS) const override {
+    OS << "error previously reported";
+  }
+
+  static inline Error reportedOrSuccess(bool HasErrorReported) {
+    if (HasErrorReported)
+      return make_error<ErrorReported>();
+    return Error::success();
   }
 };
 
@@ -631,17 +623,17 @@ class Pattern {
 
   Check::FileCheckType CheckTy;
 
-  /// Line number for this CHECK pattern or None if it is an implicit pattern.
-  /// Used to determine whether a variable definition is made on an earlier
-  /// line to the one with this CHECK.
-  Optional<size_t> LineNumber;
+  /// Line number for this CHECK pattern or std::nullopt if it is an implicit
+  /// pattern. Used to determine whether a variable definition is made on an
+  /// earlier line to the one with this CHECK.
+  std::optional<size_t> LineNumber;
 
   /// Ignore case while matching if set to true.
   bool IgnoreCase = false;
 
 public:
   Pattern(Check::FileCheckType Ty, FileCheckPatternContext *Context,
-          Optional<size_t> Line = None)
+          std::optional<size_t> Line = std::nullopt)
       : Context(Context), CheckTy(Ty), LineNumber(Line) {}
 
   /// \returns the location in source code.
@@ -676,10 +668,10 @@ public:
   /// holding a diagnostic against \p SM if parsing fails. If substitution was
   /// successful, sets \p DefinedNumericVariable to point to the class
   /// representing the numeric variable defined in this numeric substitution
-  /// block, or None if this block does not define any variable.
+  /// block, or std::nullopt if this block does not define any variable.
   static Expected<std::unique_ptr<Expression>> parseNumericSubstitutionBlock(
-      StringRef Expr, Optional<NumericVariable *> &DefinedNumericVariable,
-      bool IsLegacyLineExpr, Optional<size_t> LineNumber,
+      StringRef Expr, std::optional<NumericVariable *> &DefinedNumericVariable,
+      bool IsLegacyLineExpr, std::optional<size_t> LineNumber,
       FileCheckPatternContext *Context, const SourceMgr &SM);
   /// Parses the pattern in \p PatternStr and initializes this Pattern instance
   /// accordingly.
@@ -690,11 +682,22 @@ public:
   /// \returns true in case of an error, false otherwise.
   bool parsePattern(StringRef PatternStr, StringRef Prefix, SourceMgr &SM,
                     const FileCheckRequest &Req);
-  /// Matches the pattern string against the input buffer \p Buffer
+  struct Match {
+    size_t Pos;
+    size_t Len;
+  };
+  struct MatchResult {
+    std::optional<Match> TheMatch;
+    Error TheError;
+    MatchResult(size_t MatchPos, size_t MatchLen, Error E)
+        : TheMatch(Match{MatchPos, MatchLen}), TheError(std::move(E)) {}
+    MatchResult(Match M, Error E) : TheMatch(M), TheError(std::move(E)) {}
+    MatchResult(Error E) : TheError(std::move(E)) {}
+  };
+  /// Matches the pattern string against the input buffer \p Buffer.
   ///
-  /// \returns the position that is matched or an error indicating why matching
-  /// failed. If there is a match, updates \p MatchLen with the size of the
-  /// matched string.
+  /// \returns either (1) an error resulting in no match or (2) a match possibly
+  /// with an error encountered while processing the match.
   ///
   /// The GlobalVariableTable StringMap in the FileCheckPatternContext class
   /// instance provides the current values of FileCheck string variables and is
@@ -702,10 +705,8 @@ public:
   /// GlobalNumericVariableTable StringMap in the same class provides the
   /// current values of FileCheck numeric variables and is updated if this
   /// match defines new numeric values.
-  Expected<size_t> match(StringRef Buffer, size_t &MatchLen,
-                         const SourceMgr &SM) const;
-  /// Prints the value of successful substitutions or the name of the undefined
-  /// string or numeric variables preventing a successful substitution.
+  MatchResult match(StringRef Buffer, const SourceMgr &SM) const;
+  /// Prints the value of successful substitutions.
   void printSubstitutions(const SourceMgr &SM, StringRef Buffer,
                           SMRange MatchRange, FileCheckDiag::MatchType MatchTy,
                           std::vector<FileCheckDiag> *Diags) const;
@@ -744,7 +745,7 @@ private:
   /// should defining such a variable be invalid.
   static Expected<NumericVariable *> parseNumericVariableDefinition(
       StringRef &Expr, FileCheckPatternContext *Context,
-      Optional<size_t> LineNumber, ExpressionFormat ImplicitFormat,
+      std::optional<size_t> LineNumber, ExpressionFormat ImplicitFormat,
       const SourceMgr &SM);
   /// Parses \p Name as a (pseudo if \p IsPseudo is true) numeric variable use
   /// at line \p LineNumber, or before input is parsed if \p LineNumber is
@@ -753,7 +754,7 @@ private:
   /// representing that variable if successful, or an error holding a
   /// diagnostic against \p SM otherwise.
   static Expected<std::unique_ptr<NumericVariableUse>> parseNumericVariableUse(
-      StringRef Name, bool IsPseudo, Optional<size_t> LineNumber,
+      StringRef Name, bool IsPseudo, std::optional<size_t> LineNumber,
       FileCheckPatternContext *Context, const SourceMgr &SM);
   enum class AllowedOperand { LineVar, LegacyLiteral, Any };
   /// Parses \p Expr for use of a numeric operand at line \p LineNumber, or
@@ -767,7 +768,7 @@ private:
   /// function will attempt to parse a parenthesized expression.
   static Expected<std::unique_ptr<ExpressionAST>>
   parseNumericOperand(StringRef &Expr, AllowedOperand AO, bool ConstraintParsed,
-                      Optional<size_t> LineNumber,
+                      std::optional<size_t> LineNumber,
                       FileCheckPatternContext *Context, const SourceMgr &SM);
   /// Parses and updates \p RemainingExpr for a binary operation at line
   /// \p LineNumber, or before input is parsed if \p LineNumber is None. The
@@ -781,7 +782,7 @@ private:
   static Expected<std::unique_ptr<ExpressionAST>>
   parseBinop(StringRef Expr, StringRef &RemainingExpr,
              std::unique_ptr<ExpressionAST> LeftOp, bool IsLegacyLineExpr,
-             Optional<size_t> LineNumber, FileCheckPatternContext *Context,
+             std::optional<size_t> LineNumber, FileCheckPatternContext *Context,
              const SourceMgr &SM);
 
   /// Parses a parenthesized expression inside \p Expr at line \p LineNumber, or
@@ -791,7 +792,7 @@ private:
   /// variables. \returns the class representing that operand in the AST of the
   /// expression or an error holding a diagnostic against \p SM otherwise.
   static Expected<std::unique_ptr<ExpressionAST>>
-  parseParenExpr(StringRef &Expr, Optional<size_t> LineNumber,
+  parseParenExpr(StringRef &Expr, std::optional<size_t> LineNumber,
                  FileCheckPatternContext *Context, const SourceMgr &SM);
 
   /// Parses \p Expr for an argument list belonging to a call to function \p
@@ -803,8 +804,8 @@ private:
   /// otherwise.
   static Expected<std::unique_ptr<ExpressionAST>>
   parseCallExpr(StringRef &Expr, StringRef FuncName,
-                Optional<size_t> LineNumber, FileCheckPatternContext *Context,
-                const SourceMgr &SM);
+                std::optional<size_t> LineNumber,
+                FileCheckPatternContext *Context, const SourceMgr &SM);
 };
 
 //===----------------------------------------------------------------------===//
@@ -822,9 +823,19 @@ struct FileCheckString {
   /// The location in the match file that the check string was specified.
   SMLoc Loc;
 
-  /// All of the strings that are disallowed from occurring between this match
-  /// string and the previous one (or start of file).
-  std::vector<Pattern> DagNotStrings;
+  /// Hold the information about the DAG/NOT strings in the program, which are
+  /// not explicitly stored otherwise. This allows for better and more accurate
+  /// diagnostic messages.
+  struct DagNotPrefixInfo {
+    Pattern DagNotPat;
+    StringRef DagNotPrefix;
+
+    DagNotPrefixInfo(const Pattern &P, StringRef S)
+        : DagNotPat(P), DagNotPrefix(S) {}
+  };
+
+  /// Hold the DAG/NOT strings occurring in the input file.
+  std::vector<DagNotPrefixInfo> DagNotStrings;
 
   FileCheckString(const Pattern &P, StringRef S, SMLoc L)
       : Pat(P), Prefix(S), Loc(L) {}
@@ -844,12 +855,12 @@ struct FileCheckString {
   /// \p Buffer. Errors are reported against \p SM and diagnostics recorded in
   /// \p Diags according to the verbosity level set in \p Req.
   bool CheckNot(const SourceMgr &SM, StringRef Buffer,
-                const std::vector<const Pattern *> &NotStrings,
+                const std::vector<const DagNotPrefixInfo *> &NotStrings,
                 const FileCheckRequest &Req,
                 std::vector<FileCheckDiag> *Diags) const;
   /// Matches "dag strings" and their mixed "not strings".
   size_t CheckDag(const SourceMgr &SM, StringRef Buffer,
-                  std::vector<const Pattern *> &NotStrings,
+                  std::vector<const DagNotPrefixInfo *> &NotStrings,
                   const FileCheckRequest &Req,
                   std::vector<FileCheckDiag> *Diags) const;
 };

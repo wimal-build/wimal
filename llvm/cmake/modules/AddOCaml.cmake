@@ -103,6 +103,9 @@ function(add_ocaml_library name)
     list(APPEND ocaml_inputs "${bin}/${ocaml_file}.mli" "${bin}/${ocaml_file}.ml")
 
     list(APPEND ocaml_outputs "${bin}/${ocaml_file}.cmi" "${bin}/${ocaml_file}.cmo")
+
+        list(APPEND ocaml_outputs "${bin}/${ocaml_file}.cmti" "${bin}/${ocaml_file}.cmt")
+
     if( HAVE_OCAMLOPT )
       list(APPEND ocaml_outputs
            "${bin}/${ocaml_file}.cmx"
@@ -152,7 +155,8 @@ function(add_ocaml_library name)
 
   add_custom_command(
     OUTPUT ${ocaml_outputs}
-    COMMAND "${OCAMLFIND}" "ocamlmklib" "-o" "${name}" ${ocaml_flags} ${ocaml_params}
+    COMMAND "${OCAMLFIND}" "ocamlmklib" "-ocamlcflags" "-bin-annot"
+      "-o" "${name}" ${ocaml_flags} ${ocaml_params}
     DEPENDS ${ocaml_inputs} ${c_outputs}
     COMMENT "Building OCaml library ${name}"
     VERBATIM)
@@ -169,6 +173,8 @@ function(add_ocaml_library name)
     VERBATIM)
 
   add_custom_target("ocaml_${name}" ALL DEPENDS ${ocaml_outputs} "${bin}/${name}.odoc")
+  get_subproject_title(subproject_title)
+  set_target_properties("ocaml_${name}" PROPERTIES FOLDER "${subproject_title}/Bindings/OCaml")
 
   set_target_properties("ocaml_${name}" PROPERTIES
     OCAML_FLAGS "-I;${bin}")
@@ -224,5 +230,5 @@ endfunction()
 add_custom_target(ocaml_make_directory
   COMMAND "${CMAKE_COMMAND}" "-E" "make_directory" "${LLVM_LIBRARY_DIR}/ocaml/llvm")
 add_custom_target("ocaml_all")
-set_target_properties(ocaml_all PROPERTIES FOLDER "Misc")
-set_target_properties(ocaml_make_directory PROPERTIES FOLDER "Misc")
+set_target_properties(ocaml_all PROPERTIES FOLDER "LLVM/Bindings/OCaml")
+set_target_properties(ocaml_make_directory PROPERTIES FOLDER "LLVM/Bindings/OCaml")

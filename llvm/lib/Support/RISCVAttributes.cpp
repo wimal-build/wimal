@@ -11,15 +11,17 @@
 using namespace llvm;
 using namespace llvm::RISCVAttrs;
 
-static const TagNameItem tagData[] = {
+static constexpr TagNameItem tagData[] = {
     {STACK_ALIGN, "Tag_stack_align"},
     {ARCH, "Tag_arch"},
     {UNALIGNED_ACCESS, "Tag_unaligned_access"},
     {PRIV_SPEC, "Tag_priv_spec"},
     {PRIV_SPEC_MINOR, "Tag_priv_spec_minor"},
     {PRIV_SPEC_REVISION, "Tag_priv_spec_revision"},
+    {ATOMIC_ABI, "Tag_atomic_abi"},
 };
 
-const TagNameMap llvm::RISCVAttrs::RISCVAttributeTags(tagData,
-                                                      sizeof(tagData) /
-                                                          sizeof(TagNameItem));
+constexpr TagNameMap RISCVAttributeTags{tagData};
+const TagNameMap &llvm::RISCVAttrs::getRISCVAttributeTags() {
+  return RISCVAttributeTags;
+}

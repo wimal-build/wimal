@@ -15,39 +15,31 @@
 #ifndef LLVM_TRANSFORMS_IPO_SAMPLEPROFILEPROBE_H
 #define LLVM_TRANSFORMS_IPO_SAMPLEPROFILEPROBE_H
 
-#include "llvm/ADT/DenseMap.h"
-#include "llvm/Analysis/CallGraphSCCPass.h"
 #include "llvm/Analysis/LazyCallGraph.h"
-#include "llvm/Analysis/LoopInfo.h"
-#include "llvm/IR/PassInstrumentation.h"
 #include "llvm/IR/PassManager.h"
-#include "llvm/IR/PseudoProbe.h"
+#include "llvm/IR/PassInstrumentation.h"
 #include "llvm/ProfileData/SampleProf.h"
-#include "llvm/Target/TargetMachine.h"
 #include <unordered_map>
 
 namespace llvm {
+class BasicBlock;
+class Function;
+class Instruction;
+class Loop;
+class PassInstrumentationCallbacks;
+class TargetMachine;
 
 class Module;
 
 using namespace sampleprof;
 using BlockIdMap = std::unordered_map<BasicBlock *, uint32_t>;
 using InstructionIdMap = std::unordered_map<Instruction *, uint32_t>;
-using ProbeFactorMap = std::unordered_map<uint64_t, float>;
+// Map from tuples of Probe id and inline stack hash code to distribution
+// factors.
+using ProbeFactorMap = std::unordered_map<std::pair<uint64_t, uint64_t>, float,
+                                          pair_hash<uint64_t, uint64_t>>;
 using FuncProbeFactorMap = StringMap<ProbeFactorMap>;
 
-enum class PseudoProbeReservedId { Invalid = 0, Last = Invalid };
-
-class PseudoProbeDescriptor {
-  uint64_t FunctionGUID;
-  uint64_t FunctionHash;
-
-public:
-  PseudoProbeDescriptor(uint64_t GUID, uint64_t Hash)
-      : FunctionGUID(GUID), FunctionHash(Hash) {}
-  uint64_t getFunctionGUID() const { return FunctionGUID; }
-  uint64_t getFunctionHash() const { return FunctionHash; }
-};
 
 // A pseudo probe verifier that can be run after each IR passes to detect the
 // violation of updating probe factors. In principle, the sum of distribution
@@ -76,20 +68,6 @@ private:
                           const ProbeFactorMap &ProbeFactors);
 };
 
-// This class serves sample counts correlation for SampleProfileLoader by
-// analyzing pseudo probes and their function descriptors injected by
-// SampleProfileProber.
-class PseudoProbeManager {
-  DenseMap<uint64_t, PseudoProbeDescriptor> GUIDToProbeDescMap;
-
-  const PseudoProbeDescriptor *getDesc(const Function &F) const;
-
-public:
-  PseudoProbeManager(const Module &M);
-  bool moduleIsProbed(const Module &M) const;
-  bool profileIsValid(const Function &F, const FunctionSamples &Samples) const;
-};
-
 /// Sample profile pseudo prober.
 ///
 /// Insert pseudo probes for block sampling and value sampling.
@@ -104,9 +82,16 @@ private:
   uint64_t getFunctionHash() const { return FunctionHash; }
   uint32_t getBlockId(const BasicBlock *BB) const;
   uint32_t getCallsiteId(const Instruction *Call) const;
-  void computeCFGHash();
-  void computeProbeIdForBlocks();
-  void computeProbeIdForCallsites();
+  void findUnreachableBlocks(DenseSet<BasicBlock *> &BlocksToIgnore);
+  void findInvokeNormalDests(DenseSet<BasicBlock *> &InvokeNormalDests);
+  void computeBlocksToIgnore(DenseSet<BasicBlock *> &BlocksToIgnore,
+                             DenseSet<BasicBlock *> &BlocksAndCallsToIgnore);
+  const Instruction *
+  getOriginalTerminator(const BasicBlock *Head,
+                        const DenseSet<BasicBlock *> &BlocksToIgnore);
+  void computeCFGHash(const DenseSet<BasicBlock *> &BlocksToIgnore);
+  void computeProbeId(const DenseSet<BasicBlock *> &BlocksToIgnore,
+                      const DenseSet<BasicBlock *> &BlocksAndCallsToIgnore);
 
   Function *F;
 
@@ -135,11 +120,23 @@ public:
   PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
 };
 
+// Pseudo probe distribution factor updater.
+// Sample profile annotation can happen in both LTO prelink and postlink. The
+// postlink-time re-annotation can degrade profile quality because of prelink
+// code duplication transformation, such as loop unrolling, jump threading,
+// indirect call promotion etc. As such, samples corresponding to a source
+// location may be aggregated multiple times in postlink. With a concept of
+// distribution factor for pseudo probes, samples can be distributed among
+// duplicated probes reasonable based on the assumption that optimizations
+// duplicating code well-maintain the branch frequency information (BFI). This
+// pass updates distribution factors for each pseudo probe at the end of the
+// prelink pipeline, to reflect an estimated portion of the real execution
+// count.
 class PseudoProbeUpdatePass : public PassInfoMixin<PseudoProbeUpdatePass> {
   void runOnFunction(Function &F, FunctionAnalysisManager &FAM);
 
 public:
-  PseudoProbeUpdatePass() {}
+  PseudoProbeUpdatePass() = default;
   PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
 };
 

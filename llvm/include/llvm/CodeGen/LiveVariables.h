@@ -35,21 +35,20 @@
 #include "llvm/ADT/SparseBitVector.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstr.h"
+#include "llvm/CodeGen/MachinePassManager.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/InitializePasses.h"
+#include "llvm/PassRegistry.h"
 
 namespace llvm {
 
 class MachineBasicBlock;
 class MachineRegisterInfo;
 
-class LiveVariables : public MachineFunctionPass {
-public:
-  static char ID; // Pass identification, replacement for typeid
-  LiveVariables() : MachineFunctionPass(ID) {
-    initializeLiveVariablesPass(*PassRegistry::getPassRegistry());
-  }
+class LiveVariables {
+  friend class LiveVariablesWrapperPass;
 
+public:
   /// VarInfo - This represents the regions where a virtual register is live in
   /// the program.  We represent this with three different pieces of
   /// information: the set of blocks in which the instruction is live
@@ -108,6 +107,8 @@ public:
     bool isLiveIn(const MachineBasicBlock &MBB, Register Reg,
                   MachineRegisterInfo &MRI);
 
+    void print(raw_ostream &OS) const;
+
     void dump() const;
   };
 
@@ -117,17 +118,12 @@ private:
   ///
   IndexedMap<VarInfo, VirtReg2IndexFunctor> VirtRegInfo;
 
-  /// PHIJoins - list of virtual registers that are PHI joins. These registers
-  /// may have multiple definitions, and they require special handling when
-  /// building live intervals.
-  SparseBitVector<> PHIJoins;
-
 private:   // Intermediate data structures
-  MachineFunction *MF;
+  MachineFunction *MF = nullptr;
 
-  MachineRegisterInfo* MRI;
+  MachineRegisterInfo *MRI = nullptr;
 
-  const TargetRegisterInfo *TRI;
+  const TargetRegisterInfo *TRI = nullptr;
 
   // PhysRegInfo - Keep track of which instruction was the last def of a
   // physical register. This is a purely local property, because all physical
@@ -145,13 +141,18 @@ private:   // Intermediate data structures
   // current basic block.
   DenseMap<MachineInstr*, unsigned> DistanceMap;
 
+  // For legacy pass.
+  LiveVariables() = default;
+
+  void analyze(MachineFunction &MF);
+
   /// HandlePhysRegKill - Add kills of Reg and its sub-registers to the
   /// uses. Pay special attention to the sub-register uses which may come below
   /// the last use of the whole register.
   bool HandlePhysRegKill(Register Reg, MachineInstr *MI);
 
   /// HandleRegMask - Call HandlePhysRegKill for all registers clobbered by Mask.
-  void HandleRegMask(const MachineOperand&);
+  void HandleRegMask(const MachineOperand &, unsigned);
 
   void HandlePhysRegUse(Register Reg, MachineInstr &MI);
   void HandlePhysRegDef(Register Reg, MachineInstr *MI,
@@ -174,19 +175,24 @@ private:   // Intermediate data structures
   /// is coming from.
   void analyzePHINodes(const MachineFunction& Fn);
 
-  void runOnInstr(MachineInstr &MI, SmallVectorImpl<unsigned> &Defs);
+  void runOnInstr(MachineInstr &MI, SmallVectorImpl<unsigned> &Defs,
+                  unsigned NumRegs);
 
   void runOnBlock(MachineBasicBlock *MBB, unsigned NumRegs);
+
 public:
+  LiveVariables(MachineFunction &MF);
 
-  bool runOnMachineFunction(MachineFunction &MF) override;
-
-  /// RegisterDefIsDead - Return true if the specified instruction defines the
-  /// specified register, but that definition is dead.
-  bool RegisterDefIsDead(MachineInstr &MI, Register Reg) const;
+  void print(raw_ostream &OS) const;
 
   //===--------------------------------------------------------------------===//
   //  API to update live variable information
+
+  /// Recompute liveness from scratch for a virtual register \p Reg that is
+  /// known to have a single def that dominates all uses. This can be useful
+  /// after removing some uses of \p Reg. It is not necessary for the whole
+  /// machine function to be in SSA form.
+  void recomputeForSingleDefVirtReg(Register Reg);
 
   /// replaceKillInstruction - Update register kill info by replacing a kill
   /// instruction with a new one.
@@ -212,8 +218,7 @@ public:
       return false;
 
     bool Removed = false;
-    for (unsigned i = 0, e = MI.getNumOperands(); i != e; ++i) {
-      MachineOperand &MO = MI.getOperand(i);
+    for (MachineOperand &MO : MI.operands()) {
       if (MO.isReg() && MO.isKill() && MO.getReg() == Reg) {
         MO.setIsKill(false);
         Removed = true;
@@ -248,8 +253,7 @@ public:
       return false;
 
     bool Removed = false;
-    for (unsigned i = 0, e = MI.getNumOperands(); i != e; ++i) {
-      MachineOperand &MO = MI.getOperand(i);
+    for (MachineOperand &MO : MI.operands()) {
       if (MO.isReg() && MO.isDef() && MO.getReg() == Reg) {
         MO.setIsDead(false);
         Removed = true;
@@ -259,12 +263,6 @@ public:
     assert(Removed && "Register is not defined by this instruction!");
     (void)Removed;
     return true;
-  }
-
-  void getAnalysisUsage(AnalysisUsage &AU) const override;
-
-  void releaseMemory() override {
-    VirtRegInfo.clear();
   }
 
   /// getVarInfo - Return the VarInfo structure for the specified VIRTUAL
@@ -301,12 +299,48 @@ public:
                    MachineBasicBlock *DomBB,
                    MachineBasicBlock *SuccBB,
                    std::vector<SparseBitVector<>> &LiveInSets);
+};
 
-  /// isPHIJoin - Return true if Reg is a phi join register.
-  bool isPHIJoin(Register Reg) { return PHIJoins.test(Reg.id()); }
+class LiveVariablesAnalysis : public AnalysisInfoMixin<LiveVariablesAnalysis> {
+  friend AnalysisInfoMixin<LiveVariablesAnalysis>;
+  static AnalysisKey Key;
 
-  /// setPHIJoin - Mark Reg as a phi join register.
-  void setPHIJoin(Register Reg) { PHIJoins.set(Reg.id()); }
+public:
+  using Result = LiveVariables;
+  Result run(MachineFunction &MF, MachineFunctionAnalysisManager &);
+};
+
+class LiveVariablesPrinterPass
+    : public PassInfoMixin<LiveVariablesPrinterPass> {
+  raw_ostream &OS;
+
+public:
+  explicit LiveVariablesPrinterPass(raw_ostream &OS) : OS(OS) {}
+  PreservedAnalyses run(MachineFunction &MF,
+                        MachineFunctionAnalysisManager &MFAM);
+  static bool isRequired() { return true; }
+};
+
+class LiveVariablesWrapperPass : public MachineFunctionPass {
+  LiveVariables LV;
+
+public:
+  static char ID; // Pass identification, replacement for typeid
+
+  LiveVariablesWrapperPass() : MachineFunctionPass(ID) {
+    initializeLiveVariablesWrapperPassPass(*PassRegistry::getPassRegistry());
+  }
+
+  bool runOnMachineFunction(MachineFunction &MF) override {
+    LV.analyze(MF);
+    return false;
+  }
+
+  void getAnalysisUsage(AnalysisUsage &AU) const override;
+
+  void releaseMemory() override { LV.VirtRegInfo.clear(); }
+
+  LiveVariables &getLV() { return LV; }
 };
 
 } // End llvm namespace

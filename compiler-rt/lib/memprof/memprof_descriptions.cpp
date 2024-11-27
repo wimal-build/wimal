@@ -44,19 +44,19 @@ void DescribeThread(MemprofThreadContext *context) {
   CHECK(context);
   memprofThreadRegistry().CheckLocked();
   // No need to announce the main thread.
-  if (context->tid == 0 || context->announced) {
+  if (context->tid == kMainTid || context->announced) {
     return;
   }
   context->announced = true;
-  InternalScopedString str(1024);
-  str.append("Thread %s", MemprofThreadIdAndName(context).c_str());
+  InternalScopedString str;
+  str.AppendF("Thread %s", MemprofThreadIdAndName(context).c_str());
   if (context->parent_tid == kInvalidTid) {
-    str.append(" created by unknown thread\n");
+    str.Append(" created by unknown thread\n");
     Printf("%s", str.data());
     return;
   }
-  str.append(" created by %s here:\n",
-             MemprofThreadIdAndName(context->parent_tid).c_str());
+  str.AppendF(" created by %s here:\n",
+              MemprofThreadIdAndName(context->parent_tid).c_str());
   Printf("%s", str.data());
   StackDepotGet(context->stack_id).Print();
   // Recursively described parent thread if needed.

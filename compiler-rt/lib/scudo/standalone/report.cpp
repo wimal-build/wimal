@@ -17,18 +17,14 @@ namespace scudo {
 
 class ScopedErrorReport {
 public:
-  ScopedErrorReport() : Message(512) { Message.append("Scudo ERROR: "); }
+  ScopedErrorReport() : Message() { Message.append("Scudo ERROR: "); }
   void append(const char *Format, ...) {
     va_list Args;
     va_start(Args, Format);
-    Message.append(Format, Args);
+    Message.vappend(Format, Args);
     va_end(Args);
   }
-  NORETURN ~ScopedErrorReport() {
-    outputRaw(Message.data());
-    setAbortMessage(Message.data());
-    die();
-  }
+  NORETURN ~ScopedErrorReport() { reportRawError(Message.data()); }
 
 private:
   ScopedString Message;
@@ -45,14 +41,21 @@ void NORETURN reportCheckFailed(const char *File, int Line,
     trap();
   }
   ScopedErrorReport Report;
-  Report.append("CHECK failed @ %s:%d %s (%llu, %llu)\n", File, Line, Condition,
-                Value1, Value2);
+  Report.append("CHECK failed @ %s:%d %s ((u64)op1=%llu, (u64)op2=%llu)\n",
+                File, Line, Condition, Value1, Value2);
 }
 
 // Generic string fatal error message.
 void NORETURN reportError(const char *Message) {
   ScopedErrorReport Report;
   Report.append("%s\n", Message);
+}
+
+// Generic fatal error message without ScopedString.
+void NORETURN reportRawError(const char *Message) {
+  outputRaw(Message);
+  setAbortMessage(Message);
+  die();
 }
 
 void NORETURN reportInvalidFlag(const char *FlagType, const char *Value) {
@@ -65,14 +68,6 @@ void NORETURN reportInvalidFlag(const char *FlagType, const char *Value) {
 void NORETURN reportHeaderCorruption(void *Ptr) {
   ScopedErrorReport Report;
   Report.append("corrupted chunk header at address %p\n", Ptr);
-}
-
-// Two threads have attempted to modify a chunk header at the same time. This is
-// symptomatic of a race-condition in the application code, or general lack of
-// proper locking.
-void NORETURN reportHeaderRace(void *Ptr) {
-  ScopedErrorReport Report;
-  Report.append("race on chunk header at address %p\n", Ptr);
 }
 
 // The allocator was compiled with parameters that conflict with field size
@@ -98,6 +93,11 @@ void NORETURN reportAllocationSizeTooBig(uptr UserSize, uptr TotalSize,
   Report.append("requested allocation size %zu (%zu after adjustments) exceeds "
                 "maximum supported size of %zu\n",
                 UserSize, TotalSize, MaxSize);
+}
+
+void NORETURN reportOutOfBatchClass() {
+  ScopedErrorReport Report;
+  Report.append("BatchClass region is used up, can't hold any free block\n");
 }
 
 void NORETURN reportOutOfMemory(uptr RequestedSize) {

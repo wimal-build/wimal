@@ -30,13 +30,21 @@ using tools::addPathIfExists;
 std::string Hurd::getMultiarchTriple(const Driver &D,
                                      const llvm::Triple &TargetTriple,
                                      StringRef SysRoot) const {
-  if (TargetTriple.getArch() == llvm::Triple::x86) {
+  switch (TargetTriple.getArch()) {
+  default:
+    break;
+
+  case llvm::Triple::x86:
     // We use the existence of '/lib/<triple>' as a directory to detect some
     // common hurd triples that don't quite match the Clang triple for both
     // 32-bit and 64-bit targets. Multiarch fixes its install triples to these
     // regardless of what the actual target triple is.
     if (D.getVFS().exists(SysRoot + "/lib/i386-gnu"))
       return "i386-gnu";
+    break;
+
+  case llvm::Triple::x86_64:
+    return "x86_64-gnu";
   }
 
   // For most architectures, just use whatever we have rather than trying to be
@@ -65,7 +73,7 @@ Hurd::Hurd(const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
     : Generic_ELF(D, Triple, Args) {
   GCCInstallation.init(Triple, Args);
   Multilibs = GCCInstallation.getMultilibs();
-  SelectedMultilib = GCCInstallation.getMultilib();
+  SelectedMultilibs.assign({GCCInstallation.getMultilib()});
   std::string SysRoot = computeSysRoot();
   ToolChain::path_list &PPaths = getProgramPaths();
 
@@ -92,7 +100,7 @@ Hurd::Hurd(const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
   // those searched.
   // FIXME: It's not clear whether we should use the driver's installed
   // directory ('Dir' below) or the ResourceDir.
-  if (StringRef(D.Dir).startswith(SysRoot)) {
+  if (StringRef(D.Dir).starts_with(SysRoot)) {
     addPathIfExists(D, D.Dir + "/../lib/" + MultiarchTriple, Paths);
     addPathIfExists(D, D.Dir + "/../" + OSLibDir, Paths);
   }
@@ -110,7 +118,7 @@ Hurd::Hurd(const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
   // searched.
   // FIXME: It's not clear whether we should use the driver's installed
   // directory ('Dir' below) or the ResourceDir.
-  if (StringRef(D.Dir).startswith(SysRoot))
+  if (StringRef(D.Dir).starts_with(SysRoot))
     addPathIfExists(D, D.Dir + "/../lib", Paths);
 
   addPathIfExists(D, SysRoot + "/lib", Paths);
@@ -126,8 +134,14 @@ Tool *Hurd::buildAssembler() const {
 }
 
 std::string Hurd::getDynamicLinker(const ArgList &Args) const {
-  if (getArch() == llvm::Triple::x86)
+  switch (getArch()) {
+  case llvm::Triple::x86:
     return "/lib/ld.so";
+  case llvm::Triple::x86_64:
+    return "/lib/ld-x86-64.so.1";
+  default:
+    break;
+  }
 
   llvm_unreachable("unsupported architecture");
 }
@@ -170,11 +184,13 @@ void Hurd::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
 
   AddMultilibIncludeArgs(DriverArgs, CC1Args);
 
-  if (getTriple().getArch() == llvm::Triple::x86) {
-    std::string Path = SysRoot + "/usr/include/i386-gnu";
-    if (D.getVFS().exists(Path))
-      addExternCSystemInclude(DriverArgs, CC1Args, Path);
-  }
+  // On systems using multiarch, add /usr/include/$triple before
+  // /usr/include.
+  std::string MultiarchIncludeDir = getMultiarchTriple(D, getTriple(), SysRoot);
+  if (!MultiarchIncludeDir.empty() &&
+      D.getVFS().exists(SysRoot + "/usr/include/" + MultiarchIncludeDir))
+    addExternCSystemInclude(DriverArgs, CC1Args,
+                            SysRoot + "/usr/include/" + MultiarchIncludeDir);
 
   // Add an include of '/include' directly. This isn't provided by default by
   // system GCCs, but is often used with cross-compiling GCCs, and harmless to
@@ -182,6 +198,21 @@ void Hurd::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
   addExternCSystemInclude(DriverArgs, CC1Args, SysRoot + "/include");
 
   addExternCSystemInclude(DriverArgs, CC1Args, SysRoot + "/usr/include");
+}
+
+void Hurd::addLibStdCxxIncludePaths(const llvm::opt::ArgList &DriverArgs,
+                                    llvm::opt::ArgStringList &CC1Args) const {
+  // We need a detected GCC installation on Linux to provide libstdc++'s
+  // headers in odd Linuxish places.
+  if (!GCCInstallation.isValid())
+    return;
+
+  StringRef TripleStr = GCCInstallation.getTriple().str();
+  StringRef DebianMultiarch =
+      GCCInstallation.getTriple().getArch() == llvm::Triple::x86 ? "i386-gnu"
+                                                                 : TripleStr;
+
+  addGCCLibStdCxxIncludePaths(DriverArgs, CC1Args, DebianMultiarch);
 }
 
 void Hurd::addExtraOpts(llvm::opt::ArgStringList &CmdArgs) const {

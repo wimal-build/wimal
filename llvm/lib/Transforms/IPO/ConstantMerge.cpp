@@ -28,9 +28,8 @@
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
-#include "llvm/InitializePasses.h"
-#include "llvm/Pass.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/Debug.h"
 #include "llvm/Transforms/IPO.h"
 #include <algorithm>
 #include <cassert>
@@ -80,13 +79,13 @@ static void copyDebugLocMetadata(const GlobalVariable *From,
                                  GlobalVariable *To) {
   SmallVector<DIGlobalVariableExpression *, 1> MDs;
   From->getDebugInfo(MDs);
-  for (auto MD : MDs)
+  for (auto *MD : MDs)
     To->addDebugInfo(MD);
 }
 
 static Align getAlign(GlobalVariable *GV) {
-  return GV->getAlign().getValueOr(
-      GV->getParent()->getDataLayout().getPreferredAlign(GV));
+  return GV->getAlign().value_or(
+      GV->getDataLayout().getPreferredAlign(GV));
 }
 
 static bool
@@ -95,6 +94,8 @@ isUnmergeableGlobal(GlobalVariable *GV,
   // Only process constants with initializers in the default address space.
   return !GV->isConstant() || !GV->hasDefinitiveInitializer() ||
          GV->getType()->getAddressSpace() != 0 || GV->hasSection() ||
+         // Don't touch thread-local variables.
+         GV->isThreadLocal() ||
          // Don't touch values marked with attribute(used).
          UsedGlobals.count(GV);
 }
@@ -151,33 +152,30 @@ static bool mergeConstants(Module &M) {
   // were just merged.
   while (true) {
     // Find the canonical constants others will be merged with.
-    for (Module::global_iterator GVI = M.global_begin(), E = M.global_end();
-         GVI != E; ) {
-      GlobalVariable *GV = &*GVI++;
-
+    for (GlobalVariable &GV : llvm::make_early_inc_range(M.globals())) {
       // If this GV is dead, remove it.
-      GV->removeDeadConstantUsers();
-      if (GV->use_empty() && GV->hasLocalLinkage()) {
-        GV->eraseFromParent();
+      GV.removeDeadConstantUsers();
+      if (GV.use_empty() && GV.hasLocalLinkage()) {
+        GV.eraseFromParent();
         ++ChangesMade;
         continue;
       }
 
-      if (isUnmergeableGlobal(GV, UsedGlobals))
+      if (isUnmergeableGlobal(&GV, UsedGlobals))
         continue;
 
       // This transformation is legal for weak ODR globals in the sense it
       // doesn't change semantics, but we really don't want to perform it
       // anyway; it's likely to pessimize code generation, and some tools
       // (like the Darwin linker in cases involving CFString) don't expect it.
-      if (GV->isWeakForLinker())
+      if (GV.isWeakForLinker())
         continue;
 
       // Don't touch globals with metadata other then !dbg.
-      if (hasMetadataOtherThanDebugLoc(GV))
+      if (hasMetadataOtherThanDebugLoc(&GV))
         continue;
 
-      Constant *Init = GV->getInitializer();
+      Constant *Init = GV.getInitializer();
 
       // Check to see if the initializer is already known.
       GlobalVariable *&Slot = CMap[Init];
@@ -186,9 +184,9 @@ static bool mergeConstants(Module &M) {
       // replace with the current one. If the current is externally visible
       // it cannot be replace, but can be the canonical constant we merge with.
       bool FirstConstantFound = !Slot;
-      if (FirstConstantFound || IsBetterCanonical(*GV, *Slot)) {
-        Slot = GV;
-        LLVM_DEBUG(dbgs() << "Cmap[" << *Init << "] = " << GV->getName()
+      if (FirstConstantFound || IsBetterCanonical(GV, *Slot)) {
+        Slot = &GV;
+        LLVM_DEBUG(dbgs() << "Cmap[" << *Init << "] = " << GV.getName()
                           << (FirstConstantFound ? "\n" : " (updated)\n"));
       }
     }
@@ -197,18 +195,15 @@ static bool mergeConstants(Module &M) {
     // SameContentReplacements vector. We cannot do the replacement in this pass
     // because doing so may cause initializers of other globals to be rewritten,
     // invalidating the Constant* pointers in CMap.
-    for (Module::global_iterator GVI = M.global_begin(), E = M.global_end();
-         GVI != E; ) {
-      GlobalVariable *GV = &*GVI++;
-
-      if (isUnmergeableGlobal(GV, UsedGlobals))
+    for (GlobalVariable &GV : llvm::make_early_inc_range(M.globals())) {
+      if (isUnmergeableGlobal(&GV, UsedGlobals))
         continue;
 
       // We can only replace constant with local linkage.
-      if (!GV->hasLocalLinkage())
+      if (!GV.hasLocalLinkage())
         continue;
 
-      Constant *Init = GV->getInitializer();
+      Constant *Init = GV.getInitializer();
 
       // Check to see if the initializer is already known.
       auto Found = CMap.find(Init);
@@ -216,16 +211,16 @@ static bool mergeConstants(Module &M) {
         continue;
 
       GlobalVariable *Slot = Found->second;
-      if (Slot == GV)
+      if (Slot == &GV)
         continue;
 
-      if (makeMergeable(GV, Slot) == CanMerge::No)
+      if (makeMergeable(&GV, Slot) == CanMerge::No)
         continue;
 
       // Make all uses of the duplicate constant use the canonical version.
-      LLVM_DEBUG(dbgs() << "Will replace: @" << GV->getName() << " -> @"
+      LLVM_DEBUG(dbgs() << "Will replace: @" << GV.getName() << " -> @"
                         << Slot->getName() << "\n");
-      SameContentReplacements.push_back(std::make_pair(GV, Slot));
+      SameContentReplacements.push_back(std::make_pair(&GV, Slot));
     }
 
     // Now that we have figured out which replacements must be made, do them all
@@ -254,33 +249,4 @@ PreservedAnalyses ConstantMergePass::run(Module &M, ModuleAnalysisManager &) {
   if (!mergeConstants(M))
     return PreservedAnalyses::all();
   return PreservedAnalyses::none();
-}
-
-namespace {
-
-struct ConstantMergeLegacyPass : public ModulePass {
-  static char ID; // Pass identification, replacement for typeid
-
-  ConstantMergeLegacyPass() : ModulePass(ID) {
-    initializeConstantMergeLegacyPassPass(*PassRegistry::getPassRegistry());
-  }
-
-  // For this pass, process all of the globals in the module, eliminating
-  // duplicate constants.
-  bool runOnModule(Module &M) override {
-    if (skipModule(M))
-      return false;
-    return mergeConstants(M);
-  }
-};
-
-} // end anonymous namespace
-
-char ConstantMergeLegacyPass::ID = 0;
-
-INITIALIZE_PASS(ConstantMergeLegacyPass, "constmerge",
-                "Merge Duplicate Global Constants", false, false)
-
-ModulePass *llvm::createConstantMergePass() {
-  return new ConstantMergeLegacyPass();
 }

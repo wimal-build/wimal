@@ -29,6 +29,7 @@
 #include "llvm/CodeGen/MachineLoopInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/Passes.h"
+#include "llvm/CodeGen/WasmEHFuncInfo.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 using namespace llvm;
@@ -52,10 +53,10 @@ class WebAssemblyCFGSort final : public MachineFunctionPass {
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.setPreservesCFG();
-    AU.addRequired<MachineDominatorTree>();
-    AU.addPreserved<MachineDominatorTree>();
-    AU.addRequired<MachineLoopInfo>();
-    AU.addPreserved<MachineLoopInfo>();
+    AU.addRequired<MachineDominatorTreeWrapperPass>();
+    AU.addPreserved<MachineDominatorTreeWrapperPass>();
+    AU.addRequired<MachineLoopInfoWrapperPass>();
+    AU.addPreserved<MachineLoopInfoWrapperPass>();
     AU.addRequired<WebAssemblyExceptionInfo>();
     AU.addPreserved<WebAssemblyExceptionInfo>();
     MachineFunctionPass::getAnalysisUsage(AU);
@@ -218,6 +219,7 @@ static void sortBlocks(MachineFunction &MF, const MachineLoopInfo &MLI,
                 CompareBlockNumbersBackwards>
       Ready;
 
+  const auto *EHInfo = MF.getWasmEHFuncInfo();
   SortRegionInfo SRI(MLI, WEI);
   SmallVector<Entry, 4> Entries;
   for (MachineBasicBlock *MBB = &MF.front();;) {
@@ -233,7 +235,7 @@ static void sortBlocks(MachineFunction &MF, const MachineLoopInfo &MLI,
       // any blocks deferred because the header didn't dominate them.
       for (Entry &E : Entries)
         if (E.TheRegion->contains(MBB) && --E.NumBlocksLeft == 0)
-          for (auto DeferredBlock : E.Deferred)
+          for (auto *DeferredBlock : E.Deferred)
             Ready.push(DeferredBlock);
       while (!Entries.empty() && Entries.back().NumBlocksLeft == 0)
         Entries.pop_back();
@@ -245,8 +247,34 @@ static void sortBlocks(MachineFunction &MF, const MachineLoopInfo &MLI,
         if (SuccL->getHeader() == Succ && SuccL->contains(MBB))
           continue;
       // Decrement the predecessor count. If it's now zero, it's ready.
-      if (--NumPredsLeft[Succ->getNumber()] == 0)
+      if (--NumPredsLeft[Succ->getNumber()] == 0) {
+        // When we are in a SortRegion, we allow sorting of not only BBs that
+        // belong to the current (innermost) region but also BBs that are
+        // dominated by the current region header. But we should not do this for
+        // exceptions because there can be cases in which, for example:
+        // EHPad A's unwind destination (where the exception lands when it is
+        // not caught by EHPad A) is EHPad B, so EHPad B does not belong to the
+        // exception dominated by EHPad A. But EHPad B is dominated by EHPad A,
+        // so EHPad B can be sorted within EHPad A's exception. This is
+        // incorrect because we may end up delegating/rethrowing to an inner
+        // scope in CFGStackify. So here we make sure those unwind destinations
+        // are deferred until their unwind source's exception is sorted.
+        if (EHInfo && EHInfo->hasUnwindSrcs(Succ)) {
+          SmallPtrSet<MachineBasicBlock *, 4> UnwindSrcs =
+              EHInfo->getUnwindSrcs(Succ);
+          bool IsDeferred = false;
+          for (Entry &E : Entries) {
+            if (UnwindSrcs.count(E.TheRegion->getHeader())) {
+              E.Deferred.push_back(Succ);
+              IsDeferred = true;
+              break;
+            }
+          }
+          if (IsDeferred)
+            continue;
+        }
         Preferred.push(Succ);
+      }
     }
     // Determine the block to follow MBB. First try to find a preferred block,
     // to preserve the original block order when possible.
@@ -320,14 +348,14 @@ static void sortBlocks(MachineFunction &MF, const MachineLoopInfo &MLI,
       if (Region->isLoop()) {
         // Loop header. The loop predecessor should be sorted above, and the
         // other predecessors should be backedges below.
-        for (auto Pred : MBB.predecessors())
+        for (auto *Pred : MBB.predecessors())
           assert(
               (Pred->getNumber() < MBB.getNumber() || Region->contains(Pred)) &&
               "Loop header predecessors must be loop predecessors or "
               "backedges");
       } else {
         // Exception header. All predecessors should be sorted above.
-        for (auto Pred : MBB.predecessors())
+        for (auto *Pred : MBB.predecessors())
           assert(Pred->getNumber() < MBB.getNumber() &&
                  "Non-loop-header predecessors should be topologically sorted");
       }
@@ -336,7 +364,7 @@ static void sortBlocks(MachineFunction &MF, const MachineLoopInfo &MLI,
 
     } else {
       // Not a region header. All predecessors should be sorted above.
-      for (auto Pred : MBB.predecessors())
+      for (auto *Pred : MBB.predecessors())
         assert(Pred->getNumber() < MBB.getNumber() &&
                "Non-loop-header predecessors should be topologically sorted");
       assert(OnStack.count(SRI.getRegionFor(&MBB)) &&
@@ -357,9 +385,9 @@ bool WebAssemblyCFGSort::runOnMachineFunction(MachineFunction &MF) {
                        "********** Function: "
                     << MF.getName() << '\n');
 
-  const auto &MLI = getAnalysis<MachineLoopInfo>();
+  const auto &MLI = getAnalysis<MachineLoopInfoWrapperPass>().getLI();
   const auto &WEI = getAnalysis<WebAssemblyExceptionInfo>();
-  auto &MDT = getAnalysis<MachineDominatorTree>();
+  auto &MDT = getAnalysis<MachineDominatorTreeWrapperPass>().getDomTree();
   // Liveness is not tracked for VALUE_STACK physreg.
   MF.getRegInfo().invalidateLiveness();
 

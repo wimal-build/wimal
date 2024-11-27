@@ -12,8 +12,14 @@
 
 #include <limits.h>
 
+TEST(ScudoStringsTest, Constructor) {
+  scudo::ScopedString Str;
+  EXPECT_EQ(0ul, Str.length());
+  EXPECT_EQ('\0', *Str.data());
+}
+
 TEST(ScudoStringsTest, Basic) {
-  scudo::ScopedString Str(128);
+  scudo::ScopedString Str;
   Str.append("a%db%zdc%ue%zuf%xh%zxq%pe%sr", static_cast<int>(-1),
              static_cast<scudo::uptr>(-2), static_cast<unsigned>(-4),
              static_cast<scudo::uptr>(5), static_cast<unsigned>(10),
@@ -28,8 +34,27 @@ TEST(ScudoStringsTest, Basic) {
   EXPECT_STREQ(expectedString.c_str(), Str.data());
 }
 
+TEST(ScudoStringsTest, Clear) {
+  scudo::ScopedString Str;
+  Str.append("123");
+  Str.clear();
+  EXPECT_EQ(0ul, Str.length());
+  EXPECT_EQ('\0', *Str.data());
+}
+
+TEST(ScudoStringsTest, ClearLarge) {
+  constexpr char appendString[] = "123";
+  scudo::ScopedString Str;
+  Str.reserve(sizeof(appendString) * 10000);
+  for (int i = 0; i < 10000; ++i)
+    Str.append(appendString);
+  Str.clear();
+  EXPECT_EQ(0ul, Str.length());
+  EXPECT_EQ('\0', *Str.data());
+}
+
 TEST(ScudoStringsTest, Precision) {
-  scudo::ScopedString Str(128);
+  scudo::ScopedString Str;
   Str.append("%.*s", 3, "12345");
   EXPECT_EQ(Str.length(), strlen(Str.data()));
   EXPECT_STREQ("123", Str.data());
@@ -41,6 +66,10 @@ TEST(ScudoStringsTest, Precision) {
   Str.append("%-6s", "12345");
   EXPECT_EQ(Str.length(), strlen(Str.data()));
   EXPECT_STREQ("12345 ", Str.data());
+  Str.clear();
+  Str.append("%-8s", "12345");
+  EXPECT_EQ(Str.length(), strlen(Str.data()));
+  EXPECT_STREQ("12345   ", Str.data());
 }
 
 static void fillString(scudo::ScopedString &Str, scudo::uptr Size) {
@@ -52,7 +81,8 @@ TEST(ScudoStringTest, PotentialOverflows) {
   // Use a ScopedString that spans a page, and attempt to write past the end
   // of it with variations of append. The expectation is for nothing to crash.
   const scudo::uptr PageSize = scudo::getPageSizeCached();
-  scudo::ScopedString Str(PageSize);
+  scudo::ScopedString Str;
+  Str.reserve(2 * PageSize);
   Str.clear();
   fillString(Str, 2 * PageSize);
   Str.clear();
@@ -68,7 +98,7 @@ TEST(ScudoStringTest, PotentialOverflows) {
 
 template <typename T>
 static void testAgainstLibc(const char *Format, T Arg1, T Arg2) {
-  scudo::ScopedString Str(128);
+  scudo::ScopedString Str;
   Str.append(Format, Arg1, Arg2);
   char Buffer[128];
   snprintf(Buffer, sizeof(Buffer), Format, Arg1, Arg2);
@@ -97,3 +127,42 @@ TEST(ScudoStringsTest, Padding) {
   testAgainstLibc<int>("%03d - %03d", 12, 1234);
   testAgainstLibc<int>("%03d - %03d", -12, -1234);
 }
+
+#if defined(__linux__)
+
+#include <sys/resource.h>
+
+TEST(ScudoStringsTest, CapacityIncreaseFails) {
+  scudo::ScopedString Str;
+
+  rlimit Limit = {};
+  EXPECT_EQ(0, getrlimit(RLIMIT_AS, &Limit));
+
+  rlimit EmptyLimit = {.rlim_cur = 0, .rlim_max = Limit.rlim_max};
+  EXPECT_EQ(0, setrlimit(RLIMIT_AS, &EmptyLimit));
+
+  // qemu does not honor the setrlimit, so verify before proceeding.
+  scudo::MemMapT MemMap;
+  if (MemMap.map(/*Addr=*/0U, scudo::getPageSizeCached(), "scudo:test",
+                 MAP_ALLOWNOMEM)) {
+    MemMap.unmap(MemMap.getBase(), MemMap.getCapacity());
+    setrlimit(RLIMIT_AS, &Limit);
+    TEST_SKIP("Limiting address space does not prevent mmap.");
+  }
+
+  // Test requires that the default length is at least 6 characters.
+  scudo::uptr MaxSize = Str.capacity();
+  EXPECT_LE(6u, MaxSize);
+
+  for (size_t i = 0; i < MaxSize - 5; i++) {
+    Str.append("B");
+  }
+
+  // Attempt to append past the end of the current capacity.
+  Str.append("%d", 12345678);
+  EXPECT_EQ(MaxSize, Str.capacity());
+  EXPECT_STREQ("B12345", &Str.data()[MaxSize - 6]);
+
+  EXPECT_EQ(0, setrlimit(RLIMIT_AS, &Limit));
+}
+#endif

@@ -10,8 +10,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "clang/Basic/Specifiers.h"
-#include "clang/Sema/SemaInternal.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/CXXInheritance.h"
 #include "clang/AST/DeclCXX.h"
@@ -19,9 +17,12 @@
 #include "clang/AST/DeclObjC.h"
 #include "clang/AST/DependentDiagnostic.h"
 #include "clang/AST/ExprCXX.h"
+#include "clang/Basic/Specifiers.h"
 #include "clang/Sema/DelayedDiagnostic.h"
 #include "clang/Sema/Initialization.h"
 #include "clang/Sema/Lookup.h"
+#include "clang/Sema/SemaInternal.h"
+#include "llvm/ADT/STLForwardCompat.h"
 
 using namespace clang;
 using namespace sema;
@@ -33,9 +34,6 @@ enum AccessResult {
   AR_dependent
 };
 
-/// SetMemberAccessSpecifier - Set the access specifier of a member.
-/// Returns true on error (when the previous member decl access specifier
-/// is different from the new member decl access specifier).
 bool Sema::SetMemberAccessSpecifier(NamedDecl *MemberDecl,
                                     NamedDecl *PrevMemberDecl,
                                     AccessSpecifier LexicalAS) {
@@ -84,6 +82,20 @@ struct EffectiveContext {
     : Inner(DC),
       Dependent(DC->isDependentContext()) {
 
+    // An implicit deduction guide is semantically in the context enclosing the
+    // class template, but for access purposes behaves like the constructor
+    // from which it was produced.
+    if (auto *DGD = dyn_cast<CXXDeductionGuideDecl>(DC)) {
+      if (DGD->isImplicit()) {
+        DC = DGD->getCorrespondingConstructor();
+        if (!DC) {
+          // The copy deduction candidate doesn't have a corresponding
+          // constructor.
+          DC = cast<DeclContext>(DGD->getDeducedTemplate()->getTemplatedDecl());
+        }
+      }
+    }
+
     // C++11 [class.access.nest]p1:
     //   A nested class is a member and as such has the same access
     //   rights as any other member.
@@ -126,7 +138,7 @@ struct EffectiveContext {
 
   bool includesClass(const CXXRecordDecl *R) const {
     R = R->getCanonicalDecl();
-    return llvm::find(Records, R) != Records.end();
+    return llvm::is_contained(Records, R);
   }
 
   /// Retrieves the innermost "useful" context.  Can be null if we're
@@ -185,6 +197,16 @@ struct AccessTarget : public AccessedEntity {
         : Target(S.Target), Has(S.Has) {
       S.Target = nullptr;
     }
+
+    // The move assignment operator is defined as deleted pending further
+    // motivation.
+    SavedInstanceContext &operator=(SavedInstanceContext &&) = delete;
+
+    // The copy constrcutor and copy assignment operator is defined as deleted
+    // pending further motivation.
+    SavedInstanceContext(const SavedInstanceContext &) = delete;
+    SavedInstanceContext &operator=(const SavedInstanceContext &) = delete;
+
     ~SavedInstanceContext() {
       if (Target)
         Target->HasInstanceContext = Has;
@@ -1294,17 +1316,18 @@ static bool IsMicrosoftUsingDeclarationAccessBug(Sema& S,
                                                  SourceLocation AccessLoc,
                                                  AccessTarget &Entity) {
   if (UsingShadowDecl *Shadow =
-                         dyn_cast<UsingShadowDecl>(Entity.getTargetDecl())) {
-    const NamedDecl *OrigDecl = Entity.getTargetDecl()->getUnderlyingDecl();
-    if (Entity.getTargetDecl()->getAccess() == AS_private &&
-        (OrigDecl->getAccess() == AS_public ||
-         OrigDecl->getAccess() == AS_protected)) {
-      S.Diag(AccessLoc, diag::ext_ms_using_declaration_inaccessible)
-        << Shadow->getUsingDecl()->getQualifiedNameAsString()
-        << OrigDecl->getQualifiedNameAsString();
-      return true;
+          dyn_cast<UsingShadowDecl>(Entity.getTargetDecl()))
+    if (UsingDecl *UD = dyn_cast<UsingDecl>(Shadow->getIntroducer())) {
+      const NamedDecl *OrigDecl = Entity.getTargetDecl()->getUnderlyingDecl();
+      if (Entity.getTargetDecl()->getAccess() == AS_private &&
+          (OrigDecl->getAccess() == AS_public ||
+           OrigDecl->getAccess() == AS_protected)) {
+        S.Diag(AccessLoc, diag::ext_ms_using_declaration_inaccessible)
+            << UD->getQualifiedNameAsString()
+            << OrigDecl->getQualifiedNameAsString();
+        return true;
+      }
     }
-  }
   return false;
 }
 
@@ -1447,12 +1470,32 @@ static Sema::AccessResult CheckAccess(Sema &S, SourceLocation Loc,
   // specifier, like this:
   //   A::private_type A::foo() { ... }
   //
-  // Or we might be parsing something that will turn out to be a friend:
-  //   void foo(A::private_type);
-  //   void B::foo(A::private_type);
+  // friend declaration should not be delayed because it may lead to incorrect
+  // redeclaration chain, such as:
+  //   class D {
+  //    class E{
+  //     class F{};
+  //     friend  void foo(D::E::F& q);
+  //    };
+  //    friend  void foo(D::E::F& q);
+  //   };
   if (S.DelayedDiagnostics.shouldDelayDiagnostics()) {
-    S.DelayedDiagnostics.add(DelayedDiagnostic::makeAccess(Loc, Entity));
-    return Sema::AR_delayed;
+    // [class.friend]p9:
+    // A member nominated by a friend declaration shall be accessible in the
+    // class containing the friend declaration. The meaning of the friend
+    // declaration is the same whether the friend declaration appears in the
+    // private, protected, or public ([class.mem]) portion of the class
+    // member-specification.
+    Scope *TS = S.getCurScope();
+    bool IsFriendDeclaration = false;
+    while (TS && !IsFriendDeclaration) {
+      IsFriendDeclaration = TS->isFriendScope();
+      TS = TS->getParent();
+    }
+    if (!IsFriendDeclaration) {
+      S.DelayedDiagnostics.add(DelayedDiagnostic::makeAccess(Loc, Entity));
+      return Sema::AR_delayed;
+    }
   }
 
   EffectiveContext EC(S.CurContext);
@@ -1478,6 +1521,8 @@ void Sema::HandleDelayedAccessCheck(DelayedDiagnostic &DD, Decl *D) {
   } else if (TemplateDecl *TD = dyn_cast<TemplateDecl>(D)) {
     if (isa<DeclContext>(TD->getTemplatedDecl()))
       DC = cast<DeclContext>(TD->getTemplatedDecl());
+  } else if (auto *RD = dyn_cast<RequiresExprBodyDecl>(D)) {
+    DC = RD;
   }
 
   EffectiveContext EC(DC);
@@ -1542,8 +1587,6 @@ Sema::AccessResult Sema::CheckUnresolvedLookupAccess(UnresolvedLookupExpr *E,
   return CheckAccess(*this, E->getNameLoc(), Entity);
 }
 
-/// Perform access-control checking on a previously-unresolved member
-/// access which has now been resolved to a member.
 Sema::AccessResult Sema::CheckUnresolvedMemberAccess(UnresolvedMemberExpr *E,
                                                      DeclAccessPair Found) {
   if (!getLangOpts().AccessControl ||
@@ -1561,8 +1604,6 @@ Sema::AccessResult Sema::CheckUnresolvedMemberAccess(UnresolvedMemberExpr *E,
   return CheckAccess(*this, E->getMemberLoc(), Entity);
 }
 
-/// Is the given member accessible for the purposes of deciding whether to
-/// define a special member function as deleted?
 bool Sema::isMemberAccessibleForDeletion(CXXRecordDecl *NamingClass,
                                          DeclAccessPair Found,
                                          QualType ObjectType,
@@ -1610,7 +1651,6 @@ Sema::AccessResult Sema::CheckDestructorAccess(SourceLocation Loc,
   return CheckAccess(*this, Loc, Entity);
 }
 
-/// Checks access to a constructor.
 Sema::AccessResult Sema::CheckConstructorAccess(SourceLocation UseLoc,
                                                 CXXConstructorDecl *Constructor,
                                                 DeclAccessPair Found,
@@ -1631,20 +1671,24 @@ Sema::AccessResult Sema::CheckConstructorAccess(SourceLocation UseLoc,
   case InitializedEntity::EK_Base:
     PD = PDiag(diag::err_access_base_ctor);
     PD << Entity.isInheritedVirtualBase()
-       << Entity.getBaseSpecifier()->getType() << getSpecialMember(Constructor);
+       << Entity.getBaseSpecifier()->getType()
+       << llvm::to_underlying(getSpecialMember(Constructor));
     break;
 
-  case InitializedEntity::EK_Member: {
+  case InitializedEntity::EK_Member:
+  case InitializedEntity::EK_ParenAggInitMember: {
     const FieldDecl *Field = cast<FieldDecl>(Entity.getDecl());
     PD = PDiag(diag::err_access_field_ctor);
-    PD << Field->getType() << getSpecialMember(Constructor);
+    PD << Field->getType()
+       << llvm::to_underlying(getSpecialMember(Constructor));
     break;
   }
 
   case InitializedEntity::EK_LambdaCapture: {
     StringRef VarName = Entity.getCapturedVarName();
     PD = PDiag(diag::err_access_lambda_capture);
-    PD << VarName << Entity.getType() << getSpecialMember(Constructor);
+    PD << VarName << Entity.getType()
+       << llvm::to_underlying(getSpecialMember(Constructor));
     break;
   }
 
@@ -1653,7 +1697,6 @@ Sema::AccessResult Sema::CheckConstructorAccess(SourceLocation UseLoc,
   return CheckConstructorAccess(UseLoc, Constructor, Found, Entity, PD);
 }
 
-/// Checks access to a constructor.
 Sema::AccessResult Sema::CheckConstructorAccess(SourceLocation UseLoc,
                                                 CXXConstructorDecl *Constructor,
                                                 DeclAccessPair Found,
@@ -1695,7 +1738,6 @@ Sema::AccessResult Sema::CheckConstructorAccess(SourceLocation UseLoc,
   return CheckAccess(*this, UseLoc, AccessEntity);
 }
 
-/// Checks access to an overloaded operator new or delete.
 Sema::AccessResult Sema::CheckAllocationAccess(SourceLocation OpLoc,
                                                SourceRange PlacementRange,
                                                CXXRecordDecl *NamingClass,
@@ -1715,7 +1757,6 @@ Sema::AccessResult Sema::CheckAllocationAccess(SourceLocation OpLoc,
   return CheckAccess(*this, OpLoc, Entity);
 }
 
-/// Checks access to a member.
 Sema::AccessResult Sema::CheckMemberAccess(SourceLocation UseLoc,
                                            CXXRecordDecl *NamingClass,
                                            DeclAccessPair Found) {
@@ -1730,7 +1771,6 @@ Sema::AccessResult Sema::CheckMemberAccess(SourceLocation UseLoc,
   return CheckAccess(*this, UseLoc, Entity);
 }
 
-/// Checks implicit access to a member in a structured binding.
 Sema::AccessResult
 Sema::CheckStructuredBindingMemberAccess(SourceLocation UseLoc,
                                          CXXRecordDecl *DecomposedClass,
@@ -1746,14 +1786,11 @@ Sema::CheckStructuredBindingMemberAccess(SourceLocation UseLoc,
   return CheckAccess(*this, UseLoc, Entity);
 }
 
-/// Checks access to an overloaded member operator, including
-/// conversion operators.
 Sema::AccessResult Sema::CheckMemberOperatorAccess(SourceLocation OpLoc,
                                                    Expr *ObjectExpr,
-                                                   Expr *ArgExpr,
+                                                   const SourceRange &Range,
                                                    DeclAccessPair Found) {
-  if (!getLangOpts().AccessControl ||
-      Found.getAccess() == AS_public)
+  if (!getLangOpts().AccessControl || Found.getAccess() == AS_public)
     return AR_accessible;
 
   const RecordType *RT = ObjectExpr->getType()->castAs<RecordType>();
@@ -1761,14 +1798,33 @@ Sema::AccessResult Sema::CheckMemberOperatorAccess(SourceLocation OpLoc,
 
   AccessTarget Entity(Context, AccessTarget::Member, NamingClass, Found,
                       ObjectExpr->getType());
-  Entity.setDiag(diag::err_access)
-    << ObjectExpr->getSourceRange()
-    << (ArgExpr ? ArgExpr->getSourceRange() : SourceRange());
+  Entity.setDiag(diag::err_access) << ObjectExpr->getSourceRange() << Range;
 
   return CheckAccess(*this, OpLoc, Entity);
 }
 
-/// Checks access to the target of a friend declaration.
+Sema::AccessResult Sema::CheckMemberOperatorAccess(SourceLocation OpLoc,
+                                                   Expr *ObjectExpr,
+                                                   Expr *ArgExpr,
+                                                   DeclAccessPair Found) {
+  return CheckMemberOperatorAccess(
+      OpLoc, ObjectExpr, ArgExpr ? ArgExpr->getSourceRange() : SourceRange(),
+      Found);
+}
+
+Sema::AccessResult Sema::CheckMemberOperatorAccess(SourceLocation OpLoc,
+                                                   Expr *ObjectExpr,
+                                                   ArrayRef<Expr *> ArgExprs,
+                                                   DeclAccessPair FoundDecl) {
+  SourceRange R;
+  if (!ArgExprs.empty()) {
+    R = SourceRange(ArgExprs.front()->getBeginLoc(),
+                    ArgExprs.back()->getEndLoc());
+  }
+
+  return CheckMemberOperatorAccess(OpLoc, ObjectExpr, R, FoundDecl);
+}
+
 Sema::AccessResult Sema::CheckFriendAccess(NamedDecl *target) {
   assert(isa<CXXMethodDecl>(target->getAsFunction()));
 
@@ -1818,12 +1874,6 @@ Sema::AccessResult Sema::CheckAddressOfMemberAccess(Expr *OvlExpr,
   return CheckAccess(*this, Ovl->getNameLoc(), Entity);
 }
 
-/// Checks access for a hierarchy conversion.
-///
-/// \param ForceCheck true if this check should be performed even if access
-///     control is disabled;  some things rely on this for semantics
-/// \param ForceUnprivileged true if this check should proceed as if the
-///     context had no special privileges
 Sema::AccessResult Sema::CheckBaseClassAccess(SourceLocation AccessLoc,
                                               QualType Base,
                                               QualType Derived,
@@ -1858,7 +1908,6 @@ Sema::AccessResult Sema::CheckBaseClassAccess(SourceLocation AccessLoc,
   return CheckAccess(*this, AccessLoc, Entity);
 }
 
-/// Checks access to all the declarations in the given result set.
 void Sema::CheckLookupAccess(const LookupResult &R) {
   assert(getLangOpts().AccessControl
          && "performing access check without access control");
@@ -1875,23 +1924,6 @@ void Sema::CheckLookupAccess(const LookupResult &R) {
   }
 }
 
-/// Checks access to Target from the given class. The check will take access
-/// specifiers into account, but no member access expressions and such.
-///
-/// \param Target the declaration to check if it can be accessed
-/// \param NamingClass the class in which the lookup was started.
-/// \param BaseType type of the left side of member access expression.
-///        \p BaseType and \p NamingClass are used for C++ access control.
-///        Depending on the lookup case, they should be set to the following:
-///        - lhs.target (member access without a qualifier):
-///          \p BaseType and \p NamingClass are both the type of 'lhs'.
-///        - lhs.X::target (member access with a qualifier):
-///          BaseType is the type of 'lhs', NamingClass is 'X'
-///        - X::target (qualified lookup without member access):
-///          BaseType is null, NamingClass is 'X'.
-///        - target (unqualified lookup).
-///          BaseType is null, NamingClass is the parent class of 'target'.
-/// \return true if the Target is accessible from the Class, false otherwise.
 bool Sema::IsSimplyAccessible(NamedDecl *Target, CXXRecordDecl *NamingClass,
                               QualType BaseType) {
   // Perform the C++ accessibility checks first.

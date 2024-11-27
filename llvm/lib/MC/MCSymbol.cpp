@@ -11,7 +11,6 @@
 #include "llvm/Config/llvm-config.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
-#include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCFragment.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Debug.h"
@@ -23,12 +22,12 @@
 using namespace llvm;
 
 // Only the address of this fragment is ever actually used.
-static MCDummyFragment SentinelFragment(nullptr);
+static MCDummyFragment SentinelFragment;
 
 // Sentinel value for the absolute pseudo fragment.
 MCFragment *MCSymbol::AbsolutePseudoFragment = &SentinelFragment;
 
-void *MCSymbol::operator new(size_t s, const StringMapEntry<bool> *Name,
+void *MCSymbol::operator new(size_t s, const MCSymbolTableEntry *Name,
                              MCContext &Ctx) {
   // We may need more space for a Name to account for alignment.  So allocate
   // space for the storage type and not the name pointer.

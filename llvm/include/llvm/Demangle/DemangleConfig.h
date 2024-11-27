@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_DEMANGLE_COMPILER_H
-#define LLVM_DEMANGLE_COMPILER_H
+#ifndef LLVM_DEMANGLE_DEMANGLECONFIG_H
+#define LLVM_DEMANGLE_DEMANGLECONFIG_H
 
 #ifndef __has_feature
 #define __has_feature(x) 0
@@ -84,6 +84,11 @@
 #define DEMANGLE_FALLTHROUGH [[clang::fallthrough]]
 #else
 #define DEMANGLE_FALLTHROUGH
+#endif
+
+#ifndef DEMANGLE_ASSERT
+#include <cassert>
+#define DEMANGLE_ASSERT(__expr, __msg) assert((__expr) && (__msg))
 #endif
 
 #define DEMANGLE_NAMESPACE_BEGIN namespace llvm { namespace itanium_demangle {

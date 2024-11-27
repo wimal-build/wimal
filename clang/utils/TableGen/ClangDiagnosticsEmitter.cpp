@@ -12,7 +12,6 @@
 
 #include "TableGenBackends.h"
 #include "llvm/ADT/DenseSet.h"
-#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/PointerUnion.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallPtrSet.h"
@@ -30,6 +29,7 @@
 #include <cctype>
 #include <functional>
 #include <map>
+#include <optional>
 #include <set>
 using namespace llvm;
 
@@ -129,13 +129,14 @@ namespace {
   };
 
   struct GroupInfo {
+    llvm::StringRef GroupName;
     std::vector<const Record*> DiagsInGroup;
     std::vector<std::string> SubGroups;
-    unsigned IDNo;
+    unsigned IDNo = 0;
 
-    const Record *ExplicitDef;
+    llvm::SmallVector<const Record *, 1> Defs;
 
-    GroupInfo() : IDNo(0), ExplicitDef(nullptr) {}
+    GroupInfo() = default;
   };
 } // end anonymous namespace.
 
@@ -148,12 +149,6 @@ static bool beforeThanCompare(const Record *LHS, const Record *RHS) {
 static bool diagGroupBeforeByName(const Record *LHS, const Record *RHS) {
   return LHS->getValueAsString("GroupName") <
          RHS->getValueAsString("GroupName");
-}
-
-static bool beforeThanCompareGroups(const GroupInfo *LHS, const GroupInfo *RHS){
-  assert(!LHS->DiagsInGroup.empty() && !RHS->DiagsInGroup.empty());
-  return beforeThanCompare(LHS->DiagsInGroup.front(),
-                           RHS->DiagsInGroup.front());
 }
 
 /// Invert the 1-[0/1] mapping of diags to group into a one to many
@@ -174,24 +169,14 @@ static void groupDiagnostics(const std::vector<Record*> &Diags,
     DiagsInGroup[GroupName].DiagsInGroup.push_back(R);
   }
 
-  typedef SmallPtrSet<GroupInfo *, 16> GroupSetTy;
-  GroupSetTy ImplicitGroups;
-
   // Add all DiagGroup's to the DiagsInGroup list to make sure we pick up empty
   // groups (these are warnings that GCC supports that clang never produces).
   for (unsigned i = 0, e = DiagGroups.size(); i != e; ++i) {
     Record *Group = DiagGroups[i];
     GroupInfo &GI =
         DiagsInGroup[std::string(Group->getValueAsString("GroupName"))];
-    if (Group->isAnonymous()) {
-      if (GI.DiagsInGroup.size() > 1)
-        ImplicitGroups.insert(&GI);
-    } else {
-      if (GI.ExplicitDef)
-        assert(GI.ExplicitDef == Group);
-      else
-        GI.ExplicitDef = Group;
-    }
+    GI.GroupName = Group->getName();
+    GI.Defs.push_back(Group);
 
     std::vector<Record*> SubGroups = Group->getValueAsListOfDefs("SubGroups");
     for (unsigned j = 0, e = SubGroups.size(); j != e; ++j)
@@ -205,61 +190,51 @@ static void groupDiagnostics(const std::vector<Record*> &Diags,
        I = DiagsInGroup.begin(), E = DiagsInGroup.end(); I != E; ++I, ++IDNo)
     I->second.IDNo = IDNo;
 
-  // Sort the implicit groups, so we can warn about them deterministically.
-  SmallVector<GroupInfo *, 16> SortedGroups(ImplicitGroups.begin(),
-                                            ImplicitGroups.end());
-  for (SmallVectorImpl<GroupInfo *>::iterator I = SortedGroups.begin(),
-                                              E = SortedGroups.end();
-       I != E; ++I) {
-    MutableArrayRef<const Record *> GroupDiags = (*I)->DiagsInGroup;
-    llvm::sort(GroupDiags, beforeThanCompare);
-  }
-  llvm::sort(SortedGroups, beforeThanCompareGroups);
+  // Warn if the same group is defined more than once (including implicitly).
+  for (auto &Group : DiagsInGroup) {
+    if (Group.second.Defs.size() == 1 &&
+        (!Group.second.Defs.front()->isAnonymous() ||
+         Group.second.DiagsInGroup.size() <= 1))
+      continue;
 
-  // Warn about the same group being used anonymously in multiple places.
-  for (SmallVectorImpl<GroupInfo *>::const_iterator I = SortedGroups.begin(),
-                                                    E = SortedGroups.end();
-       I != E; ++I) {
-    ArrayRef<const Record *> GroupDiags = (*I)->DiagsInGroup;
-
-    if ((*I)->ExplicitDef) {
-      std::string Name =
-          std::string((*I)->ExplicitDef->getValueAsString("GroupName"));
-      for (ArrayRef<const Record *>::const_iterator DI = GroupDiags.begin(),
-                                                    DE = GroupDiags.end();
-           DI != DE; ++DI) {
-        const DefInit *GroupInit = cast<DefInit>((*DI)->getValueInit("Group"));
-        const Record *NextDiagGroup = GroupInit->getDef();
-        if (NextDiagGroup == (*I)->ExplicitDef)
-          continue;
-
-        SrcMgr.PrintMessage((*DI)->getLoc().front(),
-                            SourceMgr::DK_Error,
-                            Twine("group '") + Name +
-                              "' is referred to anonymously");
-        SrcMgr.PrintMessage((*I)->ExplicitDef->getLoc().front(),
-                            SourceMgr::DK_Note, "group defined here");
+    bool First = true;
+    for (const Record *Def : Group.second.Defs) {
+      // Skip implicit definitions from diagnostics; we'll report those
+      // separately below.
+      bool IsImplicit = false;
+      for (const Record *Diag : Group.second.DiagsInGroup) {
+        if (cast<DefInit>(Diag->getValueInit("Group"))->getDef() == Def) {
+          IsImplicit = true;
+          break;
+        }
       }
-    } else {
-      // If there's no existing named group, we should just warn once and use
-      // notes to list all the other cases.
-      ArrayRef<const Record *>::const_iterator DI = GroupDiags.begin(),
-                                               DE = GroupDiags.end();
-      assert(DI != DE && "We only care about groups with multiple uses!");
+      if (IsImplicit)
+        continue;
 
-      const DefInit *GroupInit = cast<DefInit>((*DI)->getValueInit("Group"));
-      const Record *NextDiagGroup = GroupInit->getDef();
-      std::string Name =
-          std::string(NextDiagGroup->getValueAsString("GroupName"));
+      llvm::SMLoc Loc = Def->getLoc().front();
+      if (First) {
+        SrcMgr.PrintMessage(Loc, SourceMgr::DK_Error,
+                            Twine("group '") + Group.first +
+                                "' is defined more than once");
+        First = false;
+      } else {
+        SrcMgr.PrintMessage(Loc, SourceMgr::DK_Note, "also defined here");
+      }
+    }
 
-      SrcMgr.PrintMessage((*DI)->getLoc().front(),
-                          SourceMgr::DK_Error,
-                          Twine("group '") + Name +
-                            "' is referred to anonymously");
+    for (const Record *Diag : Group.second.DiagsInGroup) {
+      if (!cast<DefInit>(Diag->getValueInit("Group"))->getDef()->isAnonymous())
+        continue;
 
-      for (++DI; DI != DE; ++DI) {
-        SrcMgr.PrintMessage((*DI)->getLoc().front(),
-                            SourceMgr::DK_Note, "also referenced here");
+      llvm::SMLoc Loc = Diag->getLoc().front();
+      if (First) {
+        SrcMgr.PrintMessage(Loc, SourceMgr::DK_Error,
+                            Twine("group '") + Group.first +
+                                "' is implicitly defined more than once");
+        First = false;
+      } else {
+        SrcMgr.PrintMessage(Loc, SourceMgr::DK_Note,
+                            "also implicitly defined here");
       }
     }
   }
@@ -275,8 +250,9 @@ typedef llvm::PointerUnion<RecordVec*, RecordSet*> VecOrSet;
 
 namespace {
 class InferPedantic {
-  typedef llvm::DenseMap<const Record*,
-                         std::pair<unsigned, Optional<unsigned> > > GMap;
+  typedef llvm::DenseMap<const Record *,
+                         std::pair<unsigned, std::optional<unsigned>>>
+      GMap;
 
   DiagGroupParentMap &DiagGroupParents;
   const std::vector<Record*> &Diags;
@@ -350,7 +326,7 @@ bool InferPedantic::isOffByDefault(const Record *Diag) {
 bool InferPedantic::groupInPedantic(const Record *Group, bool increment) {
   GMap::mapped_type &V = GroupCount[Group];
   // Lazily compute the threshold value for the group count.
-  if (!V.second.hasValue()) {
+  if (!V.second) {
     const GroupInfo &GI =
         DiagsInGroup[std::string(Group->getValueAsString("GroupName"))];
     V.second = GI.SubGroups.size() + GI.DiagsInGroup.size();
@@ -362,7 +338,7 @@ bool InferPedantic::groupInPedantic(const Record *Group, bool increment) {
   // Consider a group in -Wpendatic IFF if has at least one diagnostic
   // or subgroup AND all of those diagnostics and subgroups are covered
   // by -Wpedantic via our computation.
-  return V.first != 0 && V.first == V.second.getValue();
+  return V.first != 0 && V.first == *V.second;
 }
 
 void InferPedantic::markGroup(const Record *Group) {
@@ -429,17 +405,14 @@ void InferPedantic::compute(VecOrSet DiagsInPedantic,
     if (!groupInPedantic(Group))
       continue;
 
-    unsigned ParentsInPedantic = 0;
     const std::vector<Record*> &Parents = DiagGroupParents.getParents(Group);
-    for (unsigned j = 0, ej = Parents.size(); j != ej; ++j) {
-      if (groupInPedantic(Parents[j]))
-        ++ParentsInPedantic;
-    }
+    bool AllParentsInPedantic =
+        llvm::all_of(Parents, [&](Record *R) { return groupInPedantic(R); });
     // If all the parents are in -Wpedantic, this means that this diagnostic
     // group will be indirectly included by -Wpedantic already.  In that
     // case, do not add it directly to -Wpedantic.  If the group has no
     // parents, obviously it should go into -Wpedantic.
-    if (Parents.size() > 0 && ParentsInPedantic == Parents.size())
+    if (Parents.size() > 0 && AllParentsInPedantic)
       continue;
 
     if (RecordVec *V = GroupsInPedantic.dyn_cast<RecordVec*>())
@@ -584,7 +557,7 @@ struct PluralPiece : SelectPiece {
 struct DiffPiece : Piece {
   DiffPiece() : Piece(DiffPieceClass) {}
 
-  Piece *Options[2] = {};
+  Piece *Parts[4] = {};
   int Indexes[2] = {};
 
   static bool classof(const Piece *P) {
@@ -641,7 +614,7 @@ struct DiagnosticTextBuilder {
     return It->second.Root;
   }
 
-  LLVM_ATTRIBUTE_NORETURN void PrintFatalError(llvm::Twine const &Msg) const {
+  [[noreturn]] void PrintFatalError(llvm::Twine const &Msg) const {
     assert(EvaluatingRecord && "not evaluating a record?");
     llvm::PrintFatalError(EvaluatingRecord->getLoc(), Msg);
   }
@@ -660,9 +633,18 @@ private:
     }
 
     DiagText(DiagnosticTextBuilder &Builder, StringRef Text)
-        : Builder(Builder), Root(parseDiagText(Text)) {}
+        : Builder(Builder), Root(parseDiagText(Text, StopAt::End)) {}
 
-    Piece *parseDiagText(StringRef &Text, bool Nested = false);
+    enum class StopAt {
+      // Parse until the end of the string.
+      End,
+      // Additionally stop if we hit a non-nested '|' or '}'.
+      PipeOrCloseBrace,
+      // Additionally stop if we hit a non-nested '$'.
+      Dollar,
+    };
+
+    Piece *parseDiagText(StringRef &Text, StopAt Stop);
     int parseModifier(StringRef &) const;
 
   public:
@@ -671,6 +653,14 @@ private:
           Root(O.Root) {
       O.Root = nullptr;
     }
+    // The move assignment operator is defined as deleted pending further
+    // motivation.
+    DiagText &operator=(DiagText &&) = delete;
+
+    // The copy constrcutor and copy assignment operator is defined as deleted
+    // pending further motivation.
+    DiagText(const DiagText &) = delete;
+    DiagText &operator=(const DiagText &) = delete;
 
     ~DiagText() {
       for (Piece *P : AllocatedPieces)
@@ -694,7 +684,7 @@ private:
 };
 
 template <class Derived> struct DiagTextVisitor {
-  using ModifierMappingsType = Optional<std::vector<int>>;
+  using ModifierMappingsType = std::optional<std::vector<int>>;
 
 private:
   Derived &getDerived() { return static_cast<Derived &>(*this); }
@@ -725,7 +715,7 @@ public:
 
   private:
     DiagTextVisitor &Visitor;
-    Optional<std::vector<int>> OldMappings;
+    std::optional<std::vector<int>> OldMappings;
 
   public:
     Piece *Substitution;
@@ -883,16 +873,12 @@ struct DiagTextDocPrinter : DiagTextVisitor<DiagTextDocPrinter> {
     auto &S = RST.back();
 
     StringRef T = P->Text;
-    while (!T.empty() && T.front() == ' ') {
+    while (T.consume_front(" "))
       RST.back() += " |nbsp| ";
-      T = T.drop_front();
-    }
 
     std::string Suffix;
-    while (!T.empty() && T.back() == ' ') {
+    while (T.consume_back(" "))
       Suffix += " |nbsp| ";
-      T = T.drop_back();
-    }
 
     if (!T.empty()) {
       S += ':';
@@ -928,7 +914,24 @@ struct DiagTextDocPrinter : DiagTextVisitor<DiagTextDocPrinter> {
 
   void VisitPlural(PluralPiece *P) { VisitSelect(P); }
 
-  void VisitDiff(DiffPiece *P) { Visit(P->Options[1]); }
+  void VisitDiff(DiffPiece *P) {
+    // Render %diff{a $ b $ c|d}e,f as %select{a %e b %f c|d}.
+    PlaceholderPiece E(MT_Placeholder, P->Indexes[0]);
+    PlaceholderPiece F(MT_Placeholder, P->Indexes[1]);
+
+    MultiPiece FirstOption;
+    FirstOption.Pieces.push_back(P->Parts[0]);
+    FirstOption.Pieces.push_back(&E);
+    FirstOption.Pieces.push_back(P->Parts[1]);
+    FirstOption.Pieces.push_back(&F);
+    FirstOption.Pieces.push_back(P->Parts[2]);
+
+    SelectPiece Select(MT_Diff);
+    Select.Options.push_back(&FirstOption);
+    Select.Options.push_back(P->Parts[3]);
+
+    VisitSelect(&Select);
+  }
 
   std::vector<std::string> &RST;
 };
@@ -982,9 +985,13 @@ public:
 
   void VisitDiff(DiffPiece *P) {
     Result += "%diff{";
-    Visit(P->Options[0]);
+    Visit(P->Parts[0]);
+    Result += "$";
+    Visit(P->Parts[1]);
+    Result += "$";
+    Visit(P->Parts[2]);
     Result += "|";
-    Visit(P->Options[1]);
+    Visit(P->Parts[3]);
     Result += "}";
     addInt(mapIndex(P->Indexes[0]));
     Result += ",";
@@ -1009,16 +1016,19 @@ int DiagnosticTextBuilder::DiagText::parseModifier(StringRef &Text) const {
 }
 
 Piece *DiagnosticTextBuilder::DiagText::parseDiagText(StringRef &Text,
-                                                      bool Nested) {
+                                                      StopAt Stop) {
   std::vector<Piece *> Parsed;
+
+  constexpr llvm::StringLiteral StopSets[] = {"%", "%|}", "%|}$"};
+  llvm::StringRef StopSet = StopSets[static_cast<int>(Stop)];
 
   while (!Text.empty()) {
     size_t End = (size_t)-2;
     do
-      End = Nested ? Text.find_first_of("%|}", End + 2)
-                   : Text.find_first_of('%', End + 2);
-    while (End < Text.size() - 1 && Text[End] == '%' &&
-           (Text[End + 1] == '%' || Text[End + 1] == '|'));
+      End = Text.find_first_of(StopSet, End + 2);
+    while (
+        End < Text.size() - 1 && Text[End] == '%' &&
+        (Text[End + 1] == '%' || Text[End + 1] == '|' || Text[End + 1] == '$'));
 
     if (End) {
       Parsed.push_back(New<TextPiece>(Text.slice(0, End), "diagtext"));
@@ -1027,7 +1037,7 @@ Piece *DiagnosticTextBuilder::DiagText::parseDiagText(StringRef &Text,
         break;
     }
 
-    if (Text[0] == '|' || Text[0] == '}')
+    if (Text[0] == '|' || Text[0] == '}' || Text[0] == '$')
       break;
 
     // Drop the '%'.
@@ -1050,6 +1060,12 @@ Piece *DiagnosticTextBuilder::DiagText::parseDiagText(StringRef &Text,
                                .Case("", MT_Placeholder)
                                .Default(MT_Unknown);
 
+    auto ExpectAndConsume = [&](StringRef Prefix) {
+      if (!Text.consume_front(Prefix))
+        Builder.PrintFatalError("expected '" + Prefix + "' while parsing %" +
+                                Modifier);
+    };
+
     switch (ModType) {
     case MT_Unknown:
       Builder.PrintFatalError("Unknown modifier type: " + Modifier);
@@ -1057,11 +1073,11 @@ Piece *DiagnosticTextBuilder::DiagText::parseDiagText(StringRef &Text,
       SelectPiece *Select = New<SelectPiece>(MT_Select);
       do {
         Text = Text.drop_front(); // '{' or '|'
-        Select->Options.push_back(parseDiagText(Text, true));
+        Select->Options.push_back(
+            parseDiagText(Text, StopAt::PipeOrCloseBrace));
         assert(!Text.empty() && "malformed %select");
       } while (Text.front() == '|');
-      // Drop the trailing '}'.
-      Text = Text.drop_front(1);
+      ExpectAndConsume("}");
       Select->Index = parseModifier(Text);
       Parsed.push_back(Select);
       continue;
@@ -1070,7 +1086,7 @@ Piece *DiagnosticTextBuilder::DiagText::parseDiagText(StringRef &Text,
       PluralPiece *Plural = New<PluralPiece>();
       do {
         Text = Text.drop_front(); // '{' or '|'
-        size_t End = Text.find_first_of(":");
+        size_t End = Text.find_first_of(':');
         if (End == StringRef::npos)
           Builder.PrintFatalError("expected ':' while parsing %plural");
         ++End;
@@ -1078,32 +1094,31 @@ Piece *DiagnosticTextBuilder::DiagText::parseDiagText(StringRef &Text,
         Plural->OptionPrefixes.push_back(
             New<TextPiece>(Text.slice(0, End), "diagtext"));
         Text = Text.slice(End, StringRef::npos);
-        Plural->Options.push_back(parseDiagText(Text, true));
-        assert(!Text.empty() && "malformed %select");
+        Plural->Options.push_back(
+            parseDiagText(Text, StopAt::PipeOrCloseBrace));
+        assert(!Text.empty() && "malformed %plural");
       } while (Text.front() == '|');
-      // Drop the trailing '}'.
-      Text = Text.drop_front(1);
+      ExpectAndConsume("}");
       Plural->Index = parseModifier(Text);
       Parsed.push_back(Plural);
       continue;
     }
     case MT_Sub: {
       SubstitutionPiece *Sub = New<SubstitutionPiece>();
-      Text = Text.drop_front(); // '{'
+      ExpectAndConsume("{");
       size_t NameSize = Text.find_first_of('}');
       assert(NameSize != size_t(-1) && "failed to find the end of the name");
       assert(NameSize != 0 && "empty name?");
       Sub->Name = Text.substr(0, NameSize).str();
       Text = Text.drop_front(NameSize);
-      Text = Text.drop_front(); // '}'
+      ExpectAndConsume("}");
       if (!Text.empty()) {
         while (true) {
           if (!isdigit(Text[0]))
             break;
           Sub->Modifiers.push_back(parseModifier(Text));
-          if (Text.empty() || Text[0] != ',')
+          if (!Text.consume_front(","))
             break;
-          Text = Text.drop_front(); // ','
           assert(!Text.empty() && isdigit(Text[0]) &&
                  "expected another modifier");
         }
@@ -1113,14 +1128,17 @@ Piece *DiagnosticTextBuilder::DiagText::parseDiagText(StringRef &Text,
     }
     case MT_Diff: {
       DiffPiece *Diff = New<DiffPiece>();
-      Text = Text.drop_front(); // '{'
-      Diff->Options[0] = parseDiagText(Text, true);
-      Text = Text.drop_front(); // '|'
-      Diff->Options[1] = parseDiagText(Text, true);
-
-      Text = Text.drop_front(); // '}'
+      ExpectAndConsume("{");
+      Diff->Parts[0] = parseDiagText(Text, StopAt::Dollar);
+      ExpectAndConsume("$");
+      Diff->Parts[1] = parseDiagText(Text, StopAt::Dollar);
+      ExpectAndConsume("$");
+      Diff->Parts[2] = parseDiagText(Text, StopAt::PipeOrCloseBrace);
+      ExpectAndConsume("|");
+      Diff->Parts[3] = parseDiagText(Text, StopAt::PipeOrCloseBrace);
+      ExpectAndConsume("}");
       Diff->Indexes[0] = parseModifier(Text);
-      Text = Text.drop_front(); // ','
+      ExpectAndConsume(",");
       Diff->Indexes[1] = parseModifier(Text);
       Parsed.push_back(Diff);
       continue;
@@ -1151,7 +1169,7 @@ std::vector<std::string>
 DiagnosticTextBuilder::buildForDocumentation(StringRef Severity,
                                              const Record *R) {
   EvaluatingRecordGuard Guard(&EvaluatingRecord, R);
-  StringRef Text = R->getValueAsString("Text");
+  StringRef Text = R->getValueAsString("Summary");
 
   DiagText D(*this, Text);
   TextPiece *Prefix = D.New<TextPiece>(Severity, Severity);
@@ -1170,7 +1188,7 @@ DiagnosticTextBuilder::buildForDocumentation(StringRef Severity,
 
 std::string DiagnosticTextBuilder::buildForDefinition(const Record *R) {
   EvaluatingRecordGuard Guard(&EvaluatingRecord, R);
-  StringRef Text = R->getValueAsString("Text");
+  StringRef Text = R->getValueAsString("Summary");
   DiagText D(*this, Text);
   std::string Result;
   DiagTextPrinter{*this, Result}.Visit(D.Root);
@@ -1195,6 +1213,197 @@ static bool isRemark(const Record &Diag) {
   return ClsName == "CLASS_REMARK";
 }
 
+// Presumes the text has been split at the first whitespace or hyphen.
+static bool isExemptAtStart(StringRef Text) {
+  // Fast path, the first character is lowercase or not alphanumeric.
+  if (Text.empty() || isLower(Text[0]) || !isAlnum(Text[0]))
+    return true;
+
+  // If the text is all uppercase (or numbers, +, or _), then we assume it's an
+  // acronym and that's allowed. This covers cases like ISO, C23, C++14, and
+  // OBJECT_MODE. However, if there's only a single letter other than "C", we
+  // do not exempt it so that we catch a case like "A really bad idea" while
+  // still allowing a case like "C does not allow...".
+  if (llvm::all_of(Text, [](char C) {
+        return isUpper(C) || isDigit(C) || C == '+' || C == '_';
+      }))
+    return Text.size() > 1 || Text[0] == 'C';
+
+  // Otherwise, there are a few other exemptions.
+  return StringSwitch<bool>(Text)
+      .Case("AddressSanitizer", true)
+      .Case("CFString", true)
+      .Case("Clang", true)
+      .Case("Fuchsia", true)
+      .Case("GNUstep", true)
+      .Case("IBOutletCollection", true)
+      .Case("Microsoft", true)
+      .Case("Neon", true)
+      .StartsWith("NSInvocation", true) // NSInvocation, NSInvocation's
+      .Case("Objective", true) // Objective-C (hyphen is a word boundary)
+      .Case("OpenACC", true)
+      .Case("OpenCL", true)
+      .Case("OpenMP", true)
+      .Case("Pascal", true)
+      .Case("Swift", true)
+      .Case("Unicode", true)
+      .Case("Vulkan", true)
+      .Case("WebAssembly", true)
+      .Default(false);
+}
+
+// Does not presume the text has been split at all.
+static bool isExemptAtEnd(StringRef Text) {
+  // Rather than come up with a list of characters that are allowed, we go the
+  // other way and look only for characters that are not allowed.
+  switch (Text.back()) {
+  default:
+    return true;
+  case '?':
+    // Explicitly allowed to support "; did you mean?".
+    return true;
+  case '.':
+  case '!':
+    return false;
+  }
+}
+
+static void verifyDiagnosticWording(const Record &Diag) {
+  StringRef FullDiagText = Diag.getValueAsString("Summary");
+
+  auto DiagnoseStart = [&](StringRef Text) {
+    // Verify that the text does not start with a capital letter, except for
+    // special cases that are exempt like ISO and C++. Find the first word
+    // by looking for a word breaking character.
+    char Separators[] = {' ', '-', ',', '}'};
+    auto Iter = std::find_first_of(
+        Text.begin(), Text.end(), std::begin(Separators), std::end(Separators));
+
+    StringRef First = Text.substr(0, Iter - Text.begin());
+    if (!isExemptAtStart(First)) {
+      PrintError(&Diag,
+                 "Diagnostics should not start with a capital letter; '" +
+                     First + "' is invalid");
+    }
+  };
+
+  auto DiagnoseEnd = [&](StringRef Text) {
+    // Verify that the text does not end with punctuation like '.' or '!'.
+    if (!isExemptAtEnd(Text)) {
+      PrintError(&Diag, "Diagnostics should not end with punctuation; '" +
+                            Text.substr(Text.size() - 1, 1) + "' is invalid");
+    }
+  };
+
+  // If the diagnostic starts with %select, look through it to see whether any
+  // of the options will cause a problem.
+  if (FullDiagText.starts_with("%select{")) {
+    // Do a balanced delimiter scan from the start of the text to find the
+    // closing '}', skipping intermediary {} pairs.
+
+    size_t BraceCount = 1;
+    constexpr size_t PercentSelectBraceLen = sizeof("%select{") - 1;
+    auto Iter = FullDiagText.begin() + PercentSelectBraceLen;
+    for (auto End = FullDiagText.end(); Iter != End; ++Iter) {
+      char Ch = *Iter;
+      if (Ch == '{')
+        ++BraceCount;
+      else if (Ch == '}')
+        --BraceCount;
+      if (!BraceCount)
+        break;
+    }
+    // Defending against a malformed diagnostic string.
+    if (BraceCount != 0)
+      return;
+
+    StringRef SelectText =
+        FullDiagText.substr(PercentSelectBraceLen, Iter - FullDiagText.begin() -
+                                                       PercentSelectBraceLen);
+    SmallVector<StringRef, 4> SelectPieces;
+    SelectText.split(SelectPieces, '|');
+
+    // Walk over all of the individual pieces of select text to see if any of
+    // them start with an invalid character. If any of the select pieces is
+    // empty, we need to look at the first word after the %select to see
+    // whether that is invalid or not. If all of the pieces are fine, then we
+    // don't need to check anything else about the start of the diagnostic.
+    bool CheckSecondWord = false;
+    for (StringRef Piece : SelectPieces) {
+      if (Piece.empty())
+        CheckSecondWord = true;
+      else
+        DiagnoseStart(Piece);
+    }
+
+    if (CheckSecondWord) {
+      // There was an empty select piece, so we need to check the second
+      // word. This catches situations like '%select{|fine}0 Not okay'. Add
+      // two to account for the closing curly brace and the number after it.
+      StringRef AfterSelect =
+          FullDiagText.substr(Iter - FullDiagText.begin() + 2).ltrim();
+      DiagnoseStart(AfterSelect);
+    }
+  } else {
+    // If the start of the diagnostic is not %select, we can check the first
+    // word and be done with it.
+    DiagnoseStart(FullDiagText);
+  }
+
+  // If the last character in the diagnostic is a number preceded by a }, scan
+  // backwards to see if this is for a %select{...}0. If it is, we need to look
+  // at each piece to see whether it ends in punctuation or not.
+  bool StillNeedToDiagEnd = true;
+  if (isDigit(FullDiagText.back()) && *(FullDiagText.end() - 2) == '}') {
+    // Scan backwards to find the opening curly brace.
+    size_t BraceCount = 1;
+    auto Iter = FullDiagText.end() - sizeof("}0");
+    for (auto End = FullDiagText.begin(); Iter != End; --Iter) {
+      char Ch = *Iter;
+      if (Ch == '}')
+        ++BraceCount;
+      else if (Ch == '{')
+        --BraceCount;
+      if (!BraceCount)
+        break;
+    }
+    // Defending against a malformed diagnostic string.
+    if (BraceCount != 0)
+      return;
+
+    // Continue the backwards scan to find the word before the '{' to see if it
+    // is 'select'.
+    constexpr size_t SelectLen = sizeof("select") - 1;
+    bool IsSelect =
+        (FullDiagText.substr(Iter - SelectLen - FullDiagText.begin(),
+                             SelectLen) == "select");
+    if (IsSelect) {
+      // Gather the content between the {} for the select in question so we can
+      // split it into pieces.
+      StillNeedToDiagEnd = false; // No longer need to handle the end.
+      StringRef SelectText =
+          FullDiagText.substr(Iter - FullDiagText.begin() + /*{*/ 1,
+                              FullDiagText.end() - Iter - /*pos before }0*/ 3);
+      SmallVector<StringRef, 4> SelectPieces;
+      SelectText.split(SelectPieces, '|');
+      for (StringRef Piece : SelectPieces) {
+        // Not worrying about a situation like: "this is bar. %select{foo|}0".
+        if (!Piece.empty())
+          DiagnoseEnd(Piece);
+      }
+    }
+  }
+
+  // If we didn't already cover the diagnostic because of a %select, handle it
+  // now.
+  if (StillNeedToDiagEnd)
+    DiagnoseEnd(FullDiagText);
+
+  // FIXME: This could also be improved by looking for instances of clang or
+  // gcc in the diagnostic and recommend Clang or GCC instead. However, this
+  // runs into odd situations like [[clang::warn_unused_result]],
+  // #pragma clang, or --unwindlib=libgcc.
+}
 
 /// ClangDiagsDefsEmitter - The top-level class emits .def files containing
 /// declarations of Clang diagnostics.
@@ -1255,6 +1464,9 @@ void clang::EmitClangDiagsDefs(RecordKeeper &Records, raw_ostream &OS,
     if (!Component.empty() && Component != R.getValueAsString("Component"))
       continue;
 
+    // Validate diagnostic wording for common issues.
+    verifyDiagnosticWording(R);
+
     OS << "DIAG(" << R.getName() << ", ";
     OS << R.getValueAsDef("Class")->getName();
     OS << ", (unsigned)diag::Severity::"
@@ -1264,8 +1476,8 @@ void clang::EmitClangDiagsDefs(RecordKeeper &Records, raw_ostream &OS,
     OS << ", \"";
     OS.write_escaped(DiagTextBuilder.buildForDefinition(&R)) << '"';
 
-    // Warning associated with the diagnostic. This is stored as an index into
-    // the alphabetically sorted warning table.
+    // Warning group associated with the diagnostic. This is stored as an index
+    // into the alphabetically sorted warning group table.
     if (DefInit *DI = dyn_cast<DefInit>(R.getValueInit("Group"))) {
       std::map<std::string, GroupInfo>::iterator I = DiagsInGroup.find(
           std::string(DI->getDef()->getValueAsString("GroupName")));
@@ -1294,6 +1506,11 @@ void clang::EmitClangDiagsDefs(RecordKeeper &Records, raw_ostream &OS,
     else
       OS << ", false";
 
+    if (R.getValueAsBit("ShowInSystemMacro"))
+      OS << ", true";
+    else
+      OS << ", false";
+
     if (R.getValueAsBit("Deferrable"))
       OS << ", true";
     else
@@ -1315,7 +1532,7 @@ static std::string getDiagCategoryEnum(llvm::StringRef name) {
   SmallString<256> enumName = llvm::StringRef("DiagCat_");
   for (llvm::StringRef::iterator I = name.begin(), E = name.end(); I != E; ++I)
     enumName += isalnum(*I) ? *I : '_';
-  return std::string(enumName.str());
+  return std::string(enumName);
 }
 
 /// Emit the array of diagnostic subgroups.
@@ -1472,18 +1689,20 @@ static void emitDiagTable(std::map<std::string, GroupInfo> &DiagsInGroup,
   for (auto const &I: DiagsInGroup)
     MaxLen = std::max(MaxLen, (unsigned)I.first.size());
 
-  OS << "\n#ifdef GET_DIAG_TABLE\n";
+  OS << "\n#ifdef DIAG_ENTRY\n";
   unsigned SubGroupIndex = 1, DiagArrayIndex = 1;
   for (auto const &I: DiagsInGroup) {
     // Group option string.
-    OS << "  { /* ";
+    OS << "DIAG_ENTRY(";
+    OS << I.second.GroupName << " /* ";
+
     if (I.first.find_first_not_of("abcdefghijklmnopqrstuvwxyz"
                                    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
                                    "0123456789!@#$%^*-+=:?") !=
         std::string::npos)
       PrintFatalError("Invalid character in diagnostic group '" + I.first +
                       "'");
-    OS << I.first << " */ " << std::string(MaxLen - I.first.size(), ' ');
+    OS << I.first << " */, ";
     // Store a pascal-style length byte at the beginning of the string.
     std::string Name = char(I.first.size()) + I.first;
     OS << GroupNames.GetOrAddStringOffset(Name, false) << ", ";
@@ -1502,7 +1721,7 @@ static void emitDiagTable(std::map<std::string, GroupInfo> &DiagsInGroup,
         DiagArrayIndex += DiagsInPedantic.size();
       DiagArrayIndex += V.size() + 1;
     } else {
-      OS << "/* Empty */     0, ";
+      OS << "0, ";
     }
 
     // Subgroups.
@@ -1510,17 +1729,25 @@ static void emitDiagTable(std::map<std::string, GroupInfo> &DiagsInGroup,
     const bool hasSubGroups =
         !SubGroups.empty() || (IsPedantic && !GroupsInPedantic.empty());
     if (hasSubGroups) {
-      OS << "/* DiagSubGroup" << I.second.IDNo << " */ " << SubGroupIndex;
+      OS << "/* DiagSubGroup" << I.second.IDNo << " */ " << SubGroupIndex
+         << ", ";
       if (IsPedantic)
         SubGroupIndex += GroupsInPedantic.size();
       SubGroupIndex += SubGroups.size() + 1;
     } else {
-      OS << "/* Empty */         0";
+      OS << "0, ";
     }
 
-    OS << " },\n";
+    std::string Documentation = I.second.Defs.back()
+                                    ->getValue("Documentation")
+                                    ->getValue()
+                                    ->getAsUnquotedString();
+
+    OS << "R\"(" << StringRef(Documentation).trim() << ")\"";
+
+    OS << ")\n";
   }
-  OS << "#endif // GET_DIAG_TABLE\n\n";
+  OS << "#endif // DIAG_ENTRY\n\n";
 }
 
 /// Emit the table of diagnostic categories.
@@ -1673,7 +1900,7 @@ void writeHeader(StringRef Str, raw_ostream &OS, char Kind = '-') {
 
 void writeDiagnosticText(DiagnosticTextBuilder &Builder, const Record *R,
                          StringRef Role, raw_ostream &OS) {
-  StringRef Text = R->getValueAsString("Text");
+  StringRef Text = R->getValueAsString("Summary");
   if (Text == "%0")
     OS << "The text of this diagnostic is not controlled by Clang.\n\n";
   else {

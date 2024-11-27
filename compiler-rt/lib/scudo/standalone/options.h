@@ -24,6 +24,7 @@ enum class OptionBit {
   TrackAllocationStacks,
   UseOddEvenTags,
   UseMemoryTagging,
+  AddLargeAllocationSlack,
 };
 
 struct Options {
@@ -37,15 +38,14 @@ struct Options {
   }
 };
 
-template <typename Config> bool useMemoryTagging(Options Options) {
+template <typename Config> bool useMemoryTagging(const Options &Options) {
   return allocatorSupportsMemoryTagging<Config>() &&
          Options.get(OptionBit::UseMemoryTagging);
 }
 
 struct AtomicOptions {
-  atomic_u32 Val;
+  atomic_u32 Val = {};
 
-public:
   Options load() const { return Options{atomic_load_relaxed(&Val)}; }
 
   void clear(OptionBit Opt) {

@@ -14,6 +14,12 @@
 #ifndef COMPILERRT_ASSEMBLY_H
 #define COMPILERRT_ASSEMBLY_H
 
+#if defined(__linux__) && defined(__CET__)
+#if __has_include(<cet.h>)
+#include <cet.h>
+#endif
+#endif
+
 #if defined(__APPLE__) && defined(__aarch64__)
 #define SEPARATOR %%
 #else
@@ -105,9 +111,11 @@
   .popsection
 
 #if BTI_FLAG != 0
-#define BTI_C bti c
+#define BTI_C hint #34
+#define BTI_J hint #36
 #else
 #define BTI_C
+#define BTI_J
 #endif
 
 #if (BTI_FLAG | PAC_FLAG) != 0
@@ -204,8 +212,11 @@
 #ifdef VISIBILITY_HIDDEN
 #define DECLARE_SYMBOL_VISIBILITY(name)                                        \
   HIDDEN(SYMBOL_NAME(name)) SEPARATOR
+#define DECLARE_SYMBOL_VISIBILITY_UNMANGLED(name) \
+  HIDDEN(name) SEPARATOR
 #else
 #define DECLARE_SYMBOL_VISIBILITY(name)
+#define DECLARE_SYMBOL_VISIBILITY_UNMANGLED(name)
 #endif
 
 #define DEFINE_COMPILERRT_FUNCTION(name)                                       \
@@ -248,15 +259,16 @@
   FUNC_ALIGN                                                                   \
   .globl name SEPARATOR                                                        \
   SYMBOL_IS_FUNC(name) SEPARATOR                                               \
-  DECLARE_SYMBOL_VISIBILITY(name) SEPARATOR                                    \
-  CFI_START SEPARATOR                                                          \
+  DECLARE_SYMBOL_VISIBILITY_UNMANGLED(name) SEPARATOR                          \
   DECLARE_FUNC_ENCODING                                                        \
-  name: SEPARATOR BTI_C
+  name:                                                                        \
+  SEPARATOR CFI_START                                                          \
+  SEPARATOR BTI_C
 
 #define DEFINE_COMPILERRT_FUNCTION_ALIAS(name, target)                         \
   .globl SYMBOL_NAME(name) SEPARATOR                                           \
   SYMBOL_IS_FUNC(SYMBOL_NAME(name)) SEPARATOR                                  \
-  DECLARE_SYMBOL_VISIBILITY(SYMBOL_NAME(name)) SEPARATOR                       \
+  DECLARE_SYMBOL_VISIBILITY(name) SEPARATOR                                    \
   .set SYMBOL_NAME(name), SYMBOL_NAME(target) SEPARATOR
 
 #if defined(__ARM_EABI__)

@@ -41,7 +41,6 @@
 #include "X86Subtarget.h"
 #include "X86TargetMachine.h"
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/Statistic.h"
@@ -154,9 +153,9 @@ private:
   using EdgeSet = MachineGadgetGraph::EdgeSet;
   using NodeSet = MachineGadgetGraph::NodeSet;
 
-  const X86Subtarget *STI;
-  const TargetInstrInfo *TII;
-  const TargetRegisterInfo *TRI;
+  const X86Subtarget *STI = nullptr;
+  const TargetInstrInfo *TII = nullptr;
+  const TargetRegisterInfo *TRI = nullptr;
 
   std::unique_ptr<MachineGadgetGraph>
   getGadgetGraph(MachineFunction &MF, const MachineLoopInfo &MLI,
@@ -237,8 +236,8 @@ char X86LoadValueInjectionLoadHardeningPass::ID = 0;
 void X86LoadValueInjectionLoadHardeningPass::getAnalysisUsage(
     AnalysisUsage &AU) const {
   MachineFunctionPass::getAnalysisUsage(AU);
-  AU.addRequired<MachineLoopInfo>();
-  AU.addRequired<MachineDominatorTree>();
+  AU.addRequired<MachineLoopInfoWrapperPass>();
+  AU.addRequired<MachineDominatorTreeWrapperPass>();
   AU.addRequired<MachineDominanceFrontier>();
   AU.setPreservesCFG();
 }
@@ -270,8 +269,8 @@ bool X86LoadValueInjectionLoadHardeningPass::runOnMachineFunction(
   TII = STI->getInstrInfo();
   TRI = STI->getRegisterInfo();
   LLVM_DEBUG(dbgs() << "Building gadget graph...\n");
-  const auto &MLI = getAnalysis<MachineLoopInfo>();
-  const auto &MDT = getAnalysis<MachineDominatorTree>();
+  const auto &MLI = getAnalysis<MachineLoopInfoWrapperPass>().getLI();
+  const auto &MDT = getAnalysis<MachineDominatorTreeWrapperPass>().getDomTree();
   const auto &MDF = getAnalysis<MachineDominanceFrontier>();
   std::unique_ptr<MachineGadgetGraph> Graph = getGadgetGraph(MF, MLI, MDT, MDF);
   LLVM_DEBUG(dbgs() << "Building gadget graph... Done\n");
@@ -306,7 +305,8 @@ bool X86LoadValueInjectionLoadHardeningPass::runOnMachineFunction(
       OptimizeDL = llvm::sys::DynamicLibrary::getPermanentLibrary(
           OptimizePluginPath.c_str(), &ErrorMsg);
       if (!ErrorMsg.empty())
-        report_fatal_error("Failed to load opt plugin: \"" + ErrorMsg + '\"');
+        report_fatal_error(Twine("Failed to load opt plugin: \"") + ErrorMsg +
+                           "\"");
       OptimizeCut = (OptimizeCutT)OptimizeDL.getAddressOfSymbol("optimize_cut");
       if (!OptimizeCut)
         report_fatal_error("Invalid optimization plugin");
@@ -330,8 +330,7 @@ X86LoadValueInjectionLoadHardeningPass::getGadgetGraph(
   using namespace rdf;
 
   // Build the Register Dataflow Graph using the RDF framework
-  TargetOperandInfo TOI{*TII};
-  DataFlowGraph DFG{MF, *TII, *TRI, MDT, MDF, TOI};
+  DataFlowGraph DFG{MF, *TII, *TRI, MDT, MDF};
   DFG.build();
   Liveness L{MF.getRegInfo(), DFG};
   L.computePhiInfo();
@@ -362,7 +361,7 @@ X86LoadValueInjectionLoadHardeningPass::getGadgetGraph(
     SmallSet<NodeId, 8> UsesVisited, DefsVisited;
     std::function<void(NodeAddr<DefNode *>)> AnalyzeDefUseChain =
         [&](NodeAddr<DefNode *> Def) {
-          if (Transmitters.find(Def.Id) != Transmitters.end())
+          if (Transmitters.contains(Def.Id))
             return; // Already analyzed `Def`
 
           // Use RDF to find all the uses of `Def`
@@ -372,9 +371,9 @@ X86LoadValueInjectionLoadHardeningPass::getGadgetGraph(
             auto Use = DFG.addr<UseNode *>(UseID);
             if (Use.Addr->getFlags() & NodeAttrs::PhiRef) { // phi node
               NodeAddr<PhiNode *> Phi = Use.Addr->getOwner(DFG);
-              for (auto I : L.getRealUses(Phi.Id)) {
+              for (const auto& I : L.getRealUses(Phi.Id)) {
                 if (DFG.getPRI().alias(RegisterRef(I.first), DefReg)) {
-                  for (auto UA : I.second)
+                  for (const auto &UA : I.second)
                     Uses.emplace(UA.first);
                 }
               }
@@ -417,7 +416,7 @@ X86LoadValueInjectionLoadHardeningPass::getGadgetGraph(
             // Check whether the use propagates to more defs.
             NodeAddr<InstrNode *> Owner{Use.Addr->getOwner(DFG)};
             rdf::NodeList AnalyzedChildDefs;
-            for (auto &ChildDef :
+            for (const auto &ChildDef :
                  Owner.Addr->members_if(DataFlowGraph::IsDef, DFG)) {
               if (!DefsVisited.insert(ChildDef.Id).second)
                 continue; // Already visited this def
@@ -440,9 +439,8 @@ X86LoadValueInjectionLoadHardeningPass::getGadgetGraph(
 
           // Remove duplicate transmitters
           llvm::sort(DefTransmitters);
-          DefTransmitters.erase(
-              std::unique(DefTransmitters.begin(), DefTransmitters.end()),
-              DefTransmitters.end());
+          DefTransmitters.erase(llvm::unique(DefTransmitters),
+                                DefTransmitters.end());
         };
 
     // Find all of the transmitters
@@ -557,7 +555,7 @@ int X86LoadValueInjectionLoadHardeningPass::elimMitigatedEdgesAndNodes(
   }
 
   // Find and eliminate gadget edges that have been mitigated.
-  int MitigatedGadgets = 0, RemainingGadgets = 0;
+  int RemainingGadgets = 0;
   NodeSet ReachableNodes{G};
   for (const Node &RootN : G.nodes()) {
     if (llvm::none_of(RootN.edges(), MachineGadgetGraph::isGadgetEdge))
@@ -585,7 +583,6 @@ int X86LoadValueInjectionLoadHardeningPass::elimMitigatedEdgesAndNodes(
           // This gadget's sink is reachable
           ++RemainingGadgets;
         } else { // This gadget's sink is unreachable, and therefore mitigated
-          ++MitigatedGadgets;
           ElimEdges.insert(E);
         }
       }
@@ -772,16 +769,13 @@ bool X86LoadValueInjectionLoadHardeningPass::instrUsesRegToAccessMemory(
       MI.getOpcode() == X86::SFENCE || MI.getOpcode() == X86::LFENCE)
     return false;
 
-  // FIXME: This does not handle pseudo loading instruction like TCRETURN*
-  const MCInstrDesc &Desc = MI.getDesc();
-  int MemRefBeginIdx = X86II::getMemoryOperandNo(Desc.TSFlags);
+  const int MemRefBeginIdx = X86::getFirstAddrOperandIdx(MI);
   if (MemRefBeginIdx < 0) {
     LLVM_DEBUG(dbgs() << "Warning: unable to obtain memory operand for loading "
                          "instruction:\n";
                MI.print(dbgs()); dbgs() << '\n';);
     return false;
   }
-  MemRefBeginIdx += X86II::getOperandBias(Desc);
 
   const MachineOperand &BaseMO =
       MI.getOperand(MemRefBeginIdx + X86::AddrBaseReg);
@@ -805,8 +799,8 @@ bool X86LoadValueInjectionLoadHardeningPass::instrUsesRegToBranch(
 
 INITIALIZE_PASS_BEGIN(X86LoadValueInjectionLoadHardeningPass, PASS_KEY,
                       "X86 LVI load hardening", false, false)
-INITIALIZE_PASS_DEPENDENCY(MachineLoopInfo)
-INITIALIZE_PASS_DEPENDENCY(MachineDominatorTree)
+INITIALIZE_PASS_DEPENDENCY(MachineLoopInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(MachineDominatorTreeWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(MachineDominanceFrontier)
 INITIALIZE_PASS_END(X86LoadValueInjectionLoadHardeningPass, PASS_KEY,
                     "X86 LVI load hardening", false, false)

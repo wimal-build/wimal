@@ -48,10 +48,10 @@ bool llvm::objcarc::CanAlterRefCount(const Instruction *Inst, const Value *Ptr,
   const auto *Call = cast<CallBase>(Inst);
 
   // See if AliasAnalysis can help us with the call.
-  FunctionModRefBehavior MRB = PA.getAA()->getModRefBehavior(Call);
-  if (AliasAnalysis::onlyReadsMemory(MRB))
+  MemoryEffects ME = PA.getAA()->getMemoryEffects(Call);
+  if (ME.onlyReadsMemory())
     return false;
-  if (AliasAnalysis::onlyAccessesArgPointees(MRB)) {
+  if (ME.onlyAccessesArgPointees()) {
     for (const Value *Op : Call->args()) {
       if (IsPotentialRetainableObjPtr(Op, *PA.getAA()) && PA.related(Ptr, Op))
         return true;
@@ -94,11 +94,9 @@ bool llvm::objcarc::CanUse(const Instruction *Inst, const Value *Ptr,
       return false;
   } else if (const auto *CS = dyn_cast<CallBase>(Inst)) {
     // For calls, just check the arguments (and not the callee operand).
-    for (auto OI = CS->arg_begin(), OE = CS->arg_end(); OI != OE; ++OI) {
-      const Value *Op = *OI;
+    for (const Value *Op : CS->args())
       if (IsPotentialRetainableObjPtr(Op, *PA.getAA()) && PA.related(Ptr, Op))
         return true;
-    }
     return false;
   } else if (const StoreInst *SI = dyn_cast<StoreInst>(Inst)) {
     // Special-case stores, because we don't care about the stored value, just
@@ -110,9 +108,8 @@ bool llvm::objcarc::CanUse(const Instruction *Inst, const Value *Ptr,
   }
 
   // Check each operand for a match.
-  for (User::const_op_iterator OI = Inst->op_begin(), OE = Inst->op_end();
-       OI != OE; ++OI) {
-    const Value *Op = *OI;
+  for (const Use &U : Inst->operands()) {
+    const Value *Op = U;
     if (IsPotentialRetainableObjPtr(Op, *PA.getAA()) && PA.related(Ptr, Op))
       return true;
   }
@@ -197,9 +194,6 @@ llvm::objcarc::Depends(DependenceKind Flavor, Instruction *Inst,
       return CanInterruptRV(Class);
     }
   }
-
-  case RetainRVDep:
-    return CanInterruptRV(GetBasicARCInstKind(Inst));
   }
 
   llvm_unreachable("Invalid dependence flavor");
@@ -226,16 +220,13 @@ static bool findDependencies(DependenceKind Flavor, const Value *Arg,
     BasicBlock::iterator StartBBBegin = LocalStartBB->begin();
     for (;;) {
       if (LocalStartPos == StartBBBegin) {
-        pred_iterator PI(LocalStartBB), PE(LocalStartBB, false);
-        if (PI == PE)
+        if (pred_empty(LocalStartBB))
           // Return if we've reached the function entry.
           return false;
         // Add the predecessors to the worklist.
-        do {
-          BasicBlock *PredBB = *PI;
+        for (BasicBlock *PredBB : predecessors(LocalStartBB))
           if (Visited.insert(PredBB).second)
             Worklist.push_back(std::make_pair(PredBB, PredBB->end()));
-        } while (++PI != PE);
         break;
       }
 
@@ -248,7 +239,7 @@ static bool findDependencies(DependenceKind Flavor, const Value *Arg,
   } while (!Worklist.empty());
 
   // Determine whether the original StartBB post-dominates all of the blocks we
-  // visited. If not, insert a sentinal indicating that most optimizations are
+  // visited. If not, insert a sentinel indicating that most optimizations are
   // not safe.
   for (const BasicBlock *BB : Visited) {
     if (BB == StartBB)

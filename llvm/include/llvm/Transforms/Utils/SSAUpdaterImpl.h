@@ -96,7 +96,7 @@ public:
 
     // Special case: bail out if BB is unreachable.
     if (BlockList.size() == 0) {
-      ValT V = Traits::GetUndefVal(BB, Updater);
+      ValT V = Traits::GetPoisonVal(BB, Updater);
       (*AvailableVals)[BB] = V;
       return V;
     }
@@ -251,9 +251,9 @@ public:
         for (unsigned p = 0; p != Info->NumPreds; ++p) {
           BBInfo *Pred = Info->Preds[p];
 
-          // Treat an unreachable predecessor as a definition with 'undef'.
+          // Treat an unreachable predecessor as a definition with 'poison'.
           if (Pred->BlkNum == 0) {
-            Pred->AvailableVal = Traits::GetUndefVal(Pred->BB, Updater);
+            Pred->AvailableVal = Traits::GetPoisonVal(Pred->BB, Updater);
             (*AvailableVals)[Pred->BB] = Pred->AvailableVal;
             Pred->DefBB = Pred;
             Pred->BlkNum = PseudoEntry->BlkNum;
@@ -323,6 +323,28 @@ public:
     } while (Changed);
   }
 
+  /// Check all predecessors and if all of them have the same AvailableVal use
+  /// it as value for block represented by Info. Return true if singluar value
+  /// is found.
+  bool FindSingularVal(BBInfo *Info) {
+    if (!Info->NumPreds)
+      return false;
+    ValT Singular = Info->Preds[0]->DefBB->AvailableVal;
+    if (!Singular)
+      return false;
+    for (unsigned Idx = 1; Idx < Info->NumPreds; ++Idx) {
+      ValT PredVal = Info->Preds[Idx]->DefBB->AvailableVal;
+      if (!PredVal || Singular != PredVal)
+        return false;
+    }
+    // Record Singular value.
+    (*AvailableVals)[Info->BB] = Singular;
+    assert(BBMap[Info->BB] == Info && "Info missed in BBMap?");
+    Info->AvailableVal = Singular;
+    Info->DefBB = Info->Preds[0]->DefBB;
+    return true;
+  }
+
   /// FindAvailableVal - If this block requires a PHI, first check if an
   /// existing PHI matches the PHI placement and reaching definitions computed
   /// earlier, and if not, create a new PHI.  Visit all the block's
@@ -337,6 +359,10 @@ public:
       BBInfo *Info = *I;
       // Check if there needs to be a PHI in BB.
       if (Info->DefBB != Info)
+        continue;
+
+      // Look for singular value.
+      if (FindSingularVal(Info))
         continue;
 
       // Look for an existing PHI.

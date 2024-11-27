@@ -18,24 +18,11 @@ namespace gwp_asan {
 void die(const char *Message);
 
 // Checks that `Condition` is true, otherwise dies with `Message`.
-GWP_ASAN_ALWAYS_INLINE void Check(bool Condition, const char *Message) {
+GWP_ASAN_ALWAYS_INLINE void check(bool Condition, const char *Message) {
   if (Condition)
     return;
   die(Message);
 }
-
-enum class AlignmentStrategy {
-  // Default => POWER_OF_TWO on most platforms, BIONIC for Android Bionic.
-  DEFAULT,
-  POWER_OF_TWO,
-  BIONIC,
-  PERFECT,
-};
-
-// Returns the real size of a right-aligned allocation.
-size_t rightAlignedAllocationSize(
-    size_t RealAllocationSize,
-    AlignmentStrategy Align = AlignmentStrategy::DEFAULT);
 } // namespace gwp_asan
 
 #endif // GWP_ASAN_UTILITIES_H_

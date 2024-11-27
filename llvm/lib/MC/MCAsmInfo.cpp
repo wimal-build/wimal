@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/MC/MCAsmInfo.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
@@ -20,7 +21,9 @@
 
 using namespace llvm;
 
+namespace {
 enum DefaultOnOff { Default, Enable, Disable };
+}
 static cl::opt<DefaultOnOff> DwarfExtendedLoc(
     "dwarf-extended-loc", cl::Hidden,
     cl::desc("Disable emission of the extended flags in .loc directives."),
@@ -28,11 +31,13 @@ static cl::opt<DefaultOnOff> DwarfExtendedLoc(
                clEnumVal(Enable, "Enabled"), clEnumVal(Disable, "Disabled")),
     cl::init(Default));
 
+namespace llvm {
 cl::opt<cl::boolOrDefault> UseLEB128Directives(
     "use-leb128-directives", cl::Hidden,
     cl::desc(
         "Disable the usage of LEB128 directives, and generate .byte instead."),
     cl::init(cl::BOU_UNSET));
+}
 
 MCAsmInfo::MCAsmInfo() {
   SeparatorString = ";";
@@ -59,31 +64,16 @@ MCAsmInfo::MCAsmInfo() {
     SupportsExtendedDwarfLocDirective = DwarfExtendedLoc == Enable;
   if (UseLEB128Directives != cl::BOU_UNSET)
     HasLEB128Directives = UseLEB128Directives == cl::BOU_TRUE;
-
-  // FIXME: Clang's logic should be synced with the logic used to initialize
-  //        this member and the two implementations should be merged.
-  // For reference:
-  // - Solaris always enables the integrated assembler by default
-  //   - SparcELFMCAsmInfo and X86ELFMCAsmInfo are handling this case
-  // - Windows always enables the integrated assembler by default
-  //   - MCAsmInfoCOFF is handling this case, should it be MCAsmInfoMicrosoft?
-  // - MachO targets always enables the integrated assembler by default
-  //   - MCAsmInfoDarwin is handling this case
-  // - Generic_GCC toolchains enable the integrated assembler on a per
-  //   architecture basis.
-  //   - The target subclasses for AArch64, ARM, and X86 handle these cases
   UseIntegratedAssembler = true;
+  ParseInlineAsmUsingAsmParser = false;
   PreserveAsmComments = true;
+  PPCUseFullRegisterNames = false;
 }
 
 MCAsmInfo::~MCAsmInfo() = default;
 
 void MCAsmInfo::addInitialFrameState(const MCCFIInstruction &Inst) {
   InitialFrameState.push_back(Inst);
-}
-
-bool MCAsmInfo::isSectionAtomizableBySymbols(const MCSection &Section) const {
-  return false;
 }
 
 const MCExpr *
@@ -109,7 +99,10 @@ MCAsmInfo::getExprForFDESymbol(const MCSymbol *Sym,
 }
 
 bool MCAsmInfo::isAcceptableChar(char C) const {
-  return isAlnum(C) || C == '_' || C == '$' || C == '.' || C == '@';
+  if (C == '@')
+    return doesAllowAtInName();
+
+  return isAlnum(C) || C == '_' || C == '$' || C == '.';
 }
 
 bool MCAsmInfo::isValidUnquotedName(StringRef Name) const {

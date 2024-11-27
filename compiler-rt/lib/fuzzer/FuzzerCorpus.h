@@ -18,6 +18,7 @@
 #include "FuzzerSHA1.h"
 #include "FuzzerTracePC.h"
 #include <algorithm>
+#include <bitset>
 #include <chrono>
 #include <numeric>
 #include <random>
@@ -39,13 +40,13 @@ struct InputInfo {
   bool MayDeleteFile = false;
   bool Reduced = false;
   bool HasFocusFunction = false;
-  Vector<uint32_t> UniqFeatureSet;
-  Vector<uint8_t> DataFlowTraceForFocusFunction;
+  std::vector<uint32_t> UniqFeatureSet;
+  std::vector<uint8_t> DataFlowTraceForFocusFunction;
   // Power schedule.
   bool NeedsEnergyUpdate = false;
   double Energy = 0.0;
-  size_t SumIncidence = 0;
-  Vector<std::pair<uint32_t, uint16_t>> FeatureFreqs;
+  double SumIncidence = 0.0;
+  std::vector<std::pair<uint32_t, uint16_t>> FeatureFreqs;
 
   // Delete feature Idx and its frequency from FeatureFreqs.
   bool DeleteFeatureFreq(uint32_t Idx) {
@@ -74,27 +75,28 @@ struct InputInfo {
   void UpdateEnergy(size_t GlobalNumberOfFeatures, bool ScalePerExecTime,
                     std::chrono::microseconds AverageUnitExecutionTime) {
     Energy = 0.0;
-    SumIncidence = 0;
+    SumIncidence = 0.0;
 
     // Apply add-one smoothing to locally discovered features.
-    for (auto F : FeatureFreqs) {
-      size_t LocalIncidence = F.second + 1;
-      Energy -= LocalIncidence * logl(LocalIncidence);
+    for (const auto &F : FeatureFreqs) {
+      double LocalIncidence = F.second + 1;
+      Energy -= LocalIncidence * log(LocalIncidence);
       SumIncidence += LocalIncidence;
     }
 
     // Apply add-one smoothing to locally undiscovered features.
-    //   PreciseEnergy -= 0; // since logl(1.0) == 0)
-    SumIncidence += (GlobalNumberOfFeatures - FeatureFreqs.size());
+    //   PreciseEnergy -= 0; // since log(1.0) == 0)
+    SumIncidence +=
+        static_cast<double>(GlobalNumberOfFeatures - FeatureFreqs.size());
 
     // Add a single locally abundant feature apply add-one smoothing.
-    size_t AbdIncidence = NumExecutedMutations + 1;
-    Energy -= AbdIncidence * logl(AbdIncidence);
+    double AbdIncidence = static_cast<double>(NumExecutedMutations + 1);
+    Energy -= AbdIncidence * log(AbdIncidence);
     SumIncidence += AbdIncidence;
 
     // Normalize.
     if (SumIncidence != 0)
-      Energy = (Energy / SumIncidence) + logl(SumIncidence);
+      Energy = Energy / SumIncidence + log(SumIncidence);
 
     if (ScalePerExecTime) {
       // Scaling to favor inputs with lower execution time.
@@ -208,11 +210,13 @@ public:
   InputInfo *AddToCorpus(const Unit &U, size_t NumFeatures, bool MayDeleteFile,
                          bool HasFocusFunction, bool NeverReduce,
                          std::chrono::microseconds TimeOfUnit,
-                         const Vector<uint32_t> &FeatureSet,
+                         const std::vector<uint32_t> &FeatureSet,
                          const DataFlowTrace &DFT, const InputInfo *BaseII) {
     assert(!U.empty());
     if (FeatureDebug)
       Printf("ADD_TO_CORPUS %zd NF %zd\n", Inputs.size(), NumFeatures);
+    // Inputs.size() is cast to uint32_t below.
+    assert(Inputs.size() < std::numeric_limits<uint32_t>::max());
     Inputs.push_back(new InputInfo());
     InputInfo &II = *Inputs.back();
     II.U = U;
@@ -224,7 +228,7 @@ public:
     II.HasFocusFunction = HasFocusFunction;
     // Assign maximal energy to the new seed.
     II.Energy = RareFeatures.empty() ? 1.0 : log(RareFeatures.size());
-    II.SumIncidence = RareFeatures.size();
+    II.SumIncidence = static_cast<double>(RareFeatures.size());
     II.NeedsEnergyUpdate = false;
     std::sort(II.UniqFeatureSet.begin(), II.UniqFeatureSet.end());
     ComputeSHA1(U.data(), U.size(), II.Sha1);
@@ -255,7 +259,7 @@ public:
   }
 
   // Debug-only
-  void PrintFeatureSet(const Vector<uint32_t> &FeatureSet) {
+  void PrintFeatureSet(const std::vector<uint32_t> &FeatureSet) {
     if (!FeatureDebug) return;
     Printf("{");
     for (uint32_t Feature: FeatureSet)
@@ -281,7 +285,8 @@ public:
     }
   }
 
-  void Replace(InputInfo *II, const Unit &U) {
+  void Replace(InputInfo *II, const Unit &U,
+               std::chrono::microseconds TimeOfUnit) {
     assert(II->U.size() > U.size());
     Hashes.erase(Sha1ToString(II->Sha1));
     DeleteFile(*II);
@@ -289,6 +294,7 @@ public:
     Hashes.insert(Sha1ToString(II->Sha1));
     II->U = U;
     II->Reduced = true;
+    II->TimeOfUnit = TimeOfUnit;
     DistributionNeedsUpdate = true;
   }
 
@@ -322,7 +328,8 @@ public:
       const auto &II = *Inputs[i];
       Printf("  [% 3zd %s] sz: % 5zd runs: % 5zd succ: % 5zd focus: %d\n", i,
              Sha1ToString(II.Sha1).c_str(), II.U.size(),
-             II.NumExecutedMutations, II.NumSuccessfullMutations, II.HasFocusFunction);
+             II.NumExecutedMutations, II.NumSuccessfullMutations,
+             II.HasFocusFunction);
     }
   }
 
@@ -376,6 +383,7 @@ public:
       }
 
       // Remove most abundant rare feature.
+      IsRareFeature[Delete] = false;
       RareFeatures[Delete] = RareFeatures.back();
       RareFeatures.pop_back();
 
@@ -391,6 +399,7 @@ public:
 
     // Add rare feature, handle collisions, and update energy.
     RareFeatures.push_back(Idx);
+    IsRareFeature[Idx] = true;
     GlobalFeatureFreqs[Idx] = 0;
     for (auto II : Inputs) {
       II->DeleteFeatureFreq(Idx);
@@ -399,7 +408,7 @@ public:
       // Zero energy seeds will never be fuzzed and remain zero energy.
       if (II->Energy > 0.0) {
         II->SumIncidence += 1;
-        II->Energy += logl(II->SumIncidence) / II->SumIncidence;
+        II->Energy += log(II->SumIncidence) / II->SumIncidence;
       }
     }
 
@@ -426,7 +435,8 @@ public:
       NumUpdatedFeatures++;
       if (FeatureDebug)
         Printf("ADD FEATURE %zd sz %d\n", Idx, NewSize);
-      SmallestElementPerFeature[Idx] = Inputs.size();
+      // Inputs.size() is guaranteed to be less than UINT32_MAX by AddToCorpus.
+      SmallestElementPerFeature[Idx] = static_cast<uint32_t>(Inputs.size());
       InputSizesPerFeature[Idx] = NewSize;
       return true;
     }
@@ -443,9 +453,7 @@ public:
     uint16_t Freq = GlobalFeatureFreqs[Idx32]++;
 
     // Skip if abundant.
-    if (Freq > FreqOfMostAbundantRareFeature ||
-        std::find(RareFeatures.begin(), RareFeatures.end(), Idx32) ==
-            RareFeatures.end())
+    if (Freq > FreqOfMostAbundantRareFeature || !IsRareFeature[Idx32])
       return;
 
     // Update global frequencies.
@@ -464,7 +472,7 @@ private:
 
   static const bool FeatureDebug = false;
 
-  size_t GetFeature(size_t Idx) const { return InputSizesPerFeature[Idx]; }
+  uint32_t GetFeature(size_t Idx) const { return InputSizesPerFeature[Idx]; }
 
   void ValidateFeatureSet() {
     if (FeatureDebug)
@@ -539,9 +547,11 @@ private:
 
     if (VanillaSchedule) {
       for (size_t i = 0; i < N; i++)
-        Weights[i] = Inputs[i]->NumFeatures
-                         ? (i + 1) * (Inputs[i]->HasFocusFunction ? 1000 : 1)
-                         : 0.;
+        Weights[i] =
+            Inputs[i]->NumFeatures
+                ? static_cast<double>((i + 1) *
+                                      (Inputs[i]->HasFocusFunction ? 1000 : 1))
+                : 0.;
     }
 
     if (FeatureDebug) {
@@ -557,11 +567,11 @@ private:
   }
   std::piecewise_constant_distribution<double> CorpusDistribution;
 
-  Vector<double> Intervals;
-  Vector<double> Weights;
+  std::vector<double> Intervals;
+  std::vector<double> Weights;
 
   std::unordered_set<std::string> Hashes;
-  Vector<InputInfo*> Inputs;
+  std::vector<InputInfo *> Inputs;
 
   size_t NumAddedFeatures = 0;
   size_t NumUpdatedFeatures = 0;
@@ -571,7 +581,8 @@ private:
   bool DistributionNeedsUpdate = true;
   uint16_t FreqOfMostAbundantRareFeature = 0;
   uint16_t GlobalFeatureFreqs[kFeatureSetSize] = {};
-  Vector<uint32_t> RareFeatures;
+  std::vector<uint32_t> RareFeatures;
+  std::bitset<kFeatureSetSize> IsRareFeature;
 
   std::string OutputCorpus;
 };

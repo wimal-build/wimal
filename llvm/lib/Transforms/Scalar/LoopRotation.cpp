@@ -11,9 +11,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Transforms/Scalar/LoopRotation.h"
-#include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/InstructionSimplify.h"
+#include "llvm/Analysis/LazyBlockFrequencyInfo.h"
+#include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/LoopPass.h"
 #include "llvm/Analysis/MemorySSA.h"
 #include "llvm/Analysis/MemorySSAUpdater.h"
@@ -21,11 +22,10 @@
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Support/Debug.h"
 #include "llvm/Transforms/Scalar.h"
-#include "llvm/Transforms/Scalar/LoopPassManager.h"
 #include "llvm/Transforms/Utils/LoopRotationUtils.h"
 #include "llvm/Transforms/Utils/LoopUtils.h"
+#include <optional>
 using namespace llvm;
 
 #define DEBUG_TYPE "loop-rotate"
@@ -43,26 +43,41 @@ LoopRotatePass::LoopRotatePass(bool EnableHeaderDuplication, bool PrepareForLTO)
     : EnableHeaderDuplication(EnableHeaderDuplication),
       PrepareForLTO(PrepareForLTO) {}
 
+void LoopRotatePass::printPipeline(
+    raw_ostream &OS, function_ref<StringRef(StringRef)> MapClassName2PassName) {
+  static_cast<PassInfoMixin<LoopRotatePass> *>(this)->printPipeline(
+      OS, MapClassName2PassName);
+  OS << "<";
+  if (!EnableHeaderDuplication)
+    OS << "no-";
+  OS << "header-duplication;";
+
+  if (!PrepareForLTO)
+    OS << "no-";
+  OS << "prepare-for-lto";
+  OS << ">";
+}
+
 PreservedAnalyses LoopRotatePass::run(Loop &L, LoopAnalysisManager &AM,
                                       LoopStandardAnalysisResults &AR,
                                       LPMUpdater &) {
   // Vectorization requires loop-rotation. Use default threshold for loops the
   // user explicitly marked for vectorization, even when header duplication is
   // disabled.
-  int Threshold = EnableHeaderDuplication ||
-                          hasVectorizeTransformation(&L) == TM_ForcedByUser
-                      ? DefaultRotationThreshold
-                      : 0;
-  const DataLayout &DL = L.getHeader()->getModule()->getDataLayout();
+  int Threshold =
+      (EnableHeaderDuplication && !L.getHeader()->getParent()->hasMinSize()) ||
+              hasVectorizeTransformation(&L) == TM_ForcedByUser
+          ? DefaultRotationThreshold
+          : 0;
+  const DataLayout &DL = L.getHeader()->getDataLayout();
   const SimplifyQuery SQ = getBestSimplifyQuery(AR, DL);
 
-  Optional<MemorySSAUpdater> MSSAU;
+  std::optional<MemorySSAUpdater> MSSAU;
   if (AR.MSSA)
     MSSAU = MemorySSAUpdater(AR.MSSA);
-  bool Changed =
-      LoopRotation(&L, &AR.LI, &AR.TTI, &AR.AC, &AR.DT, &AR.SE,
-                   MSSAU.hasValue() ? MSSAU.getPointer() : nullptr, SQ, false,
-                   Threshold, false, PrepareForLTO || PrepareForLTOOption);
+  bool Changed = LoopRotation(&L, &AR.LI, &AR.TTI, &AR.AC, &AR.DT, &AR.SE,
+                              MSSAU ? &*MSSAU : nullptr, SQ, false, Threshold,
+                              false, PrepareForLTO || PrepareForLTOOption);
 
   if (!Changed)
     return PreservedAnalyses::all();
@@ -74,79 +89,4 @@ PreservedAnalyses LoopRotatePass::run(Loop &L, LoopAnalysisManager &AM,
   if (AR.MSSA)
     PA.preserve<MemorySSAAnalysis>();
   return PA;
-}
-
-namespace {
-
-class LoopRotateLegacyPass : public LoopPass {
-  unsigned MaxHeaderSize;
-  bool PrepareForLTO;
-
-public:
-  static char ID; // Pass ID, replacement for typeid
-  LoopRotateLegacyPass(int SpecifiedMaxHeaderSize = -1,
-                       bool PrepareForLTO = false)
-      : LoopPass(ID), PrepareForLTO(PrepareForLTO) {
-    initializeLoopRotateLegacyPassPass(*PassRegistry::getPassRegistry());
-    if (SpecifiedMaxHeaderSize == -1)
-      MaxHeaderSize = DefaultRotationThreshold;
-    else
-      MaxHeaderSize = unsigned(SpecifiedMaxHeaderSize);
-  }
-
-  // LCSSA form makes instruction renaming easier.
-  void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<AssumptionCacheTracker>();
-    AU.addRequired<TargetTransformInfoWrapperPass>();
-    if (EnableMSSALoopDependency)
-      AU.addPreserved<MemorySSAWrapperPass>();
-    getLoopAnalysisUsage(AU);
-  }
-
-  bool runOnLoop(Loop *L, LPPassManager &LPM) override {
-    if (skipLoop(L))
-      return false;
-    Function &F = *L->getHeader()->getParent();
-
-    auto *LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
-    const auto *TTI = &getAnalysis<TargetTransformInfoWrapperPass>().getTTI(F);
-    auto *AC = &getAnalysis<AssumptionCacheTracker>().getAssumptionCache(F);
-    auto &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
-    auto &SE = getAnalysis<ScalarEvolutionWrapperPass>().getSE();
-    const SimplifyQuery SQ = getBestSimplifyQuery(*this, F);
-    Optional<MemorySSAUpdater> MSSAU;
-    if (EnableMSSALoopDependency) {
-      // Not requiring MemorySSA and getting it only if available will split
-      // the loop pass pipeline when LoopRotate is being run first.
-      auto *MSSAA = getAnalysisIfAvailable<MemorySSAWrapperPass>();
-      if (MSSAA)
-        MSSAU = MemorySSAUpdater(&MSSAA->getMSSA());
-    }
-    // Vectorization requires loop-rotation. Use default threshold for loops the
-    // user explicitly marked for vectorization, even when header duplication is
-    // disabled.
-    int Threshold = hasVectorizeTransformation(L) == TM_ForcedByUser
-                        ? DefaultRotationThreshold
-                        : MaxHeaderSize;
-
-    return LoopRotation(L, LI, TTI, AC, &DT, &SE,
-                        MSSAU.hasValue() ? MSSAU.getPointer() : nullptr, SQ,
-                        false, Threshold, false,
-                        PrepareForLTO || PrepareForLTOOption);
-  }
-};
-} // end namespace
-
-char LoopRotateLegacyPass::ID = 0;
-INITIALIZE_PASS_BEGIN(LoopRotateLegacyPass, "loop-rotate", "Rotate Loops",
-                      false, false)
-INITIALIZE_PASS_DEPENDENCY(AssumptionCacheTracker)
-INITIALIZE_PASS_DEPENDENCY(LoopPass)
-INITIALIZE_PASS_DEPENDENCY(TargetTransformInfoWrapperPass)
-INITIALIZE_PASS_DEPENDENCY(MemorySSAWrapperPass)
-INITIALIZE_PASS_END(LoopRotateLegacyPass, "loop-rotate", "Rotate Loops", false,
-                    false)
-
-Pass *llvm::createLoopRotatePass(int MaxHeaderSize, bool PrepareForLTO) {
-  return new LoopRotateLegacyPass(MaxHeaderSize, PrepareForLTO);
 }

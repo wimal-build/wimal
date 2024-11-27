@@ -17,35 +17,37 @@
 
 #include "llvm/ADT/BitmaskEnum.h"
 #include "llvm/ADT/PointerUnion.h"
+#include "llvm/Analysis/MemoryLocation.h"
 #include "llvm/CodeGen/PseudoSourceValue.h"
+#include "llvm/CodeGenTypes/LowLevelType.h"
 #include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Metadata.h"
 #include "llvm/IR/Value.h" // PointerLikeTypeTraits<Value*>
 #include "llvm/Support/AtomicOrdering.h"
 #include "llvm/Support/DataTypes.h"
 
 namespace llvm {
 
-class FoldingSetNodeID;
 class MDNode;
 class raw_ostream;
 class MachineFunction;
 class ModuleSlotTracker;
+class TargetInstrInfo;
 
 /// This class contains a discriminated union of information about pointers in
 /// memory operands, relating them back to LLVM IR or to virtual locations (such
 /// as frame indices) that are exposed during codegen.
 struct MachinePointerInfo {
   /// This is the IR pointer value for the access, or it is null if unknown.
-  /// If this is null, then the access is to a pointer in the default address
-  /// space.
   PointerUnion<const Value *, const PseudoSourceValue *> V;
 
   /// Offset - This is an offset from the base Value*.
   int64_t Offset;
 
-  uint8_t StackID;
-
   unsigned AddrSpace = 0;
+
+  uint8_t StackID;
 
   explicit MachinePointerInfo(const Value *v, int64_t offset = 0,
                               uint8_t ID = 0)
@@ -60,8 +62,8 @@ struct MachinePointerInfo {
   }
 
   explicit MachinePointerInfo(unsigned AddressSpace = 0, int64_t offset = 0)
-      : V((const Value *)nullptr), Offset(offset), StackID(0),
-        AddrSpace(AddressSpace) {}
+      : V((const Value *)nullptr), Offset(offset), AddrSpace(AddressSpace),
+        StackID(0) {}
 
   explicit MachinePointerInfo(
     PointerUnion<const Value *, const PseudoSourceValue *> v,
@@ -69,19 +71,19 @@ struct MachinePointerInfo {
     uint8_t ID = 0)
     : V(v), Offset(offset), StackID(ID) {
     if (V) {
-      if (const auto *ValPtr = V.dyn_cast<const Value*>())
+      if (const auto *ValPtr = dyn_cast_if_present<const Value *>(V))
         AddrSpace = ValPtr->getType()->getPointerAddressSpace();
       else
-        AddrSpace = V.get<const PseudoSourceValue*>()->getAddressSpace();
+        AddrSpace = cast<const PseudoSourceValue *>(V)->getAddressSpace();
     }
   }
 
   MachinePointerInfo getWithOffset(int64_t O) const {
     if (V.isNull())
       return MachinePointerInfo(AddrSpace, Offset + O);
-    if (V.is<const Value*>())
-      return MachinePointerInfo(V.get<const Value*>(), Offset + O, StackID);
-    return MachinePointerInfo(V.get<const PseudoSourceValue*>(), Offset + O,
+    if (isa<const Value *>(V))
+      return MachinePointerInfo(cast<const Value *>(V), Offset + O, StackID);
+    return MachinePointerInfo(cast<const PseudoSourceValue *>(V), Offset + O,
                               StackID);
   }
 
@@ -168,7 +170,11 @@ private:
   };
 
   MachinePointerInfo PtrInfo;
-  uint64_t Size;
+
+  /// Track the memory type of the access. An access size which is unknown or
+  /// too large to be represented by LLT should use the invalid LLT.
+  LLT MemoryType;
+
   Flags FlagVals;
   Align BaseAlign;
   MachineAtomicInfo AtomicInfo;
@@ -181,8 +187,14 @@ public:
   /// and atomic ordering requirements must also be specified. For cmpxchg
   /// atomic operations the atomic ordering requirements when store does not
   /// occur must also be specified.
-  MachineMemOperand(MachinePointerInfo PtrInfo, Flags flags, uint64_t s,
+  MachineMemOperand(MachinePointerInfo PtrInfo, Flags flags, LocationSize TS,
                     Align a, const AAMDNodes &AAInfo = AAMDNodes(),
+                    const MDNode *Ranges = nullptr,
+                    SyncScope::ID SSID = SyncScope::System,
+                    AtomicOrdering Ordering = AtomicOrdering::NotAtomic,
+                    AtomicOrdering FailureOrdering = AtomicOrdering::NotAtomic);
+  MachineMemOperand(MachinePointerInfo PtrInfo, Flags flags, LLT type, Align a,
+                    const AAMDNodes &AAInfo = AAMDNodes(),
                     const MDNode *Ranges = nullptr,
                     SyncScope::ID SSID = SyncScope::System,
                     AtomicOrdering Ordering = AtomicOrdering::NotAtomic,
@@ -197,10 +209,12 @@ public:
   /// other PseudoSourceValue member functions which return objects which stand
   /// for frame/stack pointer relative references and other special references
   /// which are not representable in the high-level IR.
-  const Value *getValue() const { return PtrInfo.V.dyn_cast<const Value*>(); }
+  const Value *getValue() const {
+    return dyn_cast_if_present<const Value *>(PtrInfo.V);
+  }
 
   const PseudoSourceValue *getPseudoValue() const {
-    return PtrInfo.V.dyn_cast<const PseudoSourceValue*>();
+    return dyn_cast_if_present<const PseudoSourceValue *>(PtrInfo.V);
   }
 
   const void *getOpaqueValue() const { return PtrInfo.V.getOpaqueValue(); }
@@ -217,23 +231,31 @@ public:
 
   unsigned getAddrSpace() const { return PtrInfo.getAddrSpace(); }
 
+  /// Return the memory type of the memory reference. This should only be relied
+  /// on for GlobalISel G_* operation legalization.
+  LLT getMemoryType() const { return MemoryType; }
+
   /// Return the size in bytes of the memory reference.
-  uint64_t getSize() const { return Size; }
+  LocationSize getSize() const {
+    return MemoryType.isValid()
+               ? LocationSize::precise(MemoryType.getSizeInBytes())
+               : LocationSize::beforeOrAfterPointer();
+  }
 
   /// Return the size in bits of the memory reference.
-  uint64_t getSizeInBits() const { return Size * 8; }
+  LocationSize getSizeInBits() const {
+    return MemoryType.isValid()
+               ? LocationSize::precise(MemoryType.getSizeInBits())
+               : LocationSize::beforeOrAfterPointer();
+  }
 
-  LLVM_ATTRIBUTE_DEPRECATED(uint64_t getAlignment() const,
-                            "Use getAlign instead");
+  LLT getType() const {
+    return MemoryType;
+  }
 
   /// Return the minimum known alignment in bytes of the actual memory
   /// reference.
   Align getAlign() const;
-
-  LLVM_ATTRIBUTE_DEPRECATED(uint64_t getBaseAlignment() const,
-                            "Use getBaseAlign instead") {
-    return BaseAlign.value();
-  }
 
   /// Return the minimum known alignment in bytes of the base address, without
   /// the offset.
@@ -253,7 +275,7 @@ public:
   /// Return the atomic ordering requirements for this memory operation. For
   /// cmpxchg atomic operations, return the atomic ordering requirements when
   /// store occurs.
-  AtomicOrdering getOrdering() const {
+  AtomicOrdering getSuccessOrdering() const {
     return static_cast<AtomicOrdering>(AtomicInfo.Ordering);
   }
 
@@ -261,6 +283,13 @@ public:
   /// when store does not occur.
   AtomicOrdering getFailureOrdering() const {
     return static_cast<AtomicOrdering>(AtomicInfo.FailureOrdering);
+  }
+
+  /// Return a single atomic ordering that is at least as strong as both the
+  /// success and failure orderings for an atomic operation.  (For operations
+  /// other than cmpxchg, this is equivalent to getSuccessOrdering().)
+  AtomicOrdering getMergedOrdering() const {
+    return getMergedAtomicOrdering(getSuccessOrdering(), getFailureOrdering());
   }
 
   bool isLoad() const { return FlagVals & MOLoad; }
@@ -272,14 +301,16 @@ public:
 
   /// Returns true if this operation has an atomic ordering requirement of
   /// unordered or higher, false otherwise.
-  bool isAtomic() const { return getOrdering() != AtomicOrdering::NotAtomic; }
+  bool isAtomic() const {
+    return getSuccessOrdering() != AtomicOrdering::NotAtomic;
+  }
 
   /// Returns true if this memory operation doesn't have any ordering
   /// constraints other than normal aliasing. Volatile and (ordered) atomic
-  /// memory operations can't be reordered. 
+  /// memory operations can't be reordered.
   bool isUnordered() const {
-    return (getOrdering() == AtomicOrdering::NotAtomic ||
-            getOrdering() == AtomicOrdering::Unordered) &&
+    return (getSuccessOrdering() == AtomicOrdering::NotAtomic ||
+            getSuccessOrdering() == AtomicOrdering::Unordered) &&
            !isVolatile();
   }
 
@@ -295,9 +326,13 @@ public:
   void setValue(const PseudoSourceValue *NewSV) { PtrInfo.V = NewSV; }
   void setOffset(int64_t NewOffset) { PtrInfo.Offset = NewOffset; }
 
-  /// Profile - Gather unique data for the object.
-  ///
-  void Profile(FoldingSetNodeID &ID) const;
+  /// Reset the tracked memory type.
+  void setType(LLT NewTy) {
+    MemoryType = NewTy;
+  }
+
+  /// Unset the tracked range metadata.
+  void clearRanges() { Ranges = nullptr; }
 
   /// Support for operator<<.
   /// @{

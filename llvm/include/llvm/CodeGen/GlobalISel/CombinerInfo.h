@@ -5,27 +5,23 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
-//
-/// Interface for Targets to specify which operations are combined how and when.
+/// \file
+/// Option class for Targets to specify which operations are combined how and
+/// when.
 ///
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CODEGEN_GLOBALISEL_COMBINER_INFO_H
-#define LLVM_CODEGEN_GLOBALISEL_COMBINER_INFO_H
+#ifndef LLVM_CODEGEN_GLOBALISEL_COMBINERINFO_H
+#define LLVM_CODEGEN_GLOBALISEL_COMBINERINFO_H
 
 #include <cassert>
 namespace llvm {
 
-class GISelChangeObserver;
 class LegalizerInfo;
-class MachineInstr;
-class MachineIRBuilder;
-class MachineRegisterInfo;
 
 // Contains information relevant to enabling/disabling various combines for a
 // pass.
-class CombinerInfo {
-public:
+struct CombinerInfo {
   CombinerInfo(bool AllowIllegalOps, bool ShouldLegalizeIllegal,
                const LegalizerInfo *LInfo, bool OptEnabled, bool OptSize,
                bool MinSize)
@@ -54,18 +50,9 @@ public:
   /// Whether we're optimizing for minsize (-Oz).
   bool EnableMinSize;
 
-  /// Attempt to combine instructions using MI as the root.
-  ///
-  /// Use Observer to report the creation, modification, and erasure of
-  /// instructions. GISelChangeObserver will automatically report certain
-  /// kinds of operations. These operations are:
-  /// * Instructions that are newly inserted into the MachineFunction
-  /// * Instructions that are erased from the MachineFunction.
-  ///
-  /// However, it is important to report instruction modification and this is
-  /// not automatic.
-  virtual bool combine(GISelChangeObserver &Observer, MachineInstr &MI,
-                       MachineIRBuilder &B) const = 0;
+  /// The maximum number of times the Combiner will iterate over the
+  /// MachineFunction. Setting this to 0 enables fixed-point iteration.
+  unsigned MaxIterations = 0;
 };
 } // namespace llvm
 

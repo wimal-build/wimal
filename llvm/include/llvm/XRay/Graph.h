@@ -10,8 +10,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_XRAY_GRAPH_T_H
-#define LLVM_XRAY_GRAPH_T_H
+#ifndef LLVM_XRAY_GRAPH_H
+#define LLVM_XRAY_GRAPH_H
 
 #include <initializer_list>
 #include <stdint.h>
@@ -144,7 +144,7 @@ private:
 
   public:
     template <bool IsConstDest,
-              typename = std::enable_if<IsConstDest && !IsConst>>
+              typename = std::enable_if_t<IsConstDest && !IsConst>>
     operator NeighborEdgeIteratorT<IsConstDest, IsOut, BaseIt,
                                    const EdgeValueType>() const {
       return NeighborEdgeIteratorT<IsConstDest, IsOut, BaseIt,

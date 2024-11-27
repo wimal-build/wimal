@@ -14,7 +14,6 @@
 #define LLVM_EXECUTIONENGINE_ORC_RTDYLDOBJECTLINKINGLAYER_H
 
 #include "llvm/ADT/STLExtras.h"
-#include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ExecutionEngine/JITEventListener.h"
 #include "llvm/ExecutionEngine/JITSymbol.h"
@@ -28,15 +27,18 @@
 #include <functional>
 #include <list>
 #include <memory>
-#include <string>
 #include <utility>
 #include <vector>
 
 namespace llvm {
 namespace orc {
 
-class RTDyldObjectLinkingLayer : public ObjectLayer, private ResourceManager {
+class RTDyldObjectLinkingLayer
+    : public RTTIExtends<RTDyldObjectLinkingLayer, ObjectLayer>,
+      private ResourceManager {
 public:
+  static char ID;
+
   /// Functor for receiving object-loaded notifications.
   using NotifyLoadedFunction = std::function<void(
       MaterializationResponsibility &R, const object::ObjectFile &Obj,
@@ -47,7 +49,7 @@ public:
       MaterializationResponsibility &R, std::unique_ptr<MemoryBuffer>)>;
 
   using GetMemoryManagerFunction =
-      std::function<std::unique_ptr<RuntimeDyld::MemoryManager>()>;
+      unique_function<std::unique_ptr<RuntimeDyld::MemoryManager>()>;
 
   /// Construct an ObjectLinkingLayer with the given NotifyLoaded,
   ///        and NotifyEmitted functors.
@@ -135,10 +137,11 @@ private:
                  object::OwningBinary<object::ObjectFile> O,
                  std::unique_ptr<RuntimeDyld::MemoryManager> MemMgr,
                  std::unique_ptr<RuntimeDyld::LoadedObjectInfo> LoadedObjInfo,
-                 Error Err);
+                 std::unique_ptr<SymbolDependenceMap> Deps, Error Err);
 
-  Error handleRemoveResources(ResourceKey K) override;
-  void handleTransferResources(ResourceKey DstKey, ResourceKey SrcKey) override;
+  Error handleRemoveResources(JITDylib &JD, ResourceKey K) override;
+  void handleTransferResources(JITDylib &JD, ResourceKey DstKey,
+                               ResourceKey SrcKey) override;
 
   mutable std::mutex RTDyldLayerMutex;
   GetMemoryManagerFunction GetMemoryManager;

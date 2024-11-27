@@ -1,8 +1,13 @@
 #ifndef LLVM_TABLEGEN_DIRECTIVEEMITTER_H
 #define LLVM_TABLEGEN_DIRECTIVEEMITTER_H
 
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/TableGen/Record.h"
+#include <algorithm>
+#include <string>
+#include <vector>
 
 namespace llvm {
 
@@ -30,10 +35,6 @@ public:
     return Def->getValueAsString("clausePrefix");
   }
 
-  StringRef getIncludeHeader() const {
-    return Def->getValueAsString("includeHeader");
-  }
-
   StringRef getClauseEnumSetClass() const {
     return Def->getValueAsString("clauseEnumSetClass");
   }
@@ -50,11 +51,19 @@ public:
     return Def->getValueAsBit("enableBitmaskEnumInNamespace");
   }
 
-  const std::vector<Record *> getDirectives() const {
+  std::vector<Record *> getAssociations() const {
+    return Records.getAllDerivedDefinitions("Association");
+  }
+
+  std::vector<Record *> getCategories() const {
+    return Records.getAllDerivedDefinitions("Category");
+  }
+
+  std::vector<Record *> getDirectives() const {
     return Records.getAllDerivedDefinitions("Directive");
   }
 
-  const std::vector<Record *> getClauses() const {
+  std::vector<Record *> getClauses() const {
     return Records.getAllDerivedDefinitions("Clause");
   }
 
@@ -64,7 +73,7 @@ private:
   const llvm::Record *Def;
   const llvm::RecordKeeper &Records;
 
-  const std::vector<Record *> getDirectiveLanguages() const {
+  std::vector<Record *> getDirectiveLanguages() const {
     return Records.getAllDerivedDefinitions("DirectiveLanguage");
   }
 };
@@ -93,7 +102,7 @@ public:
   bool isDefault() const { return Def->getValueAsBit("isDefault"); }
 
   // Returns the record name.
-  const StringRef getRecordName() const { return Def->getName(); }
+  StringRef getRecordName() const { return Def->getName(); }
 
 protected:
   const llvm::Record *Def;
@@ -120,6 +129,14 @@ public:
   std::vector<Record *> getRequiredClauses() const {
     return Def->getValueAsListOfDefs("requiredClauses");
   }
+
+  std::vector<Record *> getLeafConstructs() const {
+    return Def->getValueAsListOfDefs("leafConstructs");
+  }
+
+  Record *getAssociation() const { return Def->getValueAsDef("association"); }
+
+  Record *getCategory() const { return Def->getValueAsDef("category"); }
 };
 
 // Wrapper class that contains Clause's information defined in DirectiveBase.td
@@ -156,7 +173,7 @@ public:
       }
       return C;
     });
-    N.erase(std::remove(N.begin(), N.end(), '_'), N.end());
+    llvm::erase(N, '_');
     return N;
   }
 
@@ -178,6 +195,16 @@ public:
   }
 
   bool isImplicit() const { return Def->getValueAsBit("isImplicit"); }
+
+  std::vector<StringRef> getAliases() const {
+    return Def->getValueAsListOfStrings("aliases");
+  }
+
+  StringRef getPrefix() const { return Def->getValueAsString("prefix"); }
+
+  bool isPrefixOptional() const {
+    return Def->getValueAsBit("isPrefixOptional");
+  }
 };
 
 // Wrapper class that contains VersionedClause's information defined in

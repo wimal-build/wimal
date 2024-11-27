@@ -17,7 +17,10 @@
 #ifndef LLVM_BITCODE_LLVMBITCODES_H
 #define LLVM_BITCODE_LLVMBITCODES_H
 
-#include "llvm/Bitstream/BitCodes.h"
+// This is the only file included, and it, in turn, is a leaf header.
+// This allows external tools to dump the AST of this file and analyze it for
+// changes without needing to fully or partially build LLVM itself.
+#include "llvm/Bitstream/BitCodeEnums.h"
 
 namespace llvm {
 namespace bitc {
@@ -168,8 +171,12 @@ enum TypeCodes {
 
   TYPE_CODE_TOKEN = 22, // TOKEN
 
-  TYPE_CODE_BFLOAT = 23, // BRAIN FLOATING POINT
-  TYPE_CODE_X86_AMX = 24 // X86 AMX
+  TYPE_CODE_BFLOAT = 23,  // BRAIN FLOATING POINT
+  TYPE_CODE_X86_AMX = 24, // X86 AMX
+
+  TYPE_CODE_OPAQUE_POINTER = 25, // OPAQUE_POINTER: [addrspace]
+
+  TYPE_CODE_TARGET_TYPE = 26, // TARGET_TYPE
 };
 
 enum OperandBundleTagCode {
@@ -203,7 +210,7 @@ enum GlobalValueSummarySymtabCodes {
   FS_PERMODULE = 1,
   // PERMODULE_PROFILE: [valueid, flags, instcount, numrefs,
   //                     numrefs x valueid,
-  //                     n x (valueid, hotness)]
+  //                     n x (valueid, hotness+tailcall)]
   FS_PERMODULE_PROFILE = 2,
   // PERMODULE_GLOBALVAR_INIT_REFS: [valueid, flags, n x valueid]
   FS_PERMODULE_GLOBALVAR_INIT_REFS = 3,
@@ -212,7 +219,7 @@ enum GlobalValueSummarySymtabCodes {
   FS_COMBINED = 4,
   // COMBINED_PROFILE: [valueid, modid, flags, instcount, numrefs,
   //                    numrefs x valueid,
-  //                    n x (valueid, hotness)]
+  //                    n x (valueid, hotness+tailcall)]
   FS_COMBINED_PROFILE = 5,
   // COMBINED_GLOBALVAR_INIT_REFS: [valueid, modid, flags, n x valueid]
   FS_COMBINED_GLOBALVAR_INIT_REFS = 6,
@@ -261,7 +268,7 @@ enum GlobalValueSummarySymtabCodes {
   // Per-module summary that also adds relative block frequency to callee info.
   // PERMODULE_RELBF: [valueid, flags, instcount, numrefs,
   //                   numrefs x valueid,
-  //                   n x (valueid, relblockfreq)]
+  //                   n x (valueid, relblockfreq+tailcall)]
   FS_PERMODULE_RELBF = 19,
   // Index-wide flags
   FS_FLAGS = 20,
@@ -296,6 +303,23 @@ enum GlobalValueSummarySymtabCodes {
   // Range information for accessed offsets for every argument.
   // [n x (paramno, range, numcalls, numcalls x (callee_guid, paramno, range))]
   FS_PARAM_ACCESS = 25,
+  // Summary of per-module memprof callsite metadata.
+  // [valueid, n x stackidindex]
+  FS_PERMODULE_CALLSITE_INFO = 26,
+  // Summary of per-module allocation memprof metadata.
+  // [nummib, nummib x (alloc type, numstackids, numstackids x stackidindex),
+  // [nummib x total size]?]
+  FS_PERMODULE_ALLOC_INFO = 27,
+  // Summary of combined index memprof callsite metadata.
+  // [valueid, numstackindices, numver,
+  //  numstackindices x stackidindex, numver x version]
+  FS_COMBINED_CALLSITE_INFO = 28,
+  // Summary of combined index allocation memprof metadata.
+  // [nummib, numver,
+  //  nummib x (alloc type, numstackids, numstackids x stackidindex),
+  //  numver x version, [nummib x total size]?]
+  FS_COMBINED_ALLOC_INFO = 29,
+  FS_STACK_IDS = 30,
 };
 
 enum MetadataCodes {
@@ -342,8 +366,10 @@ enum MetadataCodes {
   METADATA_STRING_TYPE = 41,            // [distinct, name, size, align,...]
   // Codes 42 and 43 are reserved for support for Fortran array specific debug
   // info.
-  METADATA_COMMON_BLOCK = 44,    // [distinct, scope, name, variable,...]
-  METADATA_GENERIC_SUBRANGE = 45 // [distinct, count, lo, up, stride]
+  METADATA_COMMON_BLOCK = 44,     // [distinct, scope, name, variable,...]
+  METADATA_GENERIC_SUBRANGE = 45, // [distinct, count, lo, up, stride]
+  METADATA_ARG_LIST = 46,         // [n x [type num, value num]]
+  METADATA_ASSIGN_ID = 47,        // [distinct, ...]
 };
 
 // The constants block (CONSTANTS_BLOCK_ID) describes emission for each
@@ -360,7 +386,7 @@ enum ConstantsCodes {
   CST_CODE_CSTRING = 9,          // CSTRING:       [values]
   CST_CODE_CE_BINOP = 10,        // CE_BINOP:      [opcode, opval, opval]
   CST_CODE_CE_CAST = 11,         // CE_CAST:       [opcode, opty, opval]
-  CST_CODE_CE_GEP = 12,          // CE_GEP:        [n x operands]
+  CST_CODE_CE_GEP_OLD = 12,      // CE_GEP:        [n x operands]
   CST_CODE_CE_SELECT = 13,       // CE_SELECT:     [opval, opval, opval]
   CST_CODE_CE_EXTRACTELT = 14,   // CE_EXTRACTELT: [opty, opval, opval]
   CST_CODE_CE_INSERTELT = 15,    // CE_INSERTELT:  [opval, opval, opval]
@@ -372,11 +398,23 @@ enum ConstantsCodes {
   CST_CODE_CE_INBOUNDS_GEP = 20, // INBOUNDS_GEP:  [n x operands]
   CST_CODE_BLOCKADDRESS = 21,    // CST_CODE_BLOCKADDRESS [fnty, fnval, bb#]
   CST_CODE_DATA = 22,            // DATA:          [n x elements]
-  CST_CODE_INLINEASM = 23,       // INLINEASM:     [sideeffect|alignstack|
+  CST_CODE_INLINEASM_OLD2 = 23,  // INLINEASM:     [sideeffect|alignstack|
                                  //                 asmdialect,asmstr,conststr]
-  CST_CODE_CE_GEP_WITH_INRANGE_INDEX = 24, //      [opty, flags, n x operands]
-  CST_CODE_CE_UNOP = 25,         // CE_UNOP:      [opcode, opval]
-  CST_CODE_POISON = 26,          // POISON
+  CST_CODE_CE_GEP_WITH_INRANGE_INDEX_OLD = 24, //  [opty, flags, n x operands]
+  CST_CODE_CE_UNOP = 25,                       // CE_UNOP:      [opcode, opval]
+  CST_CODE_POISON = 26,                        // POISON
+  CST_CODE_DSO_LOCAL_EQUIVALENT = 27, // DSO_LOCAL_EQUIVALENT [gvty, gv]
+  CST_CODE_INLINEASM_OLD3 = 28,       // INLINEASM:     [sideeffect|alignstack|
+                                      //                 asmdialect|unwind,
+                                      //                 asmstr,conststr]
+  CST_CODE_NO_CFI_VALUE = 29,         // NO_CFI [ fty, f ]
+  CST_CODE_INLINEASM = 30,            // INLINEASM:     [fnty,
+                                      //                 sideeffect|alignstack|
+                                      //                 asmdialect|unwind,
+                                      //                 asmstr,conststr]
+  CST_CODE_CE_GEP_WITH_INRANGE = 31,  // [opty, flags, range, n x operands]
+  CST_CODE_CE_GEP = 32,               // [opty, flags, n x operands]
+  CST_CODE_PTRAUTH = 33,              // [ptr, key, disc, addrdisc]
 };
 
 /// CastOpcodes - These are values used in the bitcode files to encode which
@@ -443,7 +481,11 @@ enum RMWOperations {
   RMW_UMAX = 9,
   RMW_UMIN = 10,
   RMW_FADD = 11,
-  RMW_FSUB = 12
+  RMW_FSUB = 12,
+  RMW_FMAX = 13,
+  RMW_FMIN = 14,
+  RMW_UINC_WRAP = 15,
+  RMW_UDEC_WRAP = 16
 };
 
 /// OverflowingBinaryOperatorOptionalFlags - Flags for serializing
@@ -451,6 +493,13 @@ enum RMWOperations {
 enum OverflowingBinaryOperatorOptionalFlags {
   OBO_NO_UNSIGNED_WRAP = 0,
   OBO_NO_SIGNED_WRAP = 1
+};
+
+/// TruncInstOptionalFlags - Flags for serializing
+/// TruncInstOptionalFlags's SubclassOptionalData contents.
+enum TruncInstOptionalFlags {
+  TIO_NO_UNSIGNED_WRAP = 0,
+  TIO_NO_SIGNED_WRAP = 1
 };
 
 /// FastMath Flags
@@ -467,9 +516,24 @@ enum FastMathMap {
   AllowReassoc    = (1 << 7)
 };
 
+/// Flags for serializing PossiblyNonNegInst's SubclassOptionalData contents.
+enum PossiblyNonNegInstOptionalFlags { PNNI_NON_NEG = 0 };
+
 /// PossiblyExactOperatorOptionalFlags - Flags for serializing
 /// PossiblyExactOperator's SubclassOptionalData contents.
 enum PossiblyExactOperatorOptionalFlags { PEO_EXACT = 0 };
+
+/// PossiblyDisjointInstOptionalFlags - Flags for serializing
+/// PossiblyDisjointInst's SubclassOptionalData contents.
+enum PossiblyDisjointInstOptionalFlags { PDI_DISJOINT = 0 };
+
+/// GetElementPtrOptionalFlags - Flags for serializing
+/// GEPOperator's SubclassOptionalData contents.
+enum GetElementPtrOptionalFlags {
+  GEP_INBOUNDS = 0,
+  GEP_NUSW = 1,
+  GEP_NUW = 2,
+};
 
 /// Encoded AtomicOrdering values.
 enum AtomicOrderingCodes {
@@ -540,15 +604,15 @@ enum FunctionCodes {
 
   FUNC_CODE_INST_CALL = 34, // CALL:    [attr, cc, fnty, fnid, args...]
 
-  FUNC_CODE_DEBUG_LOC = 35,        // DEBUG_LOC:  [Line,Col,ScopeVal, IAVal]
-  FUNC_CODE_INST_FENCE = 36,       // FENCE: [ordering, synchscope]
-  FUNC_CODE_INST_CMPXCHG_OLD = 37, // CMPXCHG: [ptrty, ptr, cmp, val, vol,
-                                   //            ordering, synchscope,
-                                   //            failure_ordering?, weak?]
-  FUNC_CODE_INST_ATOMICRMW = 38,   // ATOMICRMW: [ptrty,ptr,val, operation,
-                                   //             align, vol,
-                                   //             ordering, synchscope]
-  FUNC_CODE_INST_RESUME = 39,      // RESUME:     [opval]
+  FUNC_CODE_DEBUG_LOC = 35,          // DEBUG_LOC:  [Line,Col,ScopeVal, IAVal]
+  FUNC_CODE_INST_FENCE = 36,         // FENCE: [ordering, synchscope]
+  FUNC_CODE_INST_CMPXCHG_OLD = 37,   // CMPXCHG: [ptrty, ptr, cmp, val, vol,
+                                     //            ordering, synchscope,
+                                     //            failure_ordering?, weak?]
+  FUNC_CODE_INST_ATOMICRMW_OLD = 38, // ATOMICRMW: [ptrty,ptr,val, operation,
+                                     //             align, vol,
+                                     //             ordering, synchscope]
+  FUNC_CODE_INST_RESUME = 39,        // RESUME:     [opval]
   FUNC_CODE_INST_LANDINGPAD_OLD =
       40,                         // LANDINGPAD: [ty,val,val,num,id0,val0...]
   FUNC_CODE_INST_LOADATOMIC = 41, // LOAD: [opty, op, align, vol,
@@ -570,11 +634,26 @@ enum FunctionCodes {
       52, // CATCHSWITCH: [num,args...] or [num,args...,bb]
   // 53 is unused.
   // 54 is unused.
-  FUNC_CODE_OPERAND_BUNDLE = 55, // OPERAND_BUNDLE: [tag#, value...]
-  FUNC_CODE_INST_UNOP = 56,      // UNOP:       [opcode, ty, opval]
-  FUNC_CODE_INST_CALLBR = 57,    // CALLBR:     [attr, cc, norm, transfs,
-                                 //              fnty, fnid, args...]
-  FUNC_CODE_INST_FREEZE = 58,    // FREEZE: [opty, opval]
+  FUNC_CODE_OPERAND_BUNDLE = 55,  // OPERAND_BUNDLE: [tag#, value...]
+  FUNC_CODE_INST_UNOP = 56,       // UNOP:       [opcode, ty, opval]
+  FUNC_CODE_INST_CALLBR = 57,     // CALLBR:     [attr, cc, norm, transfs,
+                                  //              fnty, fnid, args...]
+  FUNC_CODE_INST_FREEZE = 58,     // FREEZE: [opty, opval]
+  FUNC_CODE_INST_ATOMICRMW = 59,  // ATOMICRMW: [ptrty, ptr, valty, val,
+                                  //             operation, align, vol,
+                                  //             ordering, synchscope]
+  FUNC_CODE_BLOCKADDR_USERS = 60, // BLOCKADDR_USERS: [value...]
+
+  FUNC_CODE_DEBUG_RECORD_VALUE =
+      61, // [DILocation, DILocalVariable, DIExpression, ValueAsMetadata]
+  FUNC_CODE_DEBUG_RECORD_DECLARE =
+      62, // [DILocation, DILocalVariable, DIExpression, ValueAsMetadata]
+  FUNC_CODE_DEBUG_RECORD_ASSIGN =
+      63, // [DILocation, DILocalVariable, DIExpression, ValueAsMetadata,
+          //  DIAssignID, DIExpression (addr), ValueAsMetadata (addr)]
+  FUNC_CODE_DEBUG_RECORD_VALUE_SIMPLE =
+      64, // [DILocation, DILocalVariable, DIExpression, Value]
+  FUNC_CODE_DEBUG_RECORD_LABEL = 65, // [DILocation, DILabel]
 };
 
 enum UseListCodes {
@@ -657,6 +736,28 @@ enum AttributeKindCodes {
   ATTR_KIND_NO_CALLBACK = 71,
   ATTR_KIND_HOT = 72,
   ATTR_KIND_NO_PROFILE = 73,
+  ATTR_KIND_VSCALE_RANGE = 74,
+  ATTR_KIND_SWIFT_ASYNC = 75,
+  ATTR_KIND_NO_SANITIZE_COVERAGE = 76,
+  ATTR_KIND_ELEMENTTYPE = 77,
+  ATTR_KIND_DISABLE_SANITIZER_INSTRUMENTATION = 78,
+  ATTR_KIND_NO_SANITIZE_BOUNDS = 79,
+  ATTR_KIND_ALLOC_ALIGN = 80,
+  ATTR_KIND_ALLOCATED_POINTER = 81,
+  ATTR_KIND_ALLOC_KIND = 82,
+  ATTR_KIND_PRESPLIT_COROUTINE = 83,
+  ATTR_KIND_FNRETTHUNK_EXTERN = 84,
+  ATTR_KIND_SKIP_PROFILE = 85,
+  ATTR_KIND_MEMORY = 86,
+  ATTR_KIND_NOFPCLASS = 87,
+  ATTR_KIND_OPTIMIZE_FOR_DEBUGGING = 88,
+  ATTR_KIND_WRITABLE = 89,
+  ATTR_KIND_CORO_ONLY_DESTROY_WHEN_COMPLETE = 90,
+  ATTR_KIND_DEAD_ON_UNWIND = 91,
+  ATTR_KIND_RANGE = 92,
+  ATTR_KIND_SANITIZE_NUMERICAL_STABILITY = 93,
+  ATTR_KIND_INITIALIZES = 94,
+  ATTR_KIND_HYBRID_PATCHABLE = 95,
 };
 
 enum ComdatSelectionKindCodes {

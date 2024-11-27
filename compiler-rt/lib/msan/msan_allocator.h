@@ -18,15 +18,18 @@
 namespace __msan {
 
 struct MsanThreadLocalMallocStorage {
-  uptr quarantine_cache[16];
   // Allocator cache contains atomic_uint64_t which must be 8-byte aligned.
-  ALIGNED(8) uptr allocator_cache[96 * (512 * 8 + 16)];  // Opaque.
+  alignas(8) uptr allocator_cache[96 * (512 * 8 + 16)];  // Opaque.
+  void Init();
   void CommitBack();
 
  private:
   // These objects are allocated via mmap() and are zero-initialized.
   MsanThreadLocalMallocStorage() {}
 };
+
+void LockAllocator();
+void UnlockAllocator();
 
 } // namespace __msan
 #endif // MSAN_ALLOCATOR_H

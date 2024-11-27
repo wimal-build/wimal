@@ -35,18 +35,17 @@ static void reportCoverage(StringRef SourceFile, StringRef ObjectDir,
     // A file was given. Ignore the source file and look next to this file.
     sys::path::replace_extension(CoverageFileStem, "");
 
-  std::string GCNO = InputGCNO.empty()
-                         ? std::string(CoverageFileStem.str()) + ".gcno"
-                         : InputGCNO;
-  std::string GCDA = InputGCDA.empty()
-                         ? std::string(CoverageFileStem.str()) + ".gcda"
-                         : InputGCDA;
+  std::string GCNO =
+      InputGCNO.empty() ? std::string(CoverageFileStem) + ".gcno" : InputGCNO;
+  std::string GCDA =
+      InputGCDA.empty() ? std::string(CoverageFileStem) + ".gcda" : InputGCDA;
   GCOVFile GF;
 
   // Open .gcda and .gcda without requiring a NUL terminator. The concurrent
   // modification may nullify the NUL terminator condition.
   ErrorOr<std::unique_ptr<MemoryBuffer>> GCNO_Buff =
-      MemoryBuffer::getFileOrSTDIN(GCNO, -1, /*RequiresNullTerminator=*/false);
+      MemoryBuffer::getFileOrSTDIN(GCNO, /*IsText=*/false,
+                                   /*RequiresNullTerminator=*/false);
   if (std::error_code EC = GCNO_Buff.getError()) {
     errs() << GCNO << ": " << EC.message() << "\n";
     return;
@@ -58,7 +57,8 @@ static void reportCoverage(StringRef SourceFile, StringRef ObjectDir,
   }
 
   ErrorOr<std::unique_ptr<MemoryBuffer>> GCDA_Buff =
-      MemoryBuffer::getFileOrSTDIN(GCDA, -1, /*RequiresNullTerminator=*/false);
+      MemoryBuffer::getFileOrSTDIN(GCDA, /*IsText=*/false,
+                                   /*RequiresNullTerminator=*/false);
   if (std::error_code EC = GCDA_Buff.getError()) {
     if (EC != errc::no_such_file_or_directory) {
       errs() << GCDA << ": " << EC.message() << "\n";

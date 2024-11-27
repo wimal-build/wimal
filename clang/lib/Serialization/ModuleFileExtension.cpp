@@ -6,15 +6,15 @@
 //
 //===----------------------------------------------------------------------===//
 #include "clang/Serialization/ModuleFileExtension.h"
-#include "llvm/ADT/Hashing.h"
+
 using namespace clang;
 
-ModuleFileExtension::~ModuleFileExtension() { }
+char ModuleFileExtension::ID = 0;
 
-llvm::hash_code ModuleFileExtension::hashExtension(llvm::hash_code Code) const {
-  return Code;
-}
+ModuleFileExtension::~ModuleFileExtension() {}
 
-ModuleFileExtensionWriter::~ModuleFileExtensionWriter() { }
+void ModuleFileExtension::hashExtension(ExtensionHashBuilder &HBuilder) const {}
 
-ModuleFileExtensionReader::~ModuleFileExtensionReader() { }
+ModuleFileExtensionWriter::~ModuleFileExtensionWriter() {}
+
+ModuleFileExtensionReader::~ModuleFileExtensionReader() {}

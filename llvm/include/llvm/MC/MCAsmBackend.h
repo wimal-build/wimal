@@ -10,18 +10,23 @@
 #define LLVM_MC_MCASMBACKEND_H
 
 #include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/Optional.h"
 #include "llvm/MC/MCDirectives.h"
 #include "llvm/MC/MCFixup.h"
-#include "llvm/MC/MCFragment.h"
 #include "llvm/Support/Endian.h"
 #include <cstdint>
 
 namespace llvm {
 
-class MCAsmLayout;
+class MCAlignFragment;
+class MCDwarfCallFrameFragment;
+class MCDwarfLineAddrFragment;
+class MCFragment;
+class MCLEBFragment;
+class MCRelaxableFragment;
+class MCSymbol;
 class MCAssembler;
-class MCCFIInstruction;
+class MCContext;
+struct MCDwarfFrameInfo;
 struct MCFixupKindInfo;
 class MCInst;
 class MCObjectStreamer;
@@ -31,18 +36,22 @@ class MCSubtargetInfo;
 class MCValue;
 class raw_pwrite_stream;
 class StringRef;
+class raw_ostream;
 
 /// Generic interface to target specific assembler backends.
 class MCAsmBackend {
 protected: // Can only create subclasses.
-  MCAsmBackend(support::endianness Endian);
+  MCAsmBackend(llvm::endianness Endian, unsigned RelaxFixupKind = MaxFixupKind);
 
 public:
   MCAsmBackend(const MCAsmBackend &) = delete;
   MCAsmBackend &operator=(const MCAsmBackend &) = delete;
   virtual ~MCAsmBackend();
 
-  const support::endianness Endian;
+  const llvm::endianness Endian;
+
+  /// Fixup kind used for linker relaxation. Currently only used by RISC-V.
+  const unsigned RelaxFixupKind;
 
   /// Return true if this target might automatically pad instructions and thus
   /// need to emit padding enable/disable directives around sensative code.
@@ -51,12 +60,6 @@ public:
   /// emitted into RelaxableFragment and then we can increase its size in a
   /// tricky way for optimization.
   virtual bool allowEnhancedRelaxation() const { return false; }
-
-  /// Give the target a chance to manipulate state related to instruction
-  /// alignment (e.g. padding for optimization), instruction relaxablility, etc.
-  /// before and after actually emitting the instruction.
-  virtual void emitInstructionBegin(MCObjectStreamer &OS, const MCInst &Inst) {}
-  virtual void emitInstructionEnd(MCObjectStreamer &OS, const MCInst &Inst) {}
 
   /// lifetime management
   virtual void reset() {}
@@ -82,7 +85,7 @@ public:
   virtual unsigned getNumFixupKinds() const = 0;
 
   /// Map a relocation name used in .reloc to a fixup kind.
-  virtual Optional<MCFixupKind> getFixupKind(StringRef Name) const;
+  virtual std::optional<MCFixupKind> getFixupKind(StringRef Name) const;
 
   /// Get information on a fixup kind.
   virtual const MCFixupKindInfo &getFixupKindInfo(MCFixupKind Kind) const;
@@ -90,7 +93,8 @@ public:
   /// Hook to check if a relocation is needed for some target specific reason.
   virtual bool shouldForceRelocation(const MCAssembler &Asm,
                                      const MCFixup &Fixup,
-                                     const MCValue &Target) {
+                                     const MCValue &Target,
+                                     const MCSubtargetInfo *STI) {
     return false;
   }
 
@@ -105,17 +109,24 @@ public:
   /// Hook which indicates if the target requires a fixup to be generated when
   /// handling an align directive in an executable section
   virtual bool shouldInsertFixupForCodeAlign(MCAssembler &Asm,
-                                             const MCAsmLayout &Layout,
                                              MCAlignFragment &AF) {
     return false;
   }
 
   virtual bool evaluateTargetFixup(const MCAssembler &Asm,
-                                   const MCAsmLayout &Layout,
                                    const MCFixup &Fixup, const MCFragment *DF,
-                                   const MCValue &Target, uint64_t &Value,
+                                   const MCValue &Target,
+                                   const MCSubtargetInfo *STI, uint64_t &Value,
                                    bool &WasForced) {
     llvm_unreachable("Need to implement hook if target has custom fixups");
+  }
+
+  virtual bool handleAddSubRelocations(const MCAssembler &Asm,
+                                       const MCFragment &F,
+                                       const MCFixup &Fixup,
+                                       const MCValue &Target,
+                                       uint64_t &FixedValue) const {
+    return false;
   }
 
   /// Apply the \p Value for given \p Fixup into the provided data fragment, at
@@ -128,10 +139,6 @@ public:
                           const MCValue &Target, MutableArrayRef<char> Data,
                           uint64_t Value, bool IsResolved,
                           const MCSubtargetInfo *STI) const = 0;
-
-  /// Check whether the given target requires emitting differences of two
-  /// symbols as a set of relocations.
-  virtual bool requiresDiffExpressionRelocations() const { return false; }
 
   /// @}
 
@@ -150,16 +157,17 @@ public:
 
   /// Target specific predicate for whether a given fixup requires the
   /// associated instruction to be relaxed.
-  virtual bool fixupNeedsRelaxationAdvanced(const MCFixup &Fixup, bool Resolved,
+  virtual bool fixupNeedsRelaxationAdvanced(const MCAssembler &Asm,
+                                            const MCFixup &Fixup, bool Resolved,
                                             uint64_t Value,
                                             const MCRelaxableFragment *DF,
-                                            const MCAsmLayout &Layout,
                                             const bool WasForced) const;
 
   /// Simple predicate for targets where !Resolved implies requiring relaxation
-  virtual bool fixupNeedsRelaxation(const MCFixup &Fixup, uint64_t Value,
-                                    const MCRelaxableFragment *DF,
-                                    const MCAsmLayout &Layout) const = 0;
+  virtual bool fixupNeedsRelaxation(const MCFixup &Fixup,
+                                    uint64_t Value) const {
+    llvm_unreachable("Needed if mayNeedRelaxation may return true");
+  }
 
   /// Relax the instruction in the given fragment to the next wider instruction.
   ///
@@ -168,6 +176,25 @@ public:
   /// \param STI the subtarget information for the associated instruction.
   virtual void relaxInstruction(MCInst &Inst,
                                 const MCSubtargetInfo &STI) const {};
+
+  virtual bool relaxDwarfLineAddr(const MCAssembler &Asm,
+                                  MCDwarfLineAddrFragment &DF,
+                                  bool &WasRelaxed) const {
+    return false;
+  }
+
+  virtual bool relaxDwarfCFA(const MCAssembler &Asm,
+                             MCDwarfCallFrameFragment &DF,
+                             bool &WasRelaxed) const {
+    return false;
+  }
+
+  // Defined by linker relaxation targets to possibly emit LEB128 relocations
+  // and set Value at the relocated location.
+  virtual std::pair<bool, bool>
+  relaxLEB128(const MCAssembler &Asm, MCLEBFragment &LF, int64_t &Value) const {
+    return std::make_pair(false, false);
+  }
 
   /// @}
 
@@ -179,24 +206,26 @@ public:
 
   /// Returns the maximum size of a nop in bytes on this target.
   ///
-  virtual unsigned getMaximumNopSize() const { return 0; }
+  virtual unsigned getMaximumNopSize(const MCSubtargetInfo &STI) const {
+    return 0;
+  }
 
   /// Write an (optimal) nop sequence of Count bytes to the given output. If the
   /// target cannot generate such a sequence, it should return an error.
   ///
   /// \return - True on success.
-  virtual bool writeNopData(raw_ostream &OS, uint64_t Count) const = 0;
+  virtual bool writeNopData(raw_ostream &OS, uint64_t Count,
+                            const MCSubtargetInfo *STI) const = 0;
 
   /// Give backend an opportunity to finish layout after relaxation
-  virtual void finishLayout(MCAssembler const &Asm,
-                            MCAsmLayout &Layout) const {}
+  virtual void finishLayout(MCAssembler const &Asm) const {}
 
   /// Handle any target-specific assembler flags. By default, do nothing.
   virtual void handleAssemblerFlag(MCAssemblerFlag Flag) {}
 
   /// Generate the compact unwind encoding for the CFI instructions.
-  virtual uint32_t
-      generateCompactUnwindEncoding(ArrayRef<MCCFIInstruction>) const {
+  virtual uint64_t generateCompactUnwindEncoding(const MCDwarfFrameInfo *FI,
+                                                 const MCContext *Ctxt) const {
     return 0;
   }
 
@@ -204,6 +233,8 @@ public:
   virtual bool isMicroMips(const MCSymbol *Sym) const {
     return false;
   }
+
+  bool isDarwinCanonicalPersonality(const MCSymbol *Sym) const;
 };
 
 } // end namespace llvm

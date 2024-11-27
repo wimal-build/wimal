@@ -20,12 +20,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_SUPPORT_GENERIC_IDF_H
-#define LLVM_SUPPORT_GENERIC_IDF_H
+#ifndef LLVM_SUPPORT_GENERICITERATEDDOMINANCEFRONTIER_H
+#define LLVM_SUPPORT_GENERICITERATEDDOMINANCEFRONTIER_H
 
-#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/iterator_range.h"
 #include "llvm/Support/GenericDomTree.h"
 #include <queue>
 
@@ -37,10 +37,11 @@ namespace IDFCalculatorDetail {
 /// May be specialized if, for example, one wouldn't like to return nullpointer
 /// successors.
 template <class NodeTy, bool IsPostDom> struct ChildrenGetterTy {
-  using NodeRef = typename GraphTraits<NodeTy>::NodeRef;
-  using ChildrenTy = SmallVector<NodeRef, 8>;
+  using NodeRef = typename GraphTraits<NodeTy *>::NodeRef;
+  using ChildIteratorType = typename GraphTraits<NodeTy *>::ChildIteratorType;
+  using range = iterator_range<ChildIteratorType>;
 
-  ChildrenTy get(const NodeRef &N);
+  range get(const NodeRef &N);
 };
 
 } // end of namespace IDFCalculatorDetail
@@ -116,13 +117,12 @@ private:
 namespace IDFCalculatorDetail {
 
 template <class NodeTy, bool IsPostDom>
-typename ChildrenGetterTy<NodeTy, IsPostDom>::ChildrenTy
+typename ChildrenGetterTy<NodeTy, IsPostDom>::range
 ChildrenGetterTy<NodeTy, IsPostDom>::get(const NodeRef &N) {
   using OrderedNodeTy =
       typename IDFCalculatorBase<NodeTy, IsPostDom>::OrderedNodeTy;
 
-  auto Children = children<OrderedNodeTy>(N);
-  return {Children.begin(), Children.end()};
+  return children<OrderedNodeTy>(N);
 }
 
 } // end of namespace IDFCalculatorDetail
@@ -193,7 +193,7 @@ void IDFCalculatorBase<NodeTy, IsPostDom>::calculate(
               SuccNode, std::make_pair(SuccLevel, SuccNode->getDFSNumIn())));
       };
 
-      for (auto Succ : ChildrenGetter.get(BB))
+      for (auto *Succ : ChildrenGetter.get(BB))
         DoWork(Succ);
 
       for (auto DomChild : *Node) {

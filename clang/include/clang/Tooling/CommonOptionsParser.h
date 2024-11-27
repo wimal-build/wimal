@@ -49,35 +49,27 @@ namespace tooling {
 /// using namespace clang::tooling;
 /// using namespace llvm;
 ///
-/// static cl::OptionCategory MyToolCategory("My tool options");
+/// static cl::OptionCategory MyToolCategory("my-tool options");
 /// static cl::extrahelp CommonHelp(CommonOptionsParser::HelpMessage);
 /// static cl::extrahelp MoreHelp("\nMore help text...\n");
-/// static cl::opt<bool> YourOwnOption(...);
-/// ...
 ///
 /// int main(int argc, const char **argv) {
-///   CommonOptionsParser OptionsParser(argc, argv, MyToolCategory);
+///   auto ExpectedParser =
+///       CommonOptionsParser::create(argc, argv, MyToolCategory);
+///   if (!ExpectedParser) {
+///     llvm::errs() << ExpectedParser.takeError();
+///     return 1;
+///   }
+///   CommonOptionsParser& OptionsParser = ExpectedParser.get();
 ///   ClangTool Tool(OptionsParser.getCompilations(),
 ///                  OptionsParser.getSourcePathList());
-///   return Tool.run(newFrontendActionFactory<SyntaxOnlyAction>().get());
+///   return Tool.run(
+///       newFrontendActionFactory<clang::SyntaxOnlyAction>().get());
 /// }
 /// \endcode
 class CommonOptionsParser {
-public:
-  /// Parses command-line, initializes a compilation database.
-  ///
-  /// This constructor can change argc and argv contents, e.g. consume
-  /// command-line options used for creating FixedCompilationDatabase.
-  ///
-  /// All options not belonging to \p Category become hidden.
-  ///
-  /// This constructor exits program in case of error.
-  CommonOptionsParser(int &argc, const char **argv,
-                      llvm::cl::OptionCategory &Category,
-                      const char *Overview = nullptr)
-      : CommonOptionsParser(argc, argv, Category, llvm::cl::OneOrMore,
-                            Overview) {}
 
+protected:
   /// Parses command-line, initializes a compilation database.
   ///
   /// This constructor can change argc and argv contents, e.g. consume
@@ -86,16 +78,17 @@ public:
   /// All options not belonging to \p Category become hidden.
   ///
   /// It also allows calls to set the required number of positional parameters.
-  CommonOptionsParser(int &argc, const char **argv,
-                      llvm::cl::OptionCategory &Category,
-                      llvm::cl::NumOccurrencesFlag OccurrencesFlag,
-                      const char *Overview = nullptr);
+  CommonOptionsParser(
+      int &argc, const char **argv, llvm::cl::OptionCategory &Category,
+      llvm::cl::NumOccurrencesFlag OccurrencesFlag = llvm::cl::OneOrMore,
+      const char *Overview = nullptr);
 
+public:
   /// A factory method that is similar to the above constructor, except
   /// this returns an error instead exiting the program on error.
   static llvm::Expected<CommonOptionsParser>
   create(int &argc, const char **argv, llvm::cl::OptionCategory &Category,
-         llvm::cl::NumOccurrencesFlag OccurrencesFlag,
+         llvm::cl::NumOccurrencesFlag OccurrencesFlag = llvm::cl::OneOrMore,
          const char *Overview = nullptr);
 
   /// Returns a reference to the loaded compilations database.
@@ -153,4 +146,4 @@ private:
 }  // namespace tooling
 }  // namespace clang
 
-#endif  // LLVM_TOOLS_CLANG_INCLUDE_CLANG_TOOLING_COMMONOPTIONSPARSER_H
+#endif // LLVM_CLANG_TOOLING_COMMONOPTIONSPARSER_H

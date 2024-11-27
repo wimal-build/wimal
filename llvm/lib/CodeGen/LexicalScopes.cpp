@@ -75,6 +75,11 @@ void LexicalScopes::extractLexicalScopes(
     const MachineInstr *PrevMI = nullptr;
     const DILocation *PrevDL = nullptr;
     for (const auto &MInsn : MBB) {
+      // Ignore DBG_VALUE and similar instruction that do not contribute to any
+      // instruction in the output.
+      if (MInsn.isMetaInstruction())
+        continue;
+
       // Check if instruction has valid location information.
       const DILocation *MIDL = MInsn.getDebugLoc();
       if (!MIDL) {
@@ -87,11 +92,6 @@ void LexicalScopes::extractLexicalScopes(
         PrevMI = &MInsn;
         continue;
       }
-
-      // Ignore DBG_VALUE and similar instruction that do not contribute to any
-      // instruction in the output.
-      if (MInsn.isMetaInstruction())
-        continue;
 
       if (RangeBeginMI) {
         // If we have already seen a beginning of an instruction range and
@@ -340,8 +340,8 @@ LLVM_DUMP_METHOD void LexicalScope::dump(unsigned Indent) const {
 
   if (!Children.empty())
     err << std::string(Indent + 2, ' ') << "Children ...\n";
-  for (unsigned i = 0, e = Children.size(); i != e; ++i)
-    if (Children[i] != this)
-      Children[i]->dump(Indent + 2);
+  for (const LexicalScope *Child : Children)
+    if (Child != this)
+      Child->dump(Indent + 2);
 }
 #endif

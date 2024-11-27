@@ -13,6 +13,7 @@
 
 #include "llvm/CodeGen/MachineModuleInfoImpls.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/MC/MCSymbol.h"
 
 using namespace llvm;
@@ -25,6 +26,7 @@ using namespace llvm;
 void MachineModuleInfoMachO::anchor() {}
 void MachineModuleInfoELF::anchor() {}
 void MachineModuleInfoCOFF::anchor() {}
+void MachineModuleInfoWasm::anchor() {}
 
 using PairTy = std::pair<MCSymbol *, MachineModuleInfoImpl::StubValueTy>;
 static int SortSymbolPair(const PairTy *LHS, const PairTy *RHS) {
@@ -38,5 +40,22 @@ MachineModuleInfoImpl::SymbolListTy MachineModuleInfoImpl::getSortedStubs(
   array_pod_sort(List.begin(), List.end(), SortSymbolPair);
 
   Map.clear();
+  return List;
+}
+
+using ExprStubPairTy = std::pair<MCSymbol *, const MCExpr *>;
+static int SortAuthStubPair(const ExprStubPairTy *LHS,
+                            const ExprStubPairTy *RHS) {
+  return LHS->first->getName().compare(RHS->first->getName());
+}
+
+MachineModuleInfoImpl::ExprStubListTy MachineModuleInfoImpl::getSortedExprStubs(
+    DenseMap<MCSymbol *, const MCExpr *> &ExprStubs) {
+  MachineModuleInfoImpl::ExprStubListTy List(ExprStubs.begin(),
+                                             ExprStubs.end());
+
+  array_pod_sort(List.begin(), List.end(), SortAuthStubPair);
+
+  ExprStubs.clear();
   return List;
 }

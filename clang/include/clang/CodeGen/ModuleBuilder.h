@@ -14,13 +14,22 @@
 #define LLVM_CLANG_CODEGEN_MODULEBUILDER_H
 
 #include "clang/AST/ASTConsumer.h"
+#include "clang/Basic/LLVM.h"
+#include "llvm/ADT/StringRef.h"
 
 namespace llvm {
   class Constant;
   class LLVMContext;
   class Module;
   class StringRef;
+
+  namespace vfs {
+  class FileSystem;
+  }
 }
+
+// Prefix of the name of the artificial inline frame.
+inline constexpr llvm::StringRef ClangTrapPrefix = "__clang_trap_msg";
 
 namespace clang {
   class CodeGenOptions;
@@ -74,6 +83,10 @@ public:
   /// This may return null if there was no matching declaration.
   const Decl *GetDeclForMangledName(llvm::StringRef MangledName);
 
+  /// Given a global declaration, return a mangled name for this declaration
+  /// which has been added to this code generator via a Handle method.
+  llvm::StringRef GetMangledName(GlobalDecl GD);
+
   /// Return the LLVM address of the given global entity.
   ///
   /// \param isForDefinition If true, the caller intends to define the
@@ -94,10 +107,11 @@ public:
 /// the allocated CodeGenerator instance.
 CodeGenerator *CreateLLVMCodeGen(DiagnosticsEngine &Diags,
                                  llvm::StringRef ModuleName,
+                                 IntrusiveRefCntPtr<llvm::vfs::FileSystem> FS,
                                  const HeaderSearchOptions &HeaderSearchOpts,
                                  const PreprocessorOptions &PreprocessorOpts,
                                  const CodeGenOptions &CGO,
-                                 llvm::LLVMContext& C,
+                                 llvm::LLVMContext &C,
                                  CoverageSourceInfo *CoverageInfo = nullptr);
 
 } // end namespace clang

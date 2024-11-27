@@ -44,7 +44,7 @@ class raw_ostream;
 struct KnownBits;
 
 /// This class represents a range of values.
-class LLVM_NODISCARD ConstantRange {
+class [[nodiscard]] ConstantRange {
   APInt Lower, Upper;
 
   /// Create empty constant range with same bitwidth.
@@ -124,6 +124,32 @@ public:
   static ConstantRange makeExactICmpRegion(CmpInst::Predicate Pred,
                                            const APInt &Other);
 
+  /// Does the predicate \p Pred hold between ranges this and \p Other?
+  /// NOTE: false does not mean that inverse predicate holds!
+  bool icmp(CmpInst::Predicate Pred, const ConstantRange &Other) const;
+
+  /// Return true iff CR1 ult CR2 is equivalent to CR1 slt CR2.
+  /// Does not depend on strictness/direction of the predicate.
+  static bool
+  areInsensitiveToSignednessOfICmpPredicate(const ConstantRange &CR1,
+                                            const ConstantRange &CR2);
+
+  /// Return true iff CR1 ult CR2 is equivalent to CR1 sge CR2.
+  /// Does not depend on strictness/direction of the predicate.
+  static bool
+  areInsensitiveToSignednessOfInvertedICmpPredicate(const ConstantRange &CR1,
+                                                    const ConstantRange &CR2);
+
+  /// If the comparison between constant ranges this and Other
+  /// is insensitive to the signedness of the comparison predicate,
+  /// return a predicate equivalent to \p Pred, with flipped signedness
+  /// (i.e. unsigned instead of signed or vice versa), and maybe inverted,
+  /// otherwise returns CmpInst::Predicate::BAD_ICMP_PREDICATE.
+  static CmpInst::Predicate
+  getEquivalentPredWithFlippedSignedness(CmpInst::Predicate Pred,
+                                         const ConstantRange &CR1,
+                                         const ConstantRange &CR2);
+
   /// Produce the largest range containing all X such that "X BinOp Y" is
   /// guaranteed not to wrap (overflow) for *all* Y in Other. However, there may
   /// be *some* Y in Other for which additional X not contained in the result
@@ -150,6 +176,11 @@ public:
                                              const APInt &Other,
                                              unsigned NoWrapKind);
 
+  /// Initialize a range containing all values X that satisfy `(X & Mask)
+  /// != C`. Note that the range returned may contain values where `(X & Mask)
+  /// == C` holds, making it less precise, but still conservative.
+  static ConstantRange makeMaskNotEqualRange(const APInt &Mask, const APInt &C);
+
   /// Returns true if ConstantRange calculations are supported for intrinsic
   /// with \p IntrinsicID.
   static bool isIntrinsicSupported(Intrinsic::ID IntrinsicID);
@@ -162,6 +193,11 @@ public:
   /// ConstantRange::makeExactICmpRegion(Pred, RHS) == *this.  Return true if
   /// successful.
   bool getEquivalentICmp(CmpInst::Predicate &Pred, APInt &RHS) const;
+
+  /// Set up \p Pred, \p RHS and \p Offset such that (V + Offset) Pred RHS
+  /// is true iff V is in the range. Prefers using Offset == 0 if possible.
+  void
+  getEquivalentICmp(CmpInst::Predicate &Pred, APInt &RHS, APInt &Offset) const;
 
   /// Return the lower value for this range.
   const APInt &getLower() const { return Lower; }
@@ -241,6 +277,9 @@ public:
   /// Return true if all values in this range are non-negative.
   bool isAllNonNegative() const;
 
+  /// Return true if all values in this range are positive.
+  bool isAllPositive() const;
+
   /// Return the largest unsigned value contained in the ConstantRange.
   APInt getUnsignedMax() const;
 
@@ -300,6 +339,15 @@ public:
   /// in either set before.
   ConstantRange unionWith(const ConstantRange &CR,
                           PreferredRangeType Type = Smallest) const;
+
+  /// Intersect the two ranges and return the result if it can be represented
+  /// exactly, otherwise return std::nullopt.
+  std::optional<ConstantRange>
+  exactIntersectWith(const ConstantRange &CR) const;
+
+  /// Union the two ranges and return the result if it can be represented
+  /// exactly, otherwise return std::nullopt.
+  std::optional<ConstantRange> exactUnionWith(const ConstantRange &CR) const;
 
   /// Return a new range representing the possible values resulting
   /// from an application of the specified cast operator to this range. \p
@@ -378,6 +426,20 @@ public:
   /// from a multiplication of a value in this range and a value in \p Other,
   /// treating both this and \p Other as unsigned ranges.
   ConstantRange multiply(const ConstantRange &Other) const;
+
+  /// Return a new range representing the possible values resulting
+  /// from a multiplication with wrap type \p NoWrapKind of a value in this
+  /// range and a value in \p Other.
+  /// If the result range is disjoint, the preferred range is determined by the
+  /// \p PreferredRangeType.
+  ConstantRange
+  multiplyWithNoWrap(const ConstantRange &Other, unsigned NoWrapKind,
+                     PreferredRangeType RangeType = Smallest) const;
+
+  /// Return range of possible values for a signed multiplication of this and
+  /// \p Other. However, if overflow is possible always return a full range
+  /// rather than trying to determine a more precise result.
+  ConstantRange smul_fast(const ConstantRange &Other) const;
 
   /// Return a new range representing the possible values resulting
   /// from a signed maximum of a value in this range and a value in \p Other.
@@ -481,6 +543,17 @@ public:
   /// \p IntMinIsPoison is false.
   ConstantRange abs(bool IntMinIsPoison = false) const;
 
+  /// Calculate ctlz range. If \p ZeroIsPoison is set, the range is computed
+  /// ignoring a possible zero value contained in the input range.
+  ConstantRange ctlz(bool ZeroIsPoison = false) const;
+
+  /// Calculate cttz range. If \p ZeroIsPoison is set, the range is computed
+  /// ignoring a possible zero value contained in the input range.
+  ConstantRange cttz(bool ZeroIsPoison = false) const;
+
+  /// Calculate ctpop range.
+  ConstantRange ctpop() const;
+
   /// Represents whether an operation on the given constant range is known to
   /// always or never overflow.
   enum class OverflowResult {
@@ -508,6 +581,9 @@ public:
 
   /// Return whether unsigned mul of the two ranges always/never overflows.
   OverflowResult unsignedMulMayOverflow(const ConstantRange &Other) const;
+
+  /// Return known bits for values in this range.
+  KnownBits toKnownBits() const;
 
   /// Print out the bounds to a stream.
   void print(raw_ostream &OS) const;

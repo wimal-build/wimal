@@ -49,7 +49,7 @@
 #define SYMBOL_NAME(name) XSTR(__USER_LABEL_PREFIX__) #name
 
 #if defined(__ELF__) || defined(__MINGW32__) || defined(__wasm__) ||           \
-    defined(_AIX)
+    defined(_AIX)    || defined(__CYGWIN__)
 #define COMPILER_RT_ALIAS(name, aliasname) \
   COMPILER_RT_ABI __typeof(name) aliasname __attribute__((__alias__(#name)));
 #elif defined(__APPLE__)
@@ -70,12 +70,21 @@
 #error Unsupported target
 #endif
 
-#if defined(__NetBSD__) && (defined(_KERNEL) || defined(_STANDALONE))
+#if (defined(__FreeBSD__) || defined(__NetBSD__)) &&                           \
+    (defined(_KERNEL) || defined(_STANDALONE))
 //
 // Kernel and boot environment can't use normal headers,
 // so use the equivalent system headers.
+// NB: FreeBSD (and OpenBSD) deprecate machine/limits.h in
+// favour of sys/limits.h, so prefer the former, but fall
+// back on the latter if not available since NetBSD only has
+// the latter.
 //
+#if defined(__has_include) && __has_include(<sys/limits.h>)
+#include <sys/limits.h>
+#else
 #include <machine/limits.h>
+#endif
 #include <sys/stdint.h>
 #include <sys/types.h>
 #else
@@ -110,14 +119,14 @@ COMPILER_RT_ABI tu_int __udivmodti4(tu_int a, tu_int b, tu_int *rem);
 #if defined(_MSC_VER) && !defined(__clang__)
 #include <intrin.h>
 
-int __inline __builtin_ctz(uint32_t value) {
+static int __inline __builtin_ctz(uint32_t value) {
   unsigned long trailing_zero = 0;
   if (_BitScanForward(&trailing_zero, value))
     return trailing_zero;
   return 32;
 }
 
-int __inline __builtin_clz(uint32_t value) {
+static int __inline __builtin_clz(uint32_t value) {
   unsigned long leading_zero = 0;
   if (_BitScanReverse(&leading_zero, value))
     return 31 - leading_zero;
@@ -125,14 +134,14 @@ int __inline __builtin_clz(uint32_t value) {
 }
 
 #if defined(_M_ARM) || defined(_M_X64)
-int __inline __builtin_clzll(uint64_t value) {
+static int __inline __builtin_clzll(uint64_t value) {
   unsigned long leading_zero = 0;
   if (_BitScanReverse64(&leading_zero, value))
     return 63 - leading_zero;
   return 64;
 }
 #else
-int __inline __builtin_clzll(uint64_t value) {
+static int __inline __builtin_clzll(uint64_t value) {
   if (value == 0)
     return 64;
   uint32_t msh = (uint32_t)(value >> 32);
@@ -144,6 +153,19 @@ int __inline __builtin_clzll(uint64_t value) {
 #endif
 
 #define __builtin_clzl __builtin_clzll
+
+static bool __inline __builtin_sadd_overflow(int x, int y, int *result) {
+  if ((x < 0) != (y < 0)) {
+    *result = x + y;
+    return false;
+  }
+  int tmp = (unsigned int)x + (unsigned int)y;
+  if ((tmp < 0) != (x < 0))
+    return true;
+  *result = tmp;
+  return false;
+}
+
 #endif // defined(_MSC_VER) && !defined(__clang__)
 
 #endif // INT_LIB_H

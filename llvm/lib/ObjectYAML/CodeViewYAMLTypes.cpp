@@ -148,23 +148,28 @@ void ScalarTraits<GUID>::output(const GUID &G, void *, llvm::raw_ostream &OS) {
 StringRef ScalarTraits<GUID>::input(StringRef Scalar, void *Ctx, GUID &S) {
   if (Scalar.size() != 38)
     return "GUID strings are 38 characters long";
-  if (Scalar[0] != '{' || Scalar[37] != '}')
+  if (Scalar.front() != '{' || Scalar.back() != '}')
     return "GUID is not enclosed in {}";
-  if (Scalar[9] != '-' || Scalar[14] != '-' || Scalar[19] != '-' ||
-      Scalar[24] != '-')
+  Scalar = Scalar.substr(1, Scalar.size() - 2);
+  SmallVector<StringRef, 6> A;
+  Scalar.split(A, '-', 5);
+  if (A.size() != 5 || Scalar[8] != '-' || Scalar[13] != '-' ||
+      Scalar[18] != '-' || Scalar[23] != '-')
     return "GUID sections are not properly delineated with dashes";
-
-  uint8_t *OutBuffer = S.Guid;
-  for (auto Iter = Scalar.begin(); Iter != Scalar.end();) {
-    if (*Iter == '-' || *Iter == '{' || *Iter == '}') {
-      ++Iter;
-      continue;
-    }
-    uint8_t Value = (llvm::hexDigitValue(*Iter++) << 4);
-    Value |= llvm::hexDigitValue(*Iter++);
-    *OutBuffer++ = Value;
-  }
-
+  struct MSGuid {
+    support::ulittle32_t Data1;
+    support::ulittle16_t Data2;
+    support::ulittle16_t Data3;
+    support::ubig64_t Data4;
+  };
+  MSGuid G = {};
+  uint64_t D41{}, D42{};
+  if (!to_integer(A[0], G.Data1, 16) || !to_integer(A[1], G.Data2, 16) ||
+      !to_integer(A[2], G.Data3, 16) || !to_integer(A[3], D41, 16) ||
+      !to_integer(A[4], D42, 16))
+    return "GUID contains non hex digits";
+  G.Data4 = (D41 << 48) | D42;
+  ::memcpy(&S, &G, sizeof(GUID));
   return "";
 }
 
@@ -254,6 +259,7 @@ void ScalarEnumerationTraits<CallingConvention>::enumeration(
   IO.enumCase(Value, "ClrCall", CallingConvention::ClrCall);
   IO.enumCase(Value, "Inline", CallingConvention::Inline);
   IO.enumCase(Value, "NearVector", CallingConvention::NearVector);
+  IO.enumCase(Value, "Swift", CallingConvention::Swift);
 }
 
 void ScalarEnumerationTraits<PointerKind>::enumeration(IO &IO,
@@ -485,7 +491,10 @@ private:
 
 Error LeafRecordImpl<FieldListRecord>::fromCodeViewRecord(CVType Type) {
   MemberRecordConversionVisitor V(Members);
-  return visitMemberRecordStream(Type.content(), V);
+  FieldListRecord FieldList;
+  cantFail(TypeDeserializer::deserializeAs<FieldListRecord>(Type,
+                                                            FieldList));
+  return visitMemberRecordStream(FieldList.Data, V);
 }
 
 CVType LeafRecordImpl<FieldListRecord>::toCodeViewRecord(
@@ -776,7 +785,7 @@ std::vector<LeafRecord>
 llvm::CodeViewYAML::fromDebugT(ArrayRef<uint8_t> DebugTorP,
                                StringRef SectionName) {
   ExitOnError Err("Invalid " + std::string(SectionName) + " section!");
-  BinaryStreamReader Reader(DebugTorP, support::little);
+  BinaryStreamReader Reader(DebugTorP, llvm::endianness::little);
   CVTypeArray Types;
   uint32_t Magic;
 
@@ -805,7 +814,7 @@ ArrayRef<uint8_t> llvm::CodeViewYAML::toDebugT(ArrayRef<LeafRecord> Leafs,
   }
   uint8_t *ResultBuffer = Alloc.Allocate<uint8_t>(Size);
   MutableArrayRef<uint8_t> Output(ResultBuffer, Size);
-  BinaryStreamWriter Writer(Output, support::little);
+  BinaryStreamWriter Writer(Output, llvm::endianness::little);
   ExitOnError Err("Error writing type record to " + std::string(SectionName) +
                   " section");
   Err(Writer.writeInteger<uint32_t>(COFF::DEBUG_SECTION_MAGIC));

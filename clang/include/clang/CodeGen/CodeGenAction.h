@@ -19,6 +19,7 @@ namespace llvm {
 
 namespace clang {
 class BackendConsumer;
+class CodeGenerator;
 
 class CodeGenAction : public ASTFrontendAction {
 private:
@@ -52,7 +53,12 @@ private:
 
   std::unique_ptr<llvm::Module> loadModule(llvm::MemoryBufferRef MBRef);
 
+  /// Load bitcode modules to link into our module from the options.
+  bool loadLinkModules(CompilerInstance &CI);
+
 protected:
+  bool BeginSourceFileAction(CompilerInstance &CI) override;
+
   /// Create a new code generation action.  If the optional \p _VMContext
   /// parameter is supplied, the action uses it without taking ownership,
   /// otherwise it creates a fresh LLVM context and takes ownership.
@@ -77,7 +83,9 @@ public:
   /// Take the LLVM context used by this action.
   llvm::LLVMContext *takeLLVMContext();
 
-  BackendConsumer *BEConsumer;
+  CodeGenerator *getCodeGenerator() const;
+
+  BackendConsumer *BEConsumer = nullptr;
 };
 
 class EmitAssemblyAction : public CodeGenAction {

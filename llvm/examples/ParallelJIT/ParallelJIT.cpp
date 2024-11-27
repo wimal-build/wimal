@@ -22,6 +22,7 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/GenericValue.h"
+#include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
@@ -103,7 +104,7 @@ static Function *CreateFibFunction(Module *M) {
   BasicBlock *RecurseBB = BasicBlock::Create(Context, "recurse", FibF);
 
   // Create the "if (arg < 2) goto exitbb"
-  Value *CondInst = new ICmpInst(*BB, ICmpInst::ICMP_SLE, ArgX, Two, "cond");
+  Value *CondInst = new ICmpInst(BB, ICmpInst::ICMP_SLE, ArgX, Two, "cond");
   BranchInst::Create(RetBB, RecurseBB, CondInst, BB);
 
   // Create: ret int 1
@@ -256,6 +257,7 @@ void* callFunc( void* param )
 
 int main() {
   InitializeNativeTarget();
+  LLVMInitializeNativeAsmPrinter();
   LLVMContext Context;
 
   // Create some module to put our function into it.

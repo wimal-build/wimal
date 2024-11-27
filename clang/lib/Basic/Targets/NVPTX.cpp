@@ -16,18 +16,17 @@
 #include "clang/Basic/MacroBuilder.h"
 #include "clang/Basic/TargetBuiltins.h"
 #include "llvm/ADT/StringSwitch.h"
-#include "llvm/Frontend/OpenMP/OMPGridValues.h"
 
 using namespace clang;
 using namespace clang::targets;
 
-const Builtin::Info NVPTXTargetInfo::BuiltinInfo[] = {
+static constexpr Builtin::Info BuiltinInfo[] = {
 #define BUILTIN(ID, TYPE, ATTRS)                                               \
-  {#ID, TYPE, ATTRS, nullptr, ALL_LANGUAGES, nullptr},
+  {#ID, TYPE, ATTRS, nullptr, HeaderDesc::NO_HEADER, ALL_LANGUAGES},
 #define LIBBUILTIN(ID, TYPE, ATTRS, HEADER)                                    \
-  {#ID, TYPE, ATTRS, HEADER, ALL_LANGUAGES, nullptr},
+  {#ID, TYPE, ATTRS, nullptr, HeaderDesc::HEADER, ALL_LANGUAGES},
 #define TARGET_BUILTIN(ID, TYPE, ATTRS, FEATURE)                               \
-  {#ID, TYPE, ATTRS, nullptr, ALL_LANGUAGES, FEATURE},
+  {#ID, TYPE, ATTRS, FEATURE, HeaderDesc::NO_HEADER, ALL_LANGUAGES},
 #include "clang/Basic/BuiltinsNVPTX.def"
 };
 
@@ -42,34 +41,29 @@ NVPTXTargetInfo::NVPTXTargetInfo(const llvm::Triple &Triple,
 
   PTXVersion = 32;
   for (const StringRef Feature : Opts.FeaturesAsWritten) {
-    if (!Feature.startswith("+ptx"))
+    int PTXV;
+    if (!Feature.starts_with("+ptx") ||
+        Feature.drop_front(4).getAsInteger(10, PTXV))
       continue;
-    PTXVersion = llvm::StringSwitch<unsigned>(Feature)
-                     .Case("+ptx70", 70)
-                     .Case("+ptx65", 65)
-                     .Case("+ptx64", 64)
-                     .Case("+ptx63", 63)
-                     .Case("+ptx61", 61)
-                     .Case("+ptx60", 60)
-                     .Case("+ptx50", 50)
-                     .Case("+ptx43", 43)
-                     .Case("+ptx42", 42)
-                     .Case("+ptx41", 41)
-                     .Case("+ptx40", 40)
-                     .Case("+ptx32", 32)
-                     .Default(32);
+    PTXVersion = PTXV; // TODO: should it be max(PTXVersion, PTXV)?
   }
 
   TLSSupported = false;
   VLASupported = false;
   AddrSpaceMap = &NVPTXAddrSpaceMap;
-  GridValues = llvm::omp::NVPTXGpuGridValues;
   UseAddrSpaceMapMangling = true;
+  // __bf16 is always available as a load/store only type.
+  BFloat16Width = BFloat16Align = 16;
+  BFloat16Format = &llvm::APFloat::BFloat();
 
   // Define available target features
   // These must be defined in sorted order!
   NoAsmVariants = true;
-  GPU = CudaArch::SM_20;
+  GPU = OffloadArch::UNUSED;
+
+  // PTX supports f16 as a fundamental type.
+  HasLegalHalfType = true;
+  HasFloat16 = true;
 
   if (TargetPointerWidth == 32)
     resetDataLayout("e-p:32:32-i64:64-i128:128-v16:16-v32:32-n16:32:64");
@@ -83,7 +77,7 @@ NVPTXTargetInfo::NVPTXTargetInfo(const llvm::Triple &Triple,
   // types.
   llvm::Triple HostTriple(Opts.HostTriple);
   if (!HostTriple.isNVPTX())
-    HostTarget.reset(AllocateTarget(llvm::Triple(Opts.HostTriple), Opts));
+    HostTarget = AllocateTarget(llvm::Triple(Opts.HostTriple), Opts);
 
   // If no host target, make some guesses about the data layout and return.
   if (!HostTarget) {
@@ -103,12 +97,14 @@ NVPTXTargetInfo::NVPTXTargetInfo(const llvm::Triple &Triple,
     default:
       llvm_unreachable("TargetPointerWidth must be 32 or 64");
     }
+
+    MaxAtomicInlineWidth = TargetPointerWidth;
     return;
   }
 
   // Copy properties from host target.
-  PointerWidth = HostTarget->getPointerWidth(/* AddrSpace = */ 0);
-  PointerAlign = HostTarget->getPointerAlign(/* AddrSpace = */ 0);
+  PointerWidth = HostTarget->getPointerWidth(LangAS::Default);
+  PointerAlign = HostTarget->getPointerAlign(LangAS::Default);
   BoolWidth = HostTarget->getBoolWidth();
   BoolAlign = HostTarget->getBoolAlign();
   IntWidth = HostTarget->getIntWidth();
@@ -123,13 +119,14 @@ NVPTXTargetInfo::NVPTXTargetInfo(const llvm::Triple &Triple,
   LongAlign = HostTarget->getLongAlign();
   LongLongWidth = HostTarget->getLongLongWidth();
   LongLongAlign = HostTarget->getLongLongAlign();
-  MinGlobalAlign = HostTarget->getMinGlobalAlign(/* TypeSize = */ 0);
+  MinGlobalAlign = HostTarget->getMinGlobalAlign(/* TypeSize = */ 0,
+                                                 /* HasNonWeakDef = */ true);
   NewAlign = HostTarget->getNewAlign();
   DefaultAlignForAttributeAligned =
       HostTarget->getDefaultAlignForAttributeAligned();
   SizeType = HostTarget->getSizeType();
   IntMaxType = HostTarget->getIntMaxType();
-  PtrDiffType = HostTarget->getPtrDiffType(/* AddrSpace = */ 0);
+  PtrDiffType = HostTarget->getPtrDiffType(LangAS::Default);
   IntPtrType = HostTarget->getIntPtrType();
   WCharType = HostTarget->getWCharType();
   WIntType = HostTarget->getWIntType();
@@ -163,7 +160,7 @@ NVPTXTargetInfo::NVPTXTargetInfo(const llvm::Triple &Triple,
 }
 
 ArrayRef<const char *> NVPTXTargetInfo::getGCCRegNames() const {
-  return llvm::makeArrayRef(GCCRegNames);
+  return llvm::ArrayRef(GCCRegNames);
 }
 
 bool NVPTXTargetInfo::hasFeature(StringRef Feature) const {
@@ -176,84 +173,124 @@ void NVPTXTargetInfo::getTargetDefines(const LangOptions &Opts,
                                        MacroBuilder &Builder) const {
   Builder.defineMacro("__PTX__");
   Builder.defineMacro("__NVPTX__");
-  if (Opts.CUDAIsDevice) {
+
+  // Skip setting architecture dependent macros if undefined.
+  if (GPU == OffloadArch::UNUSED && !HostTarget)
+    return;
+
+  if (Opts.CUDAIsDevice || Opts.OpenMPIsTargetDevice || !HostTarget) {
     // Set __CUDA_ARCH__ for the GPU specified.
     std::string CUDAArchCode = [this] {
       switch (GPU) {
-      case CudaArch::GFX600:
-      case CudaArch::GFX601:
-      case CudaArch::GFX602:
-      case CudaArch::GFX700:
-      case CudaArch::GFX701:
-      case CudaArch::GFX702:
-      case CudaArch::GFX703:
-      case CudaArch::GFX704:
-      case CudaArch::GFX705:
-      case CudaArch::GFX801:
-      case CudaArch::GFX802:
-      case CudaArch::GFX803:
-      case CudaArch::GFX805:
-      case CudaArch::GFX810:
-      case CudaArch::GFX900:
-      case CudaArch::GFX902:
-      case CudaArch::GFX904:
-      case CudaArch::GFX906:
-      case CudaArch::GFX908:
-      case CudaArch::GFX909:
-      case CudaArch::GFX90c:
-      case CudaArch::GFX1010:
-      case CudaArch::GFX1011:
-      case CudaArch::GFX1012:
-      case CudaArch::GFX1030:
-      case CudaArch::GFX1031:
-      case CudaArch::GFX1032:
-      case CudaArch::GFX1033:
-      case CudaArch::LAST:
+      case OffloadArch::GFX600:
+      case OffloadArch::GFX601:
+      case OffloadArch::GFX602:
+      case OffloadArch::GFX700:
+      case OffloadArch::GFX701:
+      case OffloadArch::GFX702:
+      case OffloadArch::GFX703:
+      case OffloadArch::GFX704:
+      case OffloadArch::GFX705:
+      case OffloadArch::GFX801:
+      case OffloadArch::GFX802:
+      case OffloadArch::GFX803:
+      case OffloadArch::GFX805:
+      case OffloadArch::GFX810:
+      case OffloadArch::GFX9_GENERIC:
+      case OffloadArch::GFX900:
+      case OffloadArch::GFX902:
+      case OffloadArch::GFX904:
+      case OffloadArch::GFX906:
+      case OffloadArch::GFX908:
+      case OffloadArch::GFX909:
+      case OffloadArch::GFX90a:
+      case OffloadArch::GFX90c:
+      case OffloadArch::GFX940:
+      case OffloadArch::GFX941:
+      case OffloadArch::GFX942:
+      case OffloadArch::GFX10_1_GENERIC:
+      case OffloadArch::GFX1010:
+      case OffloadArch::GFX1011:
+      case OffloadArch::GFX1012:
+      case OffloadArch::GFX1013:
+      case OffloadArch::GFX10_3_GENERIC:
+      case OffloadArch::GFX1030:
+      case OffloadArch::GFX1031:
+      case OffloadArch::GFX1032:
+      case OffloadArch::GFX1033:
+      case OffloadArch::GFX1034:
+      case OffloadArch::GFX1035:
+      case OffloadArch::GFX1036:
+      case OffloadArch::GFX11_GENERIC:
+      case OffloadArch::GFX1100:
+      case OffloadArch::GFX1101:
+      case OffloadArch::GFX1102:
+      case OffloadArch::GFX1103:
+      case OffloadArch::GFX1150:
+      case OffloadArch::GFX1151:
+      case OffloadArch::GFX1152:
+      case OffloadArch::GFX12_GENERIC:
+      case OffloadArch::GFX1200:
+      case OffloadArch::GFX1201:
+      case OffloadArch::AMDGCNSPIRV:
+      case OffloadArch::Generic:
+      case OffloadArch::LAST:
         break;
-      case CudaArch::UNUSED:
-      case CudaArch::UNKNOWN:
+      case OffloadArch::UNKNOWN:
         assert(false && "No GPU arch when compiling CUDA device code.");
         return "";
-      case CudaArch::SM_20:
+      case OffloadArch::UNUSED:
+      case OffloadArch::SM_20:
         return "200";
-      case CudaArch::SM_21:
+      case OffloadArch::SM_21:
         return "210";
-      case CudaArch::SM_30:
+      case OffloadArch::SM_30:
         return "300";
-      case CudaArch::SM_32:
+      case OffloadArch::SM_32_:
         return "320";
-      case CudaArch::SM_35:
+      case OffloadArch::SM_35:
         return "350";
-      case CudaArch::SM_37:
+      case OffloadArch::SM_37:
         return "370";
-      case CudaArch::SM_50:
+      case OffloadArch::SM_50:
         return "500";
-      case CudaArch::SM_52:
+      case OffloadArch::SM_52:
         return "520";
-      case CudaArch::SM_53:
+      case OffloadArch::SM_53:
         return "530";
-      case CudaArch::SM_60:
+      case OffloadArch::SM_60:
         return "600";
-      case CudaArch::SM_61:
+      case OffloadArch::SM_61:
         return "610";
-      case CudaArch::SM_62:
+      case OffloadArch::SM_62:
         return "620";
-      case CudaArch::SM_70:
+      case OffloadArch::SM_70:
         return "700";
-      case CudaArch::SM_72:
+      case OffloadArch::SM_72:
         return "720";
-      case CudaArch::SM_75:
+      case OffloadArch::SM_75:
         return "750";
-      case CudaArch::SM_80:
+      case OffloadArch::SM_80:
         return "800";
+      case OffloadArch::SM_86:
+        return "860";
+      case OffloadArch::SM_87:
+        return "870";
+      case OffloadArch::SM_89:
+        return "890";
+      case OffloadArch::SM_90:
+      case OffloadArch::SM_90a:
+        return "900";
       }
-      llvm_unreachable("unhandled CudaArch");
+      llvm_unreachable("unhandled OffloadArch");
     }();
     Builder.defineMacro("__CUDA_ARCH__", CUDAArchCode);
+    if (GPU == OffloadArch::SM_90a)
+      Builder.defineMacro("__CUDA_ARCH_FEAT_SM90_ALL", "1");
   }
 }
 
 ArrayRef<Builtin::Info> NVPTXTargetInfo::getTargetBuiltins() const {
-  return llvm::makeArrayRef(BuiltinInfo, clang::NVPTX::LastTSBuiltin -
-                                             Builtin::FirstTSBuiltin);
+  return llvm::ArrayRef(BuiltinInfo,
+                        clang::NVPTX::LastTSBuiltin - Builtin::FirstTSBuiltin);
 }

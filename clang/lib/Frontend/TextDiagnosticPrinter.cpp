@@ -36,7 +36,7 @@ TextDiagnosticPrinter::~TextDiagnosticPrinter() {
 void TextDiagnosticPrinter::BeginSourceFile(const LangOptions &LO,
                                             const Preprocessor *PP) {
   // Build the TextDiagnostic utility.
-  TextDiag.reset(new TextDiagnostic(OS, LO, &*DiagOpts));
+  TextDiag.reset(new TextDiagnostic(OS, LO, &*DiagOpts, PP));
 }
 
 void TextDiagnosticPrinter::EndSourceFile() {
@@ -133,8 +133,7 @@ void TextDiagnosticPrinter::HandleDiagnostic(DiagnosticsEngine::Level Level,
   // diagnostics in a context that lacks language options, a source manager, or
   // other infrastructure necessary when emitting more rich diagnostics.
   if (!Info.getLocation().isValid()) {
-    TextDiagnostic::printDiagnosticLevel(OS, Level, DiagOpts->ShowColors,
-                                         DiagOpts->CLFallbackMode);
+    TextDiagnostic::printDiagnosticLevel(OS, Level, DiagOpts->ShowColors);
     TextDiagnostic::printDiagnosticMessage(
         OS, /*IsSupplemental=*/Level == DiagnosticsEngine::Note,
         DiagMessageStream.str(), OS.tell() - StartOfLocationInfo,

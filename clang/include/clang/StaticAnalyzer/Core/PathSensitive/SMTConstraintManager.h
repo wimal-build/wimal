@@ -18,6 +18,7 @@
 #include "clang/Basic/TargetInfo.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/RangedConstraintManager.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/SMTConv.h"
+#include <optional>
 
 typedef llvm::ImmutableSet<
     std::pair<clang::ento::SymbolRef, const llvm::SMTExpr *>>
@@ -33,7 +34,10 @@ class SMTConstraintManager : public clang::ento::SimpleConstraintManager {
 public:
   SMTConstraintManager(clang::ento::ExprEngine *EE,
                        clang::ento::SValBuilder &SB)
-      : SimpleConstraintManager(EE, SB) {}
+      : SimpleConstraintManager(EE, SB) {
+    Solver->setBoolParam("model", true); // Enable model finding
+    Solver->setUnsignedParam("timeout", 15000 /*milliseconds*/);
+  }
   virtual ~SMTConstraintManager() = default;
 
   //===------------------------------------------------------------------===//
@@ -128,8 +132,8 @@ public:
       addStateConstraints(State);
 
       // Constraints are unsatisfiable
-      Optional<bool> isSat = Solver->check();
-      if (!isSat.hasValue() || !isSat.getValue())
+      std::optional<bool> isSat = Solver->check();
+      if (!isSat || !*isSat)
         return nullptr;
 
       // Model does not assign interpretation
@@ -145,8 +149,8 @@ public:
 
       Solver->addConstraint(NotExp);
 
-      Optional<bool> isNotSat = Solver->check();
-      if (!isSat.hasValue() || isNotSat.getValue())
+      std::optional<bool> isNotSat = Solver->check();
+      if (!isNotSat || *isNotSat)
         return nullptr;
 
       // This is the only solution, store it
@@ -202,9 +206,9 @@ public:
     auto CZ = State->get<ConstraintSMT>();
     auto &CZFactory = State->get_context<ConstraintSMT>();
 
-    for (auto I = CZ.begin(), E = CZ.end(); I != E; ++I) {
-      if (SymReaper.isDead(I->first))
-        CZ = CZFactory.remove(CZ, *I);
+    for (const auto &Entry : CZ) {
+      if (SymReaper.isDead(Entry.first))
+        CZ = CZFactory.remove(CZ, Entry);
     }
 
     return State->set<ConstraintSMT>(CZ);
@@ -246,7 +250,7 @@ public:
   bool canReasonAbout(SVal X) const override {
     const TargetInfo &TI = getBasicVals().getContext().getTargetInfo();
 
-    Optional<nonloc::SymbolVal> SymVal = X.getAs<nonloc::SymbolVal>();
+    std::optional<nonloc::SymbolVal> SymVal = X.getAs<nonloc::SymbolVal>();
     if (!SymVal)
       return true;
 
@@ -340,11 +344,11 @@ protected:
     Solver->reset();
     addStateConstraints(NewState);
 
-    Optional<bool> res = Solver->check();
-    if (!res.hasValue())
+    std::optional<bool> res = Solver->check();
+    if (!res)
       Cached[hash] = ConditionTruthVal();
     else
-      Cached[hash] = ConditionTruthVal(res.getValue());
+      Cached[hash] = ConditionTruthVal(*res);
 
     return Cached[hash];
   }

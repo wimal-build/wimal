@@ -12,14 +12,16 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#include "hwasan.h"
 #include "hwasan_dynamic_shadow.h"
-#include "hwasan_mapping.h"
-#include "sanitizer_common/sanitizer_common.h"
-#include "sanitizer_common/sanitizer_posix.h"
 
 #include <elf.h>
 #include <link.h>
+
+#include "hwasan.h"
+#include "hwasan_mapping.h"
+#include "hwasan_thread_list.h"
+#include "sanitizer_common/sanitizer_common.h"
+#include "sanitizer_common/sanitizer_posix.h"
 
 // The code in this file needs to run in an unrelocated binary. It should not
 // access any external symbol, including its own non-hidden globals.
@@ -34,15 +36,20 @@ decltype(__hwasan_shadow)* __hwasan_premap_shadow();
 
 namespace __hwasan {
 
+// We cannot call anything in libc here (see comment above), so we need to
+// assume the biggest allowed page size.
+// Android max page size is defined as 16k here:
+// https://android.googlesource.com/platform/bionic/+/main/libc/platform/bionic/page.h#41
+static constexpr uptr kMaxGranularity = 16384;
+
 // Conservative upper limit.
 static uptr PremapShadowSize() {
-  return RoundUpTo(GetMaxVirtualAddress() >> kShadowScale,
-                   GetMmapGranularity());
+  return RoundUpTo(GetMaxVirtualAddress() >> kShadowScale, kMaxGranularity);
 }
 
 static uptr PremapShadow() {
   return MapDynamicShadow(PremapShadowSize(), kShadowScale,
-                          kShadowBaseAlignment, kHighMemEnd);
+                          kShadowBaseAlignment, kHighMemEnd, kMaxGranularity);
 }
 
 static bool IsPremapShadowAvailable() {
@@ -54,7 +61,7 @@ static bool IsPremapShadowAvailable() {
 }
 
 static uptr FindPremappedShadowStart(uptr shadow_size_bytes) {
-  const uptr granularity = GetMmapGranularity();
+  const uptr granularity = kMaxGranularity;
   const uptr shadow_start = reinterpret_cast<uptr>(&__hwasan_shadow);
   const uptr premap_shadow_size = PremapShadowSize();
   const uptr shadow_size = RoundUpTo(shadow_size_bytes, granularity);
@@ -107,18 +114,33 @@ uptr FindDynamicShadowStart(uptr shadow_size_bytes) {
   if (IsPremapShadowAvailable())
     return FindPremappedShadowStart(shadow_size_bytes);
   return MapDynamicShadow(shadow_size_bytes, kShadowScale, kShadowBaseAlignment,
-                          kHighMemEnd);
+                          kHighMemEnd, kMaxGranularity);
 }
 
 }  // namespace __hwasan
+
+#elif SANITIZER_FUCHSIA
+
+namespace __hwasan {
+
+void InitShadowGOT() {}
+
+}  // namespace __hwasan
+
 #else
 namespace __hwasan {
 
 void InitShadowGOT() {}
 
 uptr FindDynamicShadowStart(uptr shadow_size_bytes) {
+#  if defined(HWASAN_ALIASING_MODE)
+  constexpr uptr kAliasSize = 1ULL << kAddressTagShift;
+  constexpr uptr kNumAliases = 1ULL << kTagBits;
+  return MapDynamicShadowAndAliases(shadow_size_bytes, kAliasSize, kNumAliases,
+                                    RingBufferSize());
+#  endif
   return MapDynamicShadow(shadow_size_bytes, kShadowScale, kShadowBaseAlignment,
-                          kHighMemEnd);
+                          kHighMemEnd, GetMmapGranularity());
 }
 
 }  // namespace __hwasan

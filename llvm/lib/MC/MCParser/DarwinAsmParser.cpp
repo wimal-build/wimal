@@ -6,16 +6,13 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSwitch.h"
-#include "llvm/ADT/Triple.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/BinaryFormat/MachO.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCDirectives.h"
-#include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCParser/MCAsmLexer.h"
 #include "llvm/MC/MCParser/MCAsmParser.h"
 #include "llvm/MC/MCParser/MCAsmParserExtension.h"
@@ -23,12 +20,13 @@
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/SectionKind.h"
+#include "llvm/Support/Error.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SMLoc.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/raw_ostream.h"
-#include <algorithm>
+#include "llvm/TargetParser/Triple.h"
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -194,6 +192,8 @@ public:
     addDirectiveHandler<&DarwinAsmParser::parseMacOSXVersionMin>(
       ".macosx_version_min");
     addDirectiveHandler<&DarwinAsmParser::parseBuildVersion>(".build_version");
+    addDirectiveHandler<&DarwinAsmParser::parseDirectiveCGProfile>(
+        ".cg_profile");
 
     LastVersionDirective = SMLoc();
   }
@@ -466,12 +466,13 @@ public:
   bool parseSDKVersion(VersionTuple &SDKVersion);
   void checkVersion(StringRef Directive, StringRef Arg, SMLoc Loc,
                     Triple::OSType ExpectedOS);
+  bool parseDirectiveCGProfile(StringRef Directive, SMLoc Loc);
 };
 
 } // end anonymous namespace
 
 bool DarwinAsmParser::parseSectionSwitch(StringRef Segment, StringRef Section,
-                                         unsigned TAA, unsigned Align,
+                                         unsigned TAA, unsigned Alignment,
                                          unsigned StubSize) {
   if (getLexer().isNot(AsmToken::EndOfStatement))
     return TokError("unexpected token in section switching directive");
@@ -479,7 +480,7 @@ bool DarwinAsmParser::parseSectionSwitch(StringRef Segment, StringRef Section,
 
   // FIXME: Arch specific.
   bool isText = TAA & MachO::S_ATTR_PURE_INSTRUCTIONS;
-  getStreamer().SwitchSection(getContext().getMachOSection(
+  getStreamer().switchSection(getContext().getMachOSection(
       Segment, Section, TAA, StubSize,
       isText ? SectionKind::getText() : SectionKind::getData()));
 
@@ -491,8 +492,8 @@ bool DarwinAsmParser::parseSectionSwitch(StringRef Segment, StringRef Section,
   // the section. However, this is arguably more reasonable behavior, and there
   // is no good reason for someone to intentionally emit incorrectly sized
   // values into the implicitly aligned sections.
-  if (Align)
-    getStreamer().emitValueToAlignment(Align);
+  if (Alignment)
+    getStreamer().emitValueToAlignment(Align(Alignment));
 
   return false;
 }
@@ -689,15 +690,12 @@ bool DarwinAsmParser::parseDirectiveSection(StringRef, SMLoc) {
   unsigned StubSize;
   unsigned TAA;
   bool TAAParsed;
-  std::string ErrorStr =
-    MCSectionMachO::ParseSectionSpecifier(SectionSpec, Segment, Section,
-                                          TAA, TAAParsed, StubSize);
-
-  if (!ErrorStr.empty())
-    return Error(Loc, ErrorStr);
+  if (class Error E = MCSectionMachO::ParseSectionSpecifier(
+          SectionSpec, Segment, Section, TAA, TAAParsed, StubSize))
+    return Error(Loc, toString(std::move(E)));
 
   // Issue a warning if the target is not powerpc and Section is a *coal* section.
-  Triple TT = getParser().getContext().getObjectFileInfo()->getTargetTriple();
+  Triple TT = getParser().getContext().getTargetTriple();
   Triple::ArchType ArchTy = TT.getArch();
 
   if (ArchTy != Triple::ppc && ArchTy != Triple::ppc64) {
@@ -707,7 +705,7 @@ bool DarwinAsmParser::parseDirectiveSection(StringRef, SMLoc) {
                                    .Case("__datacoal_nt", "__data")
                                    .Default(Section);
 
-    if (!Section.equals(NonCoalSection)) {
+    if (Section != NonCoalSection) {
       StringRef SectionVal(Loc.getPointer());
       size_t B = SectionVal.find(',') + 1, E = SectionVal.find(',', B);
       SMLoc BLoc = SMLoc::getFromPointer(SectionVal.data() + B);
@@ -721,7 +719,7 @@ bool DarwinAsmParser::parseDirectiveSection(StringRef, SMLoc) {
 
   // FIXME: Arch specific.
   bool isText = Segment == "__TEXT";  // FIXME: Hack.
-  getStreamer().SwitchSection(getContext().getMachOSection(
+  getStreamer().switchSection(getContext().getMachOSection(
       Segment, Section, TAA, StubSize,
       isText ? SectionKind::getText() : SectionKind::getData()));
   return false;
@@ -730,10 +728,10 @@ bool DarwinAsmParser::parseDirectiveSection(StringRef, SMLoc) {
 /// ParseDirectivePushSection:
 ///   ::= .pushsection identifier (',' identifier)*
 bool DarwinAsmParser::parseDirectivePushSection(StringRef S, SMLoc Loc) {
-  getStreamer().PushSection();
+  getStreamer().pushSection();
 
   if (parseDirectiveSection(S, Loc)) {
-    getStreamer().PopSection();
+    getStreamer().popSection();
     return true;
   }
 
@@ -743,7 +741,7 @@ bool DarwinAsmParser::parseDirectivePushSection(StringRef S, SMLoc Loc) {
 /// ParseDirectivePopSection:
 ///   ::= .popsection
 bool DarwinAsmParser::parseDirectivePopSection(StringRef, SMLoc) {
-  if (!getStreamer().PopSection())
+  if (!getStreamer().popSection())
     return TokError(".popsection without corresponding .pushsection");
   return false;
 }
@@ -754,7 +752,7 @@ bool DarwinAsmParser::parseDirectivePrevious(StringRef DirName, SMLoc) {
   MCSectionSubPair PreviousSection = getStreamer().getPreviousSection();
   if (!PreviousSection.first)
     return TokError(".previous without corresponding .section");
-  getStreamer().SwitchSection(PreviousSection.first, PreviousSection.second);
+  getStreamer().switchSection(PreviousSection.first, PreviousSection.second);
   return false;
 }
 
@@ -769,8 +767,8 @@ bool DarwinAsmParser::parseDirectiveSecureLogUnique(StringRef, SMLoc IDLoc) {
     return Error(IDLoc, ".secure_log_unique specified multiple times");
 
   // Get the secure log path.
-  const char *SecureLogFile = getContext().getSecureLogFile();
-  if (!SecureLogFile)
+  StringRef SecureLogFile = getContext().getSecureLogFile();
+  if (SecureLogFile.empty())
     return Error(IDLoc, ".secure_log_unique used but AS_SECURE_LOG_FILE "
                  "environment variable unset.");
 
@@ -779,7 +777,7 @@ bool DarwinAsmParser::parseDirectiveSecureLogUnique(StringRef, SMLoc IDLoc) {
   if (!OS) {
     std::error_code EC;
     auto NewOS = std::make_unique<raw_fd_ostream>(
-        StringRef(SecureLogFile), EC, sys::fs::OF_Append | sys::fs::OF_Text);
+        SecureLogFile, EC, sys::fs::OF_Append | sys::fs::OF_TextWithCRLF);
     if (EC)
        return Error(IDLoc, Twine("can't open secure log file: ") +
                                SecureLogFile + " (" + EC.message() + ")");
@@ -874,7 +872,7 @@ bool DarwinAsmParser::parseDirectiveTBSS(StringRef, SMLoc) {
       getContext().getMachOSection("__DATA", "__thread_bss",
                                    MachO::S_THREAD_LOCAL_ZEROFILL, 0,
                                    SectionKind::getThreadBSS()),
-      Sym, Size, 1 << Pow2Alignment);
+      Sym, Size, Align(1ULL << Pow2Alignment));
 
   return false;
 }
@@ -904,7 +902,7 @@ bool DarwinAsmParser::parseDirectiveZerofill(StringRef, SMLoc) {
     getStreamer().emitZerofill(
         getContext().getMachOSection(Segment, Section, MachO::S_ZEROFILL, 0,
                                      SectionKind::getBSS()),
-        /*Symbol=*/nullptr, /*Size=*/0, /*ByteAlignment=*/0, SectionLoc);
+        /*Symbol=*/nullptr, /*Size=*/0, Align(1), SectionLoc);
     return false;
   }
 
@@ -960,10 +958,10 @@ bool DarwinAsmParser::parseDirectiveZerofill(StringRef, SMLoc) {
   // Create the zerofill Symbol with Size and Pow2Alignment
   //
   // FIXME: Arch specific.
-  getStreamer().emitZerofill(getContext().getMachOSection(
-                               Segment, Section, MachO::S_ZEROFILL,
-                               0, SectionKind::getBSS()),
-                             Sym, Size, 1 << Pow2Alignment, SectionLoc);
+  getStreamer().emitZerofill(
+      getContext().getMachOSection(Segment, Section, MachO::S_ZEROFILL, 0,
+                                   SectionKind::getBSS()),
+      Sym, Size, Align(1ULL << Pow2Alignment), SectionLoc);
 
   return false;
 }
@@ -1092,7 +1090,7 @@ bool DarwinAsmParser::parseSDKVersion(VersionTuple &SDKVersion) {
 
 void DarwinAsmParser::checkVersion(StringRef Directive, StringRef Arg,
                                    SMLoc Loc, Triple::OSType ExpectedOS) {
-  const Triple &Target = getContext().getObjectFileInfo()->getTargetTriple();
+  const Triple &Target = getContext().getTargetTriple();
   if (Target.getOS() != ExpectedOS)
     Warning(Loc, Twine(Directive) +
             (Arg.empty() ? Twine() : Twine(' ') + Arg) +
@@ -1132,7 +1130,7 @@ bool DarwinAsmParser::parseVersionMin(StringRef Directive, SMLoc Loc,
   if (isSDKVersionToken(getLexer().getTok()) && parseSDKVersion(SDKVersion))
     return true;
 
-  if (parseToken(AsmToken::EndOfStatement))
+  if (parseEOL())
     return addErrorSuffix(Twine(" in '") + Directive + "' directive");
 
   Triple::OSType ExpectedOS = getOSTypeFromMCVM(Type);
@@ -1143,16 +1141,21 @@ bool DarwinAsmParser::parseVersionMin(StringRef Directive, SMLoc Loc,
 
 static Triple::OSType getOSTypeFromPlatform(MachO::PlatformType Type) {
   switch (Type) {
+  case MachO::PLATFORM_UNKNOWN: /* silence warning */
+    break;
   case MachO::PLATFORM_MACOS:   return Triple::MacOSX;
   case MachO::PLATFORM_IOS:     return Triple::IOS;
   case MachO::PLATFORM_TVOS:    return Triple::TvOS;
   case MachO::PLATFORM_WATCHOS: return Triple::WatchOS;
+  case MachO::PLATFORM_XROS:    return Triple::XROS;
   case MachO::PLATFORM_BRIDGEOS:         /* silence warning */ break;
+  case MachO::PLATFORM_DRIVERKIT:
+    return Triple::DriverKit;
   case MachO::PLATFORM_MACCATALYST: return Triple::IOS;
   case MachO::PLATFORM_IOSSIMULATOR:     /* silence warning */ break;
   case MachO::PLATFORM_TVOSSIMULATOR:    /* silence warning */ break;
   case MachO::PLATFORM_WATCHOSSIMULATOR: /* silence warning */ break;
-  case MachO::PLATFORM_DRIVERKIT:        /* silence warning */ break;
+  case MachO::PLATFORM_XROS_SIMULATOR:   /* silence warning */ break;
   }
   llvm_unreachable("Invalid mach-o platform type");
 }
@@ -1166,13 +1169,13 @@ bool DarwinAsmParser::parseBuildVersion(StringRef Directive, SMLoc Loc) {
     return TokError("platform name expected");
 
   unsigned Platform = StringSwitch<unsigned>(PlatformName)
-    .Case("macos", MachO::PLATFORM_MACOS)
-    .Case("ios", MachO::PLATFORM_IOS)
-    .Case("tvos", MachO::PLATFORM_TVOS)
-    .Case("watchos", MachO::PLATFORM_WATCHOS)
-    .Case("macCatalyst", MachO::PLATFORM_MACCATALYST)
-    .Default(0);
-  if (Platform == 0)
+#define PLATFORM(platform, id, name, build_name, target, tapi_target,          \
+                 marketing)                                                    \
+  .Case(#build_name, MachO::PLATFORM_##platform)
+#include "llvm/BinaryFormat/MachO.def"
+                          .Default(MachO::PLATFORM_UNKNOWN);
+
+  if (Platform == MachO::PLATFORM_UNKNOWN)
     return Error(PlatformLoc, "unknown platform name");
 
   if (getLexer().isNot(AsmToken::Comma))
@@ -1189,7 +1192,7 @@ bool DarwinAsmParser::parseBuildVersion(StringRef Directive, SMLoc Loc) {
   if (isSDKVersionToken(getLexer().getTok()) && parseSDKVersion(SDKVersion))
     return true;
 
-  if (parseToken(AsmToken::EndOfStatement))
+  if (parseEOL())
     return addErrorSuffix(" in '.build_version' directive");
 
   Triple::OSType ExpectedOS
@@ -1199,6 +1202,11 @@ bool DarwinAsmParser::parseBuildVersion(StringRef Directive, SMLoc Loc) {
   return false;
 }
 
+/// parseDirectiveCGProfile
+///   ::= .cg_profile from, to, count
+bool DarwinAsmParser::parseDirectiveCGProfile(StringRef S, SMLoc Loc) {
+  return MCAsmParserExtension::ParseDirectiveCGProfile(S, Loc);
+}
 
 namespace llvm {
 

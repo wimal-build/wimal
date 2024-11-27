@@ -12,6 +12,7 @@ static_library("Tooling") {
     "//clang/lib/Lex",
     "//clang/lib/Rewrite",
     "//clang/lib/Tooling/Core",
+    "//llvm/lib/TargetParser",
   ]
   sources = [
     "AllTUsExecution.cpp",

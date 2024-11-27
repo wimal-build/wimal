@@ -27,8 +27,10 @@ class GlobalAlias;
 class GlobalIFunc;
 class GlobalVariable;
 class Instruction;
+template <bool ExtraIteratorBits> struct ilist_iterator_bits;
+template <class ParentTy> struct ilist_parent;
 template <unsigned InternalLen> class SmallString;
-template <typename ValueSubClass> class SymbolTableListTraits;
+template <typename ValueSubClass, typename ... Args> class SymbolTableListTraits;
 
 /// This class provides a symbol table of name/value pairs. It is essentially
 /// a std::map<std::string,Value*> but has a controlled interface provided by
@@ -41,7 +43,8 @@ class ValueSymbolTable {
   friend class SymbolTableListTraits<GlobalAlias>;
   friend class SymbolTableListTraits<GlobalIFunc>;
   friend class SymbolTableListTraits<GlobalVariable>;
-  friend class SymbolTableListTraits<Instruction>;
+  friend class SymbolTableListTraits<Instruction, ilist_iterator_bits<true>,
+                                     ilist_parent<BasicBlock>>;
   friend class Value;
 
 /// @name Types
@@ -60,18 +63,23 @@ public:
 /// @name Constructors
 /// @{
 
-  ValueSymbolTable() : vmap(0) {}
+  ValueSymbolTable(int MaxNameSize = -1) : vmap(0), MaxNameSize(MaxNameSize) {}
   ~ValueSymbolTable();
 
-/// @}
-/// @name Accessors
-/// @{
+  /// @}
+  /// @name Accessors
+  /// @{
 
   /// This method finds the value with the given \p Name in the
   /// the symbol table.
   /// @returns the value associated with the \p Name
   /// Lookup a named Value.
-  Value *lookup(StringRef Name) const { return vmap.lookup(Name); }
+  Value *lookup(StringRef Name) const {
+    if (MaxNameSize > -1 && Name.size() > (unsigned)MaxNameSize)
+      Name = Name.substr(0, std::max(1u, (unsigned)MaxNameSize));
+
+    return vmap.lookup(Name);
+  }
 
   /// @returns true iff the symbol table is empty
   /// Determine if the symbol table is empty
@@ -128,6 +136,8 @@ private:
   /// @{
 
   ValueMap vmap;                    ///< The map that holds the symbol table.
+  int MaxNameSize; ///< The maximum size for each name. If the limit is
+                   ///< exceeded, the name is capped.
   mutable uint32_t LastUnique = 0;  ///< Counter for tracking unique names
 
 /// @}

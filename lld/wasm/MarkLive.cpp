@@ -21,9 +21,7 @@
 #include "MarkLive.h"
 #include "Config.h"
 #include "InputChunks.h"
-#include "InputEvent.h"
-#include "InputGlobal.h"
-#include "InputTable.h"
+#include "InputElement.h"
 #include "SymbolTable.h"
 #include "Symbols.h"
 
@@ -32,8 +30,7 @@
 using namespace llvm;
 using namespace llvm::wasm;
 
-namespace lld {
-namespace wasm {
+namespace lld::wasm {
 
 namespace {
 
@@ -43,7 +40,9 @@ public:
 
 private:
   void enqueue(Symbol *sym);
+  void enqueue(InputChunk *chunk);
   void enqueueInitFunctions(const ObjFile *sym);
+  void enqueueRetainedSegments(const ObjFile *file);
   void mark();
   bool isCallCtorsLive();
 
@@ -59,19 +58,30 @@ void MarkLive::enqueue(Symbol *sym) {
   LLVM_DEBUG(dbgs() << "markLive: " << sym->getName() << "\n");
 
   InputFile *file = sym->getFile();
-  bool needInitFunctions = file && !file->isLive() && sym->isDefined();
+  bool markImplicitDeps = file && !file->isLive() && sym->isDefined();
 
   sym->markLive();
 
-  // Mark ctor functions in the object that defines this symbol live.
-  // The ctor functions are all referenced by the synthetic callCtors
-  // function. However, this function does not contain relocations so we
-  // have to manually mark the ctors as live.
-  if (needInitFunctions)
-    enqueueInitFunctions(cast<ObjFile>(file));
+  if (markImplicitDeps) {
+    if (auto obj = dyn_cast<ObjFile>(file)) {
+      // Mark as live the ctor functions in the object that defines this symbol.
+      // The ctor functions are all referenced by the synthetic callCtors
+      // function. However, this function does not contain relocations so we
+      // have to manually mark the ctors as live.
+      enqueueInitFunctions(obj);
+      // Mark retained segments in the object that defines this symbol live.
+      enqueueRetainedSegments(obj);
+    }
+  }
 
   if (InputChunk *chunk = sym->getChunk())
     queue.push_back(chunk);
+}
+
+void MarkLive::enqueue(InputChunk *chunk) {
+  LLVM_DEBUG(dbgs() << "markLive: " << toString(chunk) << "\n");
+  chunk->live = true;
+  queue.push_back(chunk);
 }
 
 // The ctor functions are all referenced by the synthetic callCtors
@@ -86,23 +96,35 @@ void MarkLive::enqueueInitFunctions(const ObjFile *obj) {
   }
 }
 
+// Mark segments flagged by segment-level no-strip. Segment-level no-strip is
+// usually used to retain segments without having symbol table entry.
+void MarkLive::enqueueRetainedSegments(const ObjFile *file) {
+  for (InputChunk *chunk : file->segments)
+    if (chunk->isRetained())
+      enqueue(chunk);
+}
+
 void MarkLive::run() {
   // Add GC root symbols.
   if (!config->entry.empty())
     enqueue(symtab->find(config->entry));
 
   // We need to preserve any no-strip or exported symbol
-  for (Symbol *sym : symtab->getSymbols())
+  for (Symbol *sym : symtab->symbols())
     if (sym->isNoStrip() || sym->isExported())
       enqueue(sym);
 
   if (WasmSym::callDtors)
     enqueue(WasmSym::callDtors);
 
-  // Enqueue constructors in objects explicitly live from the command-line.
-  for (const ObjFile *obj : symtab->objectFiles)
-    if (obj->isLive())
+  for (const ObjFile *obj : ctx.objectFiles)
+    if (obj->isLive()) {
+      // Enqueue constructors in objects explicitly live from the command-line.
       enqueueInitFunctions(obj);
+      // Enqueue retained segments in objects explicitly live from the
+      // command-line.
+      enqueueRetainedSegments(obj);
+    }
 
   mark();
 
@@ -154,7 +176,7 @@ void markLive() {
 
   // Report garbage-collected sections.
   if (config->printGcSections) {
-    for (const ObjFile *obj : symtab->objectFiles) {
+    for (const ObjFile *obj : ctx.objectFiles) {
       for (InputChunk *c : obj->functions)
         if (!c->live)
           message("removing unused section " + toString(c));
@@ -164,20 +186,20 @@ void markLive() {
       for (InputGlobal *g : obj->globals)
         if (!g->live)
           message("removing unused section " + toString(g));
-      for (InputEvent *e : obj->events)
-        if (!e->live)
-          message("removing unused section " + toString(e));
+      for (InputTag *t : obj->tags)
+        if (!t->live)
+          message("removing unused section " + toString(t));
       for (InputTable *t : obj->tables)
         if (!t->live)
           message("removing unused section " + toString(t));
     }
-    for (InputChunk *c : symtab->syntheticFunctions)
+    for (InputChunk *c : ctx.syntheticFunctions)
       if (!c->live)
         message("removing unused section " + toString(c));
-    for (InputGlobal *g : symtab->syntheticGlobals)
+    for (InputGlobal *g : ctx.syntheticGlobals)
       if (!g->live)
         message("removing unused section " + toString(g));
-    for (InputTable *t : symtab->syntheticTables)
+    for (InputTable *t : ctx.syntheticTables)
       if (!t->live)
         message("removing unused section " + toString(t));
   }
@@ -189,13 +211,13 @@ bool MarkLive::isCallCtorsLive() {
     return false;
 
   // In Emscripten-style PIC, we call `__wasm_call_ctors` which calls
-  // `__wasm_apply_relocs`.
-  if (config->isPic)
+  // `__wasm_apply_data_relocs`.
+  if (ctx.isPic)
     return true;
 
   // If there are any init functions, mark `__wasm_call_ctors` live so that
   // it can call them.
-  for (const ObjFile *file : symtab->objectFiles) {
+  for (const ObjFile *file : ctx.objectFiles) {
     const WasmLinkingData &l = file->getWasmObj()->linkingData();
     for (const WasmInitFunc &f : l.InitFunctions) {
       auto *sym = file->getFunctionSymbol(f.Symbol);
@@ -207,5 +229,4 @@ bool MarkLive::isCallCtorsLive() {
   return false;
 }
 
-} // namespace wasm
-} // namespace lld
+} // namespace lld::wasm

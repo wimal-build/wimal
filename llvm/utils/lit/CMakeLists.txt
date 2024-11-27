@@ -4,8 +4,6 @@
 configure_lit_site_cfg(
   "${CMAKE_CURRENT_SOURCE_DIR}/tests/lit.site.cfg.in"
   "${CMAKE_CURRENT_BINARY_DIR}/lit.site.cfg"
-  OUTPUT_MAPPING
-  "${CMAKE_CURRENT_BINARY_DIR}/tests/lit.site.cfg"
   )
 
 # Lit's test suite creates output files next to the sources which makes the
@@ -28,5 +26,5 @@ add_lit_testsuite(check-lit "Running lit's tests"
 )
 
 # For IDEs
-set_target_properties(check-lit PROPERTIES FOLDER "Tests")
-set_target_properties(prepare-check-lit PROPERTIES FOLDER "Tests")
+set_target_properties(check-lit PROPERTIES FOLDER "LLVM/Tests")
+set_target_properties(prepare-check-lit PROPERTIES FOLDER "LLVM/Tests")

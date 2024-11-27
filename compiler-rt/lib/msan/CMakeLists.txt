@@ -5,6 +5,7 @@ set(MSAN_RTL_SOURCES
   msan.cpp
   msan_allocator.cpp
   msan_chained_origin_depot.cpp
+  msan_dl.cpp
   msan_interceptors.cpp
   msan_linux.cpp
   msan_report.cpp
@@ -20,13 +21,15 @@ set(MSAN_RTL_HEADERS
   msan.h
   msan_allocator.h
   msan_chained_origin_depot.h
+  msan_dl.h
   msan_flags.h
   msan_flags.inc
   msan_interface_internal.h
   msan_origin.h
   msan_poisoning.h
   msan_report.h
-  msan_thread.h)
+  msan_thread.h
+  )
 
 set(MSAN_RTL_CFLAGS ${SANITIZER_COMMON_CFLAGS})
 if(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
@@ -54,6 +57,7 @@ foreach(arch ${MSAN_SUPPORTED_ARCH})
             $<TARGET_OBJECTS:RTSanitizerCommonLibc.${arch}>
             $<TARGET_OBJECTS:RTSanitizerCommonCoverage.${arch}>
             $<TARGET_OBJECTS:RTSanitizerCommonSymbolizer.${arch}>
+            $<TARGET_OBJECTS:RTSanitizerCommonSymbolizerInternal.${arch}>
             $<TARGET_OBJECTS:RTUbsan.${arch}>
     ADDITIONAL_HEADERS ${MSAN_RTL_HEADERS}
     CFLAGS ${MSAN_RTL_CFLAGS}
@@ -80,8 +84,8 @@ foreach(arch ${MSAN_SUPPORTED_ARCH})
   endif()
 endforeach()
 
-add_compiler_rt_resource_file(msan_blacklist msan_blacklist.txt msan)
-list(APPEND MSAN_RUNTIME_LIBRARIES msan_blacklist)
+add_compiler_rt_resource_file(msan_ignorelist msan_ignorelist.txt msan)
+list(APPEND MSAN_RUNTIME_LIBRARIES msan_ignorelist)
 
 if(COMPILER_RT_INCLUDE_TESTS)
   add_subdirectory(tests)

@@ -108,6 +108,10 @@ static bool atomicReadDroppedOnZero(unsigned Opcode) {
     case AArch64::LDUMINW:    case AArch64::LDUMINX:
     case AArch64::LDUMINLB:   case AArch64::LDUMINLH:
     case AArch64::LDUMINLW:   case AArch64::LDUMINLX:
+    case AArch64::SWPB:       case AArch64::SWPH:
+    case AArch64::SWPW:       case AArch64::SWPX:
+    case AArch64::SWPLB:      case AArch64::SWPLH:
+    case AArch64::SWPLW:      case AArch64::SWPLX:
     return true;
   }
   return false;
@@ -124,7 +128,8 @@ void AArch64DeadRegisterDefinitions::processMachineBasicBlock(
       LLVM_DEBUG(dbgs() << "    Ignoring, operand is frame index\n");
       continue;
     }
-    if (MI.definesRegister(AArch64::XZR) || MI.definesRegister(AArch64::WZR)) {
+    if (MI.definesRegister(AArch64::XZR, /*TRI=*/nullptr) ||
+        MI.definesRegister(AArch64::WZR, /*TRI=*/nullptr)) {
       // It is not allowed to write to the same register (not even the zero
       // register) twice in a single instruction.
       LLVM_DEBUG(
@@ -146,8 +151,7 @@ void AArch64DeadRegisterDefinitions::processMachineBasicBlock(
       // We should not have any relevant physreg defs that are replacable by
       // zero before register allocation. So we just check for dead vreg defs.
       Register Reg = MO.getReg();
-      if (!Register::isVirtualRegister(Reg) ||
-          (!MO.isDead() && !MRI->use_nodbg_empty(Reg)))
+      if (!Reg.isVirtual() || (!MO.isDead() && !MRI->use_nodbg_empty(Reg)))
         continue;
       assert(!MO.isImplicit() && "Unexpected implicit def!");
       LLVM_DEBUG(dbgs() << "  Dead def operand #" << I << " in:\n    ";

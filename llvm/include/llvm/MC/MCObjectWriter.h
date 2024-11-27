@@ -9,12 +9,12 @@
 #ifndef LLVM_MC_MCOBJECTWRITER_H
 #define LLVM_MC_MCOBJECTWRITER_H
 
-#include "llvm/ADT/Triple.h"
+#include "llvm/MC/MCSymbol.h"
+#include "llvm/TargetParser/Triple.h"
 #include <cstdint>
 
 namespace llvm {
 
-class MCAsmLayout;
 class MCAssembler;
 class MCFixup;
 class MCFragment;
@@ -32,6 +32,21 @@ class MCValue;
 /// should be emitted as part of writeObject().
 class MCObjectWriter {
 protected:
+  /// List of declared file names
+  SmallVector<std::pair<std::string, size_t>, 0> FileNames;
+  // XCOFF specific: Optional compiler version.
+  std::string CompilerVersion;
+  std::vector<const MCSymbol *> AddrsigSyms;
+  bool EmitAddrsigSection = false;
+  bool SubsectionsViaSymbols = false;
+
+  struct CGProfileEntry {
+    const MCSymbolRefExpr *From;
+    const MCSymbolRefExpr *To;
+    uint64_t Count;
+  };
+  SmallVector<CGProfileEntry, 0> CGProfile;
+
   MCObjectWriter() = default;
 
 public:
@@ -40,7 +55,7 @@ public:
   virtual ~MCObjectWriter();
 
   /// lifetime management
-  virtual void reset() {}
+  virtual void reset();
 
   /// \name High-Level API
   /// @{
@@ -50,8 +65,7 @@ public:
   ///
   /// This routine is called by the assembler after layout and relaxation is
   /// complete.
-  virtual void executePostLayoutBinding(MCAssembler &Asm,
-                                        const MCAsmLayout &Layout) = 0;
+  virtual void executePostLayoutBinding(MCAssembler &Asm) {}
 
   /// Record a relocation entry.
   ///
@@ -59,8 +73,7 @@ public:
   /// post layout binding. The implementation is responsible for storing
   /// information about the relocation so that it can be emitted during
   /// writeObject().
-  virtual void recordRelocation(MCAssembler &Asm, const MCAsmLayout &Layout,
-                                const MCFragment *Fragment,
+  virtual void recordRelocation(MCAssembler &Asm, const MCFragment *Fragment,
                                 const MCFixup &Fixup, MCValue Target,
                                 uint64_t &FixedValue) = 0;
 
@@ -75,31 +88,43 @@ public:
                                           bool InSet) const;
 
   virtual bool isSymbolRefDifferenceFullyResolvedImpl(const MCAssembler &Asm,
-                                                      const MCSymbol &A,
-                                                      const MCSymbol &B,
-                                                      bool InSet) const;
-
-  virtual bool isSymbolRefDifferenceFullyResolvedImpl(const MCAssembler &Asm,
                                                       const MCSymbol &SymA,
                                                       const MCFragment &FB,
                                                       bool InSet,
                                                       bool IsPCRel) const;
 
+  MutableArrayRef<std::pair<std::string, size_t>> getFileNames() {
+    return FileNames;
+  }
+  void addFileName(MCAssembler &Asm, StringRef FileName);
+  void setCompilerVersion(StringRef CompilerVers) {
+    CompilerVersion = CompilerVers;
+  }
+
   /// Tell the object writer to emit an address-significance table during
   /// writeObject(). If this function is not called, all symbols are treated as
   /// address-significant.
-  virtual void emitAddrsigSection() {}
+  void emitAddrsigSection() { EmitAddrsigSection = true; }
+
+  bool getEmitAddrsigSection() { return EmitAddrsigSection; }
 
   /// Record the given symbol in the address-significance table to be written
   /// diring writeObject().
-  virtual void addAddrsigSymbol(const MCSymbol *Sym) {}
+  void addAddrsigSymbol(const MCSymbol *Sym) { AddrsigSyms.push_back(Sym); }
+
+  std::vector<const MCSymbol *> &getAddrsigSyms() { return AddrsigSyms; }
+  SmallVector<CGProfileEntry, 0> &getCGProfile() { return CGProfile; }
+
+  // Mach-O specific: Whether .subsections_via_symbols is enabled.
+  bool getSubsectionsViaSymbols() const { return SubsectionsViaSymbols; }
+  void setSubsectionsViaSymbols(bool Value) { SubsectionsViaSymbols = Value; }
 
   /// Write the object file and returns the number of bytes written.
   ///
   /// This routine is called by the assembler after layout and relaxation is
   /// complete, fixups have been evaluated and applied, and relocations
   /// generated.
-  virtual uint64_t writeObject(MCAssembler &Asm, const MCAsmLayout &Layout) = 0;
+  virtual uint64_t writeObject(MCAssembler &Asm) = 0;
 
   /// @}
 };

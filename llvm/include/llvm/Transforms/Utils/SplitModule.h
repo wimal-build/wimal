@@ -15,7 +15,7 @@
 #ifndef LLVM_TRANSFORMS_UTILS_SPLITMODULE_H
 #define LLVM_TRANSFORMS_UTILS_SPLITMODULE_H
 
-#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/STLFunctionalExtras.h"
 #include <memory>
 
 namespace llvm {
@@ -24,6 +24,9 @@ class Module;
 
 /// Splits the module M into N linkable partitions. The function ModuleCallback
 /// is called N times passing each individual partition as the MPart argument.
+/// PreserveLocals: Split without externalizing locals.
+/// RoundRobin: Use round-robin distribution of functions to modules instead
+/// of the default name-hash-based one.
 ///
 /// FIXME: This function does not deal with the somewhat subtle symbol
 /// visibility issues around module splitting, including (but not limited to):
@@ -33,9 +36,9 @@ class Module;
 /// - Internal symbols defined in module-level inline asm should be visible to
 ///   each partition.
 void SplitModule(
-    std::unique_ptr<Module> M, unsigned N,
+    Module &M, unsigned N,
     function_ref<void(std::unique_ptr<Module> MPart)> ModuleCallback,
-    bool PreserveLocals = false);
+    bool PreserveLocals = false, bool RoundRobin = false);
 
 } // end namespace llvm
 

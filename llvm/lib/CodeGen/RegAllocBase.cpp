@@ -23,6 +23,7 @@
 #include "llvm/CodeGen/Spiller.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/VirtRegMap.h"
+#include "llvm/IR/Module.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
@@ -35,7 +36,7 @@ using namespace llvm;
 
 #define DEBUG_TYPE "regalloc"
 
-STATISTIC(NumNewQueued    , "Number of new live ranges queued");
+STATISTIC(NumNewQueued, "Number of new live ranges queued");
 
 // Temporary verification option until we can put verification inside
 // MachineVerifier.
@@ -54,15 +55,14 @@ bool RegAllocBase::VerifyEnabled = false;
 // Pin the vtable to this file.
 void RegAllocBase::anchor() {}
 
-void RegAllocBase::init(VirtRegMap &vrm,
-                        LiveIntervals &lis,
+void RegAllocBase::init(VirtRegMap &vrm, LiveIntervals &lis,
                         LiveRegMatrix &mat) {
   TRI = &vrm.getTargetRegInfo();
   MRI = &vrm.getRegInfo();
   VRM = &vrm;
   LIS = &lis;
   Matrix = &mat;
-  MRI->freezeReservedRegs(vrm.getMachineFunction());
+  MRI->freezeReservedRegs();
   RegClassInfo.runOnMachineFunction(vrm.getMachineFunction());
 }
 
@@ -86,7 +86,7 @@ void RegAllocBase::allocatePhysRegs() {
   seedLiveRegs();
 
   // Continue assigning vregs one at a time to available physical registers.
-  while (LiveInterval *VirtReg = dequeue()) {
+  while (const LiveInterval *VirtReg = dequeue()) {
     assert(!VRM->hasPhys(VirtReg->reg()) && "Register already assigned");
 
     // Unused registers can appear when the spiller coalesces snippets.
@@ -116,31 +116,29 @@ void RegAllocBase::allocatePhysRegs() {
       // selectOrSplit failed to find a register!
       // Probably caused by an inline asm.
       MachineInstr *MI = nullptr;
-      for (MachineRegisterInfo::reg_instr_iterator
-               I = MRI->reg_instr_begin(VirtReg->reg()),
-               E = MRI->reg_instr_end();
-           I != E;) {
-        MI = &*(I++);
+      for (MachineInstr &MIR : MRI->reg_instructions(VirtReg->reg())) {
+        MI = &MIR;
         if (MI->isInlineAsm())
           break;
       }
-      if (MI && MI->isInlineAsm()) {
+
+      const TargetRegisterClass *RC = MRI->getRegClass(VirtReg->reg());
+      ArrayRef<MCPhysReg> AllocOrder = RegClassInfo.getOrder(RC);
+      if (AllocOrder.empty())
+        report_fatal_error("no registers from class available to allocate");
+      else if (MI && MI->isInlineAsm()) {
         MI->emitError("inline assembly requires more registers than available");
       } else if (MI) {
         LLVMContext &Context =
-            MI->getParent()->getParent()->getMMI().getModule()->getContext();
+            MI->getParent()->getParent()->getFunction().getContext();
         Context.emitError("ran out of registers during register allocation");
       } else {
         report_fatal_error("ran out of registers during register allocation");
       }
-      // Keep going after reporting the error.
-      VRM->assignVirt2Phys(
-          VirtReg->reg(),
-          RegClassInfo.getOrder(MRI->getRegClass(VirtReg->reg())).front());
-      continue;
-    }
 
-    if (AvailablePhysReg)
+      // Keep going after reporting the error.
+      VRM->assignVirt2Phys(VirtReg->reg(), AllocOrder.front());
+    } else if (AvailablePhysReg)
       Matrix->assign(*VirtReg, AvailablePhysReg);
 
     for (Register Reg : SplitVRegs) {
@@ -156,7 +154,7 @@ void RegAllocBase::allocatePhysRegs() {
         continue;
       }
       LLVM_DEBUG(dbgs() << "queuing new interval: " << *SplitVirtReg << "\n");
-      assert(Register::isVirtualRegister(SplitVirtReg->reg()) &&
+      assert(SplitVirtReg->reg().isVirtual() &&
              "expect split value in virtual register");
       enqueue(SplitVirtReg);
       ++NumNewQueued;
@@ -166,9 +164,26 @@ void RegAllocBase::allocatePhysRegs() {
 
 void RegAllocBase::postOptimization() {
   spiller().postOptimization();
-  for (auto DeadInst : DeadRemats) {
+  for (auto *DeadInst : DeadRemats) {
     LIS->RemoveMachineInstrFromMaps(*DeadInst);
     DeadInst->eraseFromParent();
   }
   DeadRemats.clear();
+}
+
+void RegAllocBase::enqueue(const LiveInterval *LI) {
+  const Register Reg = LI->reg();
+
+  assert(Reg.isVirtual() && "Can only enqueue virtual registers");
+
+  if (VRM->hasPhys(Reg))
+    return;
+
+  if (shouldAllocateRegister(Reg)) {
+    LLVM_DEBUG(dbgs() << "Enqueuing " << printReg(Reg, TRI) << '\n');
+    enqueueImpl(LI);
+  } else {
+    LLVM_DEBUG(dbgs() << "Not enqueueing " << printReg(Reg, TRI)
+                      << " in skipped register class\n");
+  }
 }

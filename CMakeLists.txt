@@ -2,13 +2,12 @@ cmake_minimum_required(VERSION 3.10)
 
 project(wimal-build)
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/wimal-cmake")
 
-# Suppress warnings of policy CMP0042
+# Suppress warnings of policies
 set(CMAKE_POLICY_DEFAULT_CMP0042 NEW CACHE STRING CMAKE_POLICY_DEFAULT_CMP0042)
 
-# Suppress warnings of policy CMP0116
-set(CMAKE_POLICY_DEFAULT_CMP0116 NEW CACHE STRING CMAKE_POLICY_DEFAULT_CMP0116)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/CMakePolicy.cmake)
 
 # Enable PIC
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -18,20 +17,6 @@ me_compile_options(-pipe)
 
 # Add zlib
 add_subdirectory(zlib)
-
-# Find table-gen
-message(STATUS "Found wimal: ${WIMAL_HOME}")
-find_program(PROGRAM_LLVM_TBLGEN llvm-tblgen HINTS ${WIMAL_HOME}/bin)
-find_program(PROGRAM_CLANG_TBLGEN clang-tblgen HINTS ${WIMAL_HOME}/bin)
-
-if(NOT PROGRAM_LLVM_TBLGEN STREQUAL PROGRAM_LLVM_TBLGEN-NOTFOUND)
-  message(STATUS "Found llvm-tblgen: ${PROGRAM_LLVM_TBLGEN}")
-  set(LLVM_TABLEGEN ${PROGRAM_LLVM_TBLGEN} CACHE PATH LLVM_TABLEGEN)
-endif()
-if(NOT PROGRAM_CLANG_TBLGEN STREQUAL PROGRAM_CLANG_TBLGEN-NOTFOUND)
-  message(STATUS "Found clang-tblgen: ${PROGRAM_CLANG_TBLGEN}")
-  set(CLANG_TABLEGEN ${PROGRAM_CLANG_TBLGEN} CACHE PATH CLANG_TABLEGEN)
-endif()
 
 # Enable zlib
 set(LLVM_ENABLE_ZLIB FORCE_ON CACHE BOOL LLVM_ENABLE_ZLIB)
@@ -46,20 +31,14 @@ set(ZLIB_INCLUDE_DIR ${ZLIB_INCLUDE_DIRECTORIES})
 set(ZLIB_FOUND ON CACHE BOOL ZLIB_FOUND)
 set(HAVE_ZLIB ON CACHE BOOL HAVE_ZLIB)
 
+# Disable zstd
+set(LLVM_ENABLE_ZSTD OFF CACHE BOOL LLVM_ENABLE_ZSTD)
+
 # Add libxml2
 add_subdirectory(libxml2)
 
 # Disable libxml2 for llvm
 set(LLVM_ENABLE_LIBXML2 OFF CACHE BOOL LLVM_ENABLE_LIBXML2)
-
-# Add libressl
-add_subdirectory(libressl)
-
-# Add xar
-add_subdirectory(xar)
-
-# Add uuid
-add_subdirectory(uuid)
 
 # Add jsoncpp
 set(JSONCPP_WITH_TESTS OFF CACHE BOOL JSONCPP_WITH_TESTS)
@@ -78,16 +57,16 @@ add_subdirectory(jsoncpp)
 # Add libuv
 add_subdirectory(libuv)
 
-# Add zsign
-add_subdirectory(zsign)
-
 # Add apple-codesign
 add_subdirectory(apple-codesign)
 
 # Disable terminfo
 set(LLVM_ENABLE_TERMINFO OFF CACHE BOOL LLVM_ENABLE_TERMINFO)
 
-# Necessary for ld64
+# Disable assertions
+set(LLVM_ENABLE_ASSERTIONS OFF CACHE BOOL LLVM_ENABLE_ASSERTIONS)
+
+# Enable exceptions and RTTI
 set(LLVM_ENABLE_EH ON CACHE BOOL LLVM_ENABLE_EH)
 set(LLVM_ENABLE_RTTI ON CACHE BOOL LLVM_ENABLE_RTTI)
 
@@ -122,26 +101,25 @@ set(LLVM_BUILD_TOOLS ON CACHE BOOL LLVM_BUILD_TOOLS)
 set(
   LLVM_TOOLCHAIN_TOOLS
   llvm-ar
+  llvm-as
+  llvm-lib
+  llvm-libtool-darwin
   llvm-nm
   llvm-objcopy
   llvm-objdump
   llvm-ranlib
   llvm-readelf
   llvm-readobj
+  llvm-size
+  llvm-strings
   llvm-strip
+  llvm-symbolizer
   CACHE STRING LLVM_TOOLCHAIN_TOOLS
 )
 
 # Include external projects
 set(
-  LLVM_EXTERNAL_PROJECTS
-  wimal
-  libcxx
-  clang
-  lld
-  tapi
-  ld64
-  cctools
+  LLVM_EXTERNAL_PROJECTS wimal libcxx clang lld #
   CACHE STRING LLVM_EXTERNAL_PROJECTS
 )
 
@@ -186,24 +164,6 @@ set(
   CACHE STRING LLVM_EXTERNAL_LLD_SOURCE_DIR
 )
 
-# Enable tapi
-set(
-  LLVM_EXTERNAL_TAPI_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tapi"
-  CACHE STRING LLVM_EXTERNAL_TAPI_SOURCE_DIR
-)
-
-# Enable ld64
-set(
-  LLVM_EXTERNAL_LD64_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/ld64"
-  CACHE STRING LLVM_EXTERNAL_LD64_SOURCE_DIR
-)
-
-# Enable cctools
-set(
-  LLVM_EXTERNAL_CCTOOLS_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cctools"
-  CACHE STRING LLVM_EXTERNAL_CCTOOLS_SOURCE_DIR
-)
-
 # Skip unnecessary components
 set(CLANG_INCLUDE_TESTS OFF CACHE BOOL CLANG_INCLUDE_TESTS)
 set(CLANG_INCLUDE_DOCS OFF CACHE BOOL CLANG_INCLUDE_DOCS)
@@ -223,42 +183,11 @@ set(
 # Add LLVM
 add_subdirectory(llvm)
 
-# Fix missing header "mach-o/compact_unwind_encoding.h"
-target_include_directories(lldMachO2 PRIVATE ld64/port)
-
 # Fix dependencies
 add_dependencies(LLVMSupport zlibstatic)
 
-# Add install targets for zsign
-add_llvm_install_targets(install-zsign COMPONENT zsign DEPENDS zsign)
-
 # Add install targets for wimal
 add_llvm_install_targets(install-wimal COMPONENT wimal DEPENDS wimal)
-
-# Add install targets for ld64
-add_llvm_install_targets(install-ld64 COMPONENT ld64 DEPENDS ld64)
-
-# Add install targets for cctools
-add_llvm_install_targets(install-cctools COMPONENT cctools DEPENDS cctools)
-
-# Add install target for llvm-tblgen
-install(
-  FILES ${CMAKE_BINARY_DIR}/llvm/bin/llvm-tblgen
-        ${CMAKE_BINARY_DIR}/llvm/bin/clang-tblgen
-  PERMISSIONS
-    OWNER_WRITE
-    OWNER_READ
-    GROUP_READ
-    WORLD_READ
-    OWNER_EXECUTE
-    GROUP_EXECUTE
-    WORLD_EXECUTE
-  DESTINATION bin
-  COMPONENT tablegen
-)
-add_llvm_install_targets(
-  install-tablegen COMPONENT tablegen DEPENDS llvm-tblgen clang-tblgen
-)
 
 # Fix cross-compiling issues
 execute_process(
@@ -304,11 +233,9 @@ add_custom_target(
   installation
   DEPENDS
     install-binaryen-stripped
-    install-tablegen-stripped
     install-LLVM-stripped
     install-LLVMgold-stripped
     install-wimal-stripped
-    install-zsign-stripped
     install-llvm-ar-stripped
     install-llvm-nm-stripped
     install-llvm-objcopy-stripped
@@ -320,13 +247,12 @@ add_custom_target(
     install-llvm-symbolizer-stripped
     install-dsymutil-stripped
     install-llvm-lipo-stripped
+    install-llvm-otool-stripped
     install-llvm-install-name-tool-stripped
     install-cxx-headers-stripped
     install-clang-stripped
     install-clang-resource-headers-stripped
     install-lld-stripped
-    install-ld64-stripped
     install-LTO-stripped
     install-llvm-ifs-stripped
-    install-cctools-stripped
 )

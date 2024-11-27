@@ -59,7 +59,7 @@ jobs:
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
-          -DCMAKE_TOOLCHAIN_FILE=../../cmake/MeToolchain.cmake
+          -DCMAKE_TOOLCHAIN_FILE=../../wimal-cmake/MeToolchain.cmake
           -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=x86_64-linux-gnu
           -DWIMAL_TARGET=x64-linux
           -DCOMPILER_RT_BUILD_BUILTINS=ON
@@ -85,7 +85,7 @@ jobs:
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
-          -DCMAKE_TOOLCHAIN_FILE=../../cmake/MeToolchain.cmake
+          -DCMAKE_TOOLCHAIN_FILE=../../wimal-cmake/MeToolchain.cmake
           -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=aarch64-linux-gnu
           -DWIMAL_TARGET=a64-linux
           -DCOMPILER_RT_BUILD_BUILTINS=ON
@@ -111,7 +111,7 @@ jobs:
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
-          -DCMAKE_TOOLCHAIN_FILE=../../cmake/MeToolchain.cmake
+          -DCMAKE_TOOLCHAIN_FILE=../../wimal-cmake/MeToolchain.cmake
           -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=armv7-none-linux-androideabi
           -DWIMAL_TARGET=arm-android
           -DCOMPILER_RT_BUILD_BUILTINS=ON
@@ -137,7 +137,7 @@ jobs:
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
-          -DCMAKE_TOOLCHAIN_FILE=../../cmake/MeToolchain.cmake
+          -DCMAKE_TOOLCHAIN_FILE=../../wimal-cmake/MeToolchain.cmake
           -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=aarch64-none-linux-android
           -DWIMAL_TARGET=a64-android
           -DCOMPILER_RT_BUILD_BUILTINS=ON
@@ -163,7 +163,7 @@ jobs:
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
-          -DCMAKE_TOOLCHAIN_FILE=../../cmake/MeToolchain.cmake
+          -DCMAKE_TOOLCHAIN_FILE=../../wimal-cmake/MeToolchain.cmake
           -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=i686-none-linux-android
           -DWIMAL_TARGET=x86-android
           -DCOMPILER_RT_BUILD_BUILTINS=ON
@@ -189,7 +189,7 @@ jobs:
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
-          -DCMAKE_TOOLCHAIN_FILE=../../cmake/MeToolchain.cmake
+          -DCMAKE_TOOLCHAIN_FILE=../../wimal-cmake/MeToolchain.cmake
           -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=x86_64-none-linux-android
           -DWIMAL_TARGET=x64-android
           -DCOMPILER_RT_BUILD_BUILTINS=ON
@@ -257,21 +257,31 @@ jobs:
         displayName: "Installing dependencies"
       - script: cmake -E make_directory cmake-build-tablegen cmake-build-azure
         displayName: "Prepare project"
+      - script: cmake -E chdir cmake-build-tablegen cmake ..
+          -GNinja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_INSTALL_PREFIX=$(Build.SourcesDirectory)/install
+          -DLLVM_EXTERNAL_CLANG_SOURCE_DIR=$(Build.SourcesDirectory)/clang
+          -DLLVM_EXTERNAL_PROJECTS=clang
+          -DLLVM_INCLUDE_BENCHMARKS=OFF
+          -DLLVM_INCLUDE_DOCS=OFF
+          -DLLVM_INCLUDE_TESTS=OFF
+          -DLLVM_TARGETS_TO_BUILD=X86
+          -DLLVM_TARGET_ARCH=host
+          -DLLVM_TARGET_IS_CROSSCOMPILE_HOST=TRUE
+        displayName: "Configure tablegen"
+      - script: cmake --build cmake-build-tablegen --target
+          install-llvm-tblgen-stripped install-clang-tblgen-stripped --
+        displayName: "Generate tablegen"
       - script: cmake -E chdir cmake-build-azure cmake ..
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
           -DWIMAL_TARGET=x64-linux
-          -DCMAKE_TOOLCHAIN_FILE=../cmake/MeToolchain.cmake
+          -DCMAKE_TOOLCHAIN_FILE=../wimal-cmake/MeToolchain.cmake
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
+          -DLLVM_TABLEGEN=$(Build.SourcesDirectory)/install/bin/llvm-tblgen
+          -DCLANG_TABLEGEN=$(Build.SourcesDirectory)/install/bin/clang-tblgen
         displayName: "Configure project"
-      - script: cmake -E chdir cmake-build-tablegen cmake ..
-          -GNinja
-          -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_INSTALL_PREFIX=$(Build.SourcesDirectory)/cmake/wimal
-          -DWIMAL_HOME=$(Build.SourcesDirectory)/cmake/wimal
-        displayName: "Configure tablegen"
-      - script: cmake --build cmake-build-tablegen --target install-tablegen --
-        displayName: "Generate table-gen"
       - script: cmake --build cmake-build-azure --target install-apple-codesign installation --
         displayName: "Build project"
       - task: ArchiveFiles@2
@@ -297,21 +307,31 @@ jobs:
         displayName: "Installing dependencies"
       - script: cmake -E make_directory cmake-build-tablegen cmake-build-azure
         displayName: "Prepare project"
+      - script: cmake -E chdir cmake-build-tablegen cmake ..
+          -GNinja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_INSTALL_PREFIX=$(Build.SourcesDirectory)/install
+          -DLLVM_EXTERNAL_CLANG_SOURCE_DIR=$(Build.SourcesDirectory)/clang
+          -DLLVM_EXTERNAL_PROJECTS=clang
+          -DLLVM_INCLUDE_BENCHMARKS=OFF
+          -DLLVM_INCLUDE_DOCS=OFF
+          -DLLVM_INCLUDE_TESTS=OFF
+          -DLLVM_TARGETS_TO_BUILD=X86
+          -DLLVM_TARGET_ARCH=host
+          -DLLVM_TARGET_IS_CROSSCOMPILE_HOST=TRUE
+        displayName: "Configure tablegen"
+      - script: cmake --build cmake-build-tablegen --target
+          install-llvm-tblgen-stripped install-clang-tblgen-stripped --
+        displayName: "Generate tablegen"
       - script: cmake -E chdir cmake-build-azure cmake ..
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
           -DWIMAL_TARGET=a64-linux
-          -DCMAKE_TOOLCHAIN_FILE=../cmake/MeToolchain.cmake
+          -DCMAKE_TOOLCHAIN_FILE=../wimal-cmake/MeToolchain.cmake
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
+          -DLLVM_TABLEGEN=$(Build.SourcesDirectory)/install/bin/llvm-tblgen
+          -DCLANG_TABLEGEN=$(Build.SourcesDirectory)/install/bin/clang-tblgen
         displayName: "Configure project"
-      - script: cmake -E chdir cmake-build-tablegen cmake ..
-          -GNinja
-          -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_INSTALL_PREFIX=$(Build.SourcesDirectory)/cmake/wimal
-          -DWIMAL_HOME=$(Build.SourcesDirectory)/cmake/wimal
-        displayName: "Configure tablegen"
-      - script: cmake --build cmake-build-tablegen --target install-tablegen --
-        displayName: "Generate table-gen"
       - script: cmake --build cmake-build-azure --target install-apple-codesign installation --
         displayName: "Build project"
       - task: ArchiveFiles@2
@@ -337,21 +357,31 @@ jobs:
         displayName: "Installing dependencies"
       - script: cmake -E make_directory cmake-build-tablegen cmake-build-azure
         displayName: "Prepare project"
+      - script: cmake -E chdir cmake-build-tablegen cmake ..
+          -GNinja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_INSTALL_PREFIX=$(Build.SourcesDirectory)/install
+          -DLLVM_EXTERNAL_CLANG_SOURCE_DIR=$(Build.SourcesDirectory)/clang
+          -DLLVM_EXTERNAL_PROJECTS=clang
+          -DLLVM_INCLUDE_BENCHMARKS=OFF
+          -DLLVM_INCLUDE_DOCS=OFF
+          -DLLVM_INCLUDE_TESTS=OFF
+          -DLLVM_TARGETS_TO_BUILD=X86
+          -DLLVM_TARGET_ARCH=host
+          -DLLVM_TARGET_IS_CROSSCOMPILE_HOST=TRUE
+        displayName: "Configure tablegen"
+      - script: cmake --build cmake-build-tablegen --target
+          install-llvm-tblgen-stripped install-clang-tblgen-stripped --
+        displayName: "Generate tablegen"
       - script: cmake -E chdir cmake-build-azure cmake ..
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
           -DWIMAL_TARGET=x64-macos
-          -DCMAKE_TOOLCHAIN_FILE=../cmake/MeToolchain.cmake
+          -DCMAKE_TOOLCHAIN_FILE=../wimal-cmake/MeToolchain.cmake
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
+          -DLLVM_TABLEGEN=$(Build.SourcesDirectory)/install/bin/llvm-tblgen
+          -DCLANG_TABLEGEN=$(Build.SourcesDirectory)/install/bin/clang-tblgen
         displayName: "Configure project"
-      - script: cmake -E chdir cmake-build-tablegen cmake ..
-          -GNinja
-          -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_INSTALL_PREFIX=$(Build.SourcesDirectory)/cmake/wimal
-          -DWIMAL_HOME=$(Build.SourcesDirectory)/cmake/wimal
-        displayName: "Configure tablegen"
-      - script: cmake --build cmake-build-tablegen --target install-tablegen --
-        displayName: "Generate tablegen"
       - script: cmake --build cmake-build-azure --target install-apple-codesign installation --
         displayName: "Build project"
       - task: ArchiveFiles@2
@@ -377,21 +407,31 @@ jobs:
         displayName: "Installing dependencies"
       - script: cmake -E make_directory cmake-build-tablegen cmake-build-azure
         displayName: "Prepare project"
+      - script: cmake -E chdir cmake-build-tablegen cmake ..
+          -GNinja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_INSTALL_PREFIX=$(Build.SourcesDirectory)/install
+          -DLLVM_EXTERNAL_CLANG_SOURCE_DIR=$(Build.SourcesDirectory)/clang
+          -DLLVM_EXTERNAL_PROJECTS=clang
+          -DLLVM_INCLUDE_BENCHMARKS=OFF
+          -DLLVM_INCLUDE_DOCS=OFF
+          -DLLVM_INCLUDE_TESTS=OFF
+          -DLLVM_TARGETS_TO_BUILD=X86
+          -DLLVM_TARGET_ARCH=host
+          -DLLVM_TARGET_IS_CROSSCOMPILE_HOST=TRUE
+        displayName: "Configure tablegen"
+      - script: cmake --build cmake-build-tablegen --target
+          install-llvm-tblgen-stripped install-clang-tblgen-stripped --
+        displayName: "Generate tablegen"
       - script: cmake -E chdir cmake-build-azure cmake ..
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
           -DWIMAL_TARGET=a64-macos
-          -DCMAKE_TOOLCHAIN_FILE=../cmake/MeToolchain.cmake
+          -DCMAKE_TOOLCHAIN_FILE=../wimal-cmake/MeToolchain.cmake
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
+          -DLLVM_TABLEGEN=$(Build.SourcesDirectory)/install/bin/llvm-tblgen
+          -DCLANG_TABLEGEN=$(Build.SourcesDirectory)/install/bin/clang-tblgen
         displayName: "Configure project"
-      - script: cmake -E chdir cmake-build-tablegen cmake ..
-          -GNinja
-          -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_INSTALL_PREFIX=$(Build.SourcesDirectory)/cmake/wimal
-          -DWIMAL_HOME=$(Build.SourcesDirectory)/cmake/wimal
-        displayName: "Configure tablegen"
-      - script: cmake --build cmake-build-tablegen --target install-tablegen --
-        displayName: "Generate tablegen"
       - script: cmake --build cmake-build-azure --target install-apple-codesign installation --
         displayName: "Build project"
       - task: ArchiveFiles@2

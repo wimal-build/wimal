@@ -29,9 +29,9 @@ class DependencyGraphCallback : public PPCallbacks {
   const Preprocessor *PP;
   std::string OutputFile;
   std::string SysRoot;
-  llvm::SetVector<const FileEntry *> AllFiles;
-  typedef llvm::DenseMap<const FileEntry *,
-                         SmallVector<const FileEntry *, 2> > DependencyMap;
+  llvm::SetVector<FileEntryRef> AllFiles;
+  using DependencyMap =
+      llvm::DenseMap<FileEntryRef, SmallVector<FileEntryRef, 2>>;
 
   DependencyMap Dependencies;
 
@@ -43,14 +43,19 @@ private:
 public:
   DependencyGraphCallback(const Preprocessor *_PP, StringRef OutputFile,
                           StringRef SysRoot)
-    : PP(_PP), OutputFile(OutputFile.str()), SysRoot(SysRoot.str()) { }
+      : PP(_PP), OutputFile(OutputFile.str()), SysRoot(SysRoot.str()) {}
 
   void InclusionDirective(SourceLocation HashLoc, const Token &IncludeTok,
                           StringRef FileName, bool IsAngled,
-                          CharSourceRange FilenameRange, const FileEntry *File,
-                          StringRef SearchPath, StringRef RelativePath,
-                          const Module *Imported,
+                          CharSourceRange FilenameRange,
+                          OptionalFileEntryRef File, StringRef SearchPath,
+                          StringRef RelativePath, const Module *SuggestedModule,
+                          bool ModuleImported,
                           SrcMgr::CharacteristicKind FileType) override;
+
+  void EmbedDirective(SourceLocation HashLoc, StringRef FileName, bool IsAngled,
+                      OptionalFileEntryRef File,
+                      const LexEmbedParametersResult &Params) override;
 
   void EndOfMainFile() override {
     OutputGraphFile();
@@ -66,29 +71,41 @@ void clang::AttachDependencyGraphGen(Preprocessor &PP, StringRef OutputFile,
 }
 
 void DependencyGraphCallback::InclusionDirective(
-    SourceLocation HashLoc,
-    const Token &IncludeTok,
-    StringRef FileName,
-    bool IsAngled,
-    CharSourceRange FilenameRange,
-    const FileEntry *File,
-    StringRef SearchPath,
-    StringRef RelativePath,
-    const Module *Imported,
-    SrcMgr::CharacteristicKind FileType) {
+    SourceLocation HashLoc, const Token &IncludeTok, StringRef FileName,
+    bool IsAngled, CharSourceRange FilenameRange, OptionalFileEntryRef File,
+    StringRef SearchPath, StringRef RelativePath, const Module *SuggestedModule,
+    bool ModuleImported, SrcMgr::CharacteristicKind FileType) {
   if (!File)
     return;
 
   SourceManager &SM = PP->getSourceManager();
-  const FileEntry *FromFile
-    = SM.getFileEntryForID(SM.getFileID(SM.getExpansionLoc(HashLoc)));
+  OptionalFileEntryRef FromFile =
+      SM.getFileEntryRefForID(SM.getFileID(SM.getExpansionLoc(HashLoc)));
   if (!FromFile)
     return;
 
-  Dependencies[FromFile].push_back(File);
+  Dependencies[*FromFile].push_back(*File);
 
-  AllFiles.insert(File);
-  AllFiles.insert(FromFile);
+  AllFiles.insert(*File);
+  AllFiles.insert(*FromFile);
+}
+
+void DependencyGraphCallback::EmbedDirective(SourceLocation HashLoc, StringRef,
+                                             bool, OptionalFileEntryRef File,
+                                             const LexEmbedParametersResult &) {
+  if (!File)
+    return;
+
+  SourceManager &SM = PP->getSourceManager();
+  OptionalFileEntryRef FromFile =
+      SM.getFileEntryRefForID(SM.getFileID(SM.getExpansionLoc(HashLoc)));
+  if (!FromFile)
+    return;
+
+  Dependencies[*FromFile].push_back(*File);
+
+  AllFiles.insert(*File);
+  AllFiles.insert(*FromFile);
 }
 
 raw_ostream &
@@ -100,7 +117,7 @@ DependencyGraphCallback::writeNodeReference(raw_ostream &OS,
 
 void DependencyGraphCallback::OutputGraphFile() {
   std::error_code EC;
-  llvm::raw_fd_ostream OS(OutputFile, EC, llvm::sys::fs::OF_Text);
+  llvm::raw_fd_ostream OS(OutputFile, EC, llvm::sys::fs::OF_TextWithCRLF);
   if (EC) {
     PP->getDiagnostics().Report(diag::err_fe_error_opening) << OutputFile
                                                             << EC.message();
@@ -115,9 +132,8 @@ void DependencyGraphCallback::OutputGraphFile() {
     OS.indent(2);
     writeNodeReference(OS, AllFiles[I]);
     OS << " [ shape=\"box\", label=\"";
-    StringRef FileName = AllFiles[I]->getName();
-    if (FileName.startswith(SysRoot))
-      FileName = FileName.substr(SysRoot.size());
+    StringRef FileName = AllFiles[I].getName();
+    FileName.consume_front(SysRoot);
 
     OS << DOT::EscapeString(std::string(FileName)) << "\"];\n";
   }

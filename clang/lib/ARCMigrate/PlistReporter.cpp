@@ -56,7 +56,7 @@ void arcmt::writeARCDiagsToPlist(const std::string &outPath,
   }
 
   std::error_code EC;
-  llvm::raw_fd_ostream o(outPath, EC, llvm::sys::fs::OF_Text);
+  llvm::raw_fd_ostream o(outPath, EC, llvm::sys::fs::OF_TextWithCRLF);
   if (EC) {
     llvm::errs() << "error: could not create file: " << outPath << '\n';
     return;
@@ -72,7 +72,7 @@ void arcmt::writeARCDiagsToPlist(const std::string &outPath,
        " <array>\n";
 
   for (FileID FID : Fids)
-    EmitString(o << "  ", SM.getFileEntryForID(FID)->getName()) << '\n';
+    EmitString(o << "  ", SM.getFileEntryRefForID(FID)->getName()) << '\n';
 
   o << " </array>\n"
        " <key>diagnostics</key>\n"

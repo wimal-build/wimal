@@ -57,19 +57,21 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_CODEGEN_MODULOSCHEDULE_H
-#define LLVM_LIB_CODEGEN_MODULOSCHEDULE_H
+#ifndef LLVM_CODEGEN_MODULOSCHEDULE_H
+#define LLVM_CODEGEN_MODULOSCHEDULE_H
 
 #include "llvm/CodeGen/MachineFunction.h"
-#include "llvm/CodeGen/MachineLoopInfo.h"
 #include "llvm/CodeGen/MachineLoopUtils.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include <deque>
+#include <map>
 #include <vector>
 
 namespace llvm {
 class MachineBasicBlock;
+class MachineLoop;
+class MachineRegisterInfo;
 class MachineInstr;
 class LiveIntervals;
 
@@ -169,11 +171,11 @@ private:
   MachineFunction &MF;
   const TargetSubtargetInfo &ST;
   MachineRegisterInfo &MRI;
-  const TargetInstrInfo *TII;
+  const TargetInstrInfo *TII = nullptr;
   LiveIntervals &LIS;
 
-  MachineBasicBlock *BB;
-  MachineBasicBlock *Preheader;
+  MachineBasicBlock *BB = nullptr;
+  MachineBasicBlock *Preheader = nullptr;
   MachineBasicBlock *NewKernel = nullptr;
   std::unique_ptr<TargetInstrInfo::PipelinerLoopInfo> LoopInfo;
 
@@ -190,7 +192,8 @@ private:
   void generateProlog(unsigned LastStage, MachineBasicBlock *KernelBB,
                       ValueMapTy *VRMap, MBBVectorTy &PrologBBs);
   void generateEpilog(unsigned LastStage, MachineBasicBlock *KernelBB,
-                      ValueMapTy *VRMap, MBBVectorTy &EpilogBBs,
+                      MachineBasicBlock *OrigBB, ValueMapTy *VRMap,
+                      ValueMapTy *VRMapPhi, MBBVectorTy &EpilogBBs,
                       MBBVectorTy &PrologBBs);
   void generateExistingPhis(MachineBasicBlock *NewBB, MachineBasicBlock *BB1,
                             MachineBasicBlock *BB2, MachineBasicBlock *KernelBB,
@@ -199,8 +202,9 @@ private:
                             bool IsLast);
   void generatePhis(MachineBasicBlock *NewBB, MachineBasicBlock *BB1,
                     MachineBasicBlock *BB2, MachineBasicBlock *KernelBB,
-                    ValueMapTy *VRMap, InstrMapTy &InstrMap,
-                    unsigned LastStageNum, unsigned CurStageNum, bool IsLast);
+                    ValueMapTy *VRMap, ValueMapTy *VRMapPhi,
+                    InstrMapTy &InstrMap, unsigned LastStageNum,
+                    unsigned CurStageNum, bool IsLast);
   void removeDeadInstructions(MachineBasicBlock *KernelBB,
                               MBBVectorTy &EpilogBBs);
   void splitLifetimes(MachineBasicBlock *KernelBB, MBBVectorTy &EpilogBBs);
@@ -294,13 +298,13 @@ protected:
   MachineFunction &MF;
   const TargetSubtargetInfo &ST;
   MachineRegisterInfo &MRI;
-  const TargetInstrInfo *TII;
-  LiveIntervals *LIS;
+  const TargetInstrInfo *TII = nullptr;
+  LiveIntervals *LIS = nullptr;
 
   /// The original loop block that gets rewritten in-place.
-  MachineBasicBlock *BB;
+  MachineBasicBlock *BB = nullptr;
   /// The original loop preheader.
-  MachineBasicBlock *Preheader;
+  MachineBasicBlock *Preheader = nullptr;
   /// All prolog and epilog blocks.
   SmallVector<MachineBasicBlock *, 4> Prologs, Epilogs;
   /// For every block, the stages that are produced.
@@ -366,6 +370,78 @@ protected:
   std::unique_ptr<TargetInstrInfo::PipelinerLoopInfo> LoopInfo;
 };
 
+/// Expand the kernel using modulo variable expansion algorithm (MVE).
+/// It unrolls the kernel enough to avoid overlap of register lifetime.
+class ModuloScheduleExpanderMVE {
+private:
+  using ValueMapTy = DenseMap<unsigned, unsigned>;
+  using MBBVectorTy = SmallVectorImpl<MachineBasicBlock *>;
+  using InstrMapTy = DenseMap<MachineInstr *, MachineInstr *>;
+
+  ModuloSchedule &Schedule;
+  MachineFunction &MF;
+  const TargetSubtargetInfo &ST;
+  MachineRegisterInfo &MRI;
+  const TargetInstrInfo *TII = nullptr;
+  LiveIntervals &LIS;
+
+  MachineBasicBlock *OrigKernel = nullptr;
+  MachineBasicBlock *OrigPreheader = nullptr;
+  MachineBasicBlock *OrigExit = nullptr;
+  MachineBasicBlock *Check = nullptr;
+  MachineBasicBlock *Prolog = nullptr;
+  MachineBasicBlock *NewKernel = nullptr;
+  MachineBasicBlock *Epilog = nullptr;
+  MachineBasicBlock *NewPreheader = nullptr;
+  MachineBasicBlock *NewExit = nullptr;
+  std::unique_ptr<TargetInstrInfo::PipelinerLoopInfo> LoopInfo;
+
+  /// The number of unroll required to avoid overlap of live ranges.
+  /// NumUnroll = 1 means no unrolling.
+  int NumUnroll;
+
+  void calcNumUnroll();
+  void generatePipelinedLoop();
+  void generateProlog(SmallVectorImpl<ValueMapTy> &VRMap);
+  void generatePhi(MachineInstr *OrigMI, int UnrollNum,
+                   SmallVectorImpl<ValueMapTy> &PrologVRMap,
+                   SmallVectorImpl<ValueMapTy> &KernelVRMap,
+                   SmallVectorImpl<ValueMapTy> &PhiVRMap);
+  void generateKernel(SmallVectorImpl<ValueMapTy> &PrologVRMap,
+                      SmallVectorImpl<ValueMapTy> &KernelVRMap,
+                      InstrMapTy &LastStage0Insts);
+  void generateEpilog(SmallVectorImpl<ValueMapTy> &KernelVRMap,
+                      SmallVectorImpl<ValueMapTy> &EpilogVRMap,
+                      InstrMapTy &LastStage0Insts);
+  void mergeRegUsesAfterPipeline(Register OrigReg, Register NewReg);
+
+  MachineInstr *cloneInstr(MachineInstr *OldMI);
+
+  void updateInstrDef(MachineInstr *NewMI, ValueMapTy &VRMap, bool LastDef);
+
+  void generateKernelPhi(Register OrigLoopVal, Register NewLoopVal,
+                         unsigned UnrollNum,
+                         SmallVectorImpl<ValueMapTy> &VRMapProlog,
+                         SmallVectorImpl<ValueMapTy> &VRMapPhi);
+  void updateInstrUse(MachineInstr *MI, int StageNum, int PhaseNum,
+                      SmallVectorImpl<ValueMapTy> &CurVRMap,
+                      SmallVectorImpl<ValueMapTy> *PrevVRMap);
+
+  void insertCondBranch(MachineBasicBlock &MBB, int RequiredTC,
+                        InstrMapTy &LastStage0Insts,
+                        MachineBasicBlock &GreaterThan,
+                        MachineBasicBlock &Otherwise);
+
+public:
+  ModuloScheduleExpanderMVE(MachineFunction &MF, ModuloSchedule &S,
+                            LiveIntervals &LIS)
+      : Schedule(S), MF(MF), ST(MF.getSubtarget()), MRI(MF.getRegInfo()),
+        TII(ST.getInstrInfo()), LIS(LIS) {}
+
+  void expand();
+  static bool canApply(MachineLoop &L);
+};
+
 /// Expander that simply annotates each scheduled instruction with a post-instr
 /// symbol that can be consumed by the ModuloScheduleTest pass.
 ///
@@ -386,4 +462,4 @@ public:
 
 } // end namespace llvm
 
-#endif // LLVM_LIB_CODEGEN_MODULOSCHEDULE_H
+#endif // LLVM_CODEGEN_MODULOSCHEDULE_H

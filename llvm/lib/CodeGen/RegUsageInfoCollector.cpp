@@ -17,16 +17,15 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/ADT/Statistic.h"
-#include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
-#include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/RegisterUsageInfo.h"
+#include "llvm/CodeGen/TargetFrameLowering.h"
+#include "llvm/IR/Function.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/CodeGen/TargetFrameLowering.h"
 
 using namespace llvm;
 
@@ -143,6 +142,9 @@ bool RegUsageInfoCollector::runOnMachineFunction(MachineFunction &MF) {
     RegMask[Reg / 32] &= ~(1u << Reg % 32);
   };
 
+  // Don't include $noreg in any regmasks.
+  SetRegAsDefined(MCRegister::NoRegister);
+
   // Some targets can clobber registers "inside" a call, typically in
   // linker-generated code.
   for (const MCPhysReg Reg : TRI->getIntraCallClobberedRegs(&MF))
@@ -209,8 +211,8 @@ computeCalleeSavedRegs(BitVector &SavedRegs, MachineFunction &MF) {
     MCPhysReg Reg = CSRegs[i];
     if (SavedRegs.test(Reg)) {
       // Save subregisters
-      for (MCSubRegIterator SR(Reg, &TRI); SR.isValid(); ++SR)
-        SavedRegs.set(*SR);
+      for (MCPhysReg SR : TRI.subregs(Reg))
+        SavedRegs.set(SR);
     }
   }
 }

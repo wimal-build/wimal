@@ -100,7 +100,7 @@ public:
   JITSymbolFlags(FlagNames Flags, TargetFlagsType TargetFlags)
       : TargetFlags(TargetFlags), Flags(Flags) {}
 
-  /// Implicitly convert to bool. Returs true if any flag is set.
+  /// Implicitly convert to bool. Returns true if any flag is set.
   explicit operator bool() const { return Flags != None || TargetFlags != 0; }
 
   /// Compare for equality.
@@ -389,6 +389,9 @@ public:
   /// definitions are implicitly always part of the caller's responsibility.
   virtual Expected<LookupSet>
   getResponsibilitySet(const LookupSet &Symbols) = 0;
+
+  /// Specify if this resolver can return valid symbols with zero value.
+  virtual bool allowsZeroSymbols() { return false; }
 
 private:
   virtual void anchor();

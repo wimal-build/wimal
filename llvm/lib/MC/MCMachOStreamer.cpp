@@ -10,7 +10,7 @@
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/ADT/Triple.h"
+#include "llvm/BinaryFormat/MachO.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCAssembler.h"
 #include "llvm/MC/MCCodeEmitter.h"
@@ -19,23 +19,29 @@
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCFixup.h"
 #include "llvm/MC/MCFragment.h"
-#include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCLinkerOptimizationHint.h"
+#include "llvm/MC/MCMachObjectWriter.h"
 #include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCObjectStreamer.h"
 #include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCSection.h"
 #include "llvm/MC/MCSectionMachO.h"
-#include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCSymbolMachO.h"
 #include "llvm/MC/MCValue.h"
+#include "llvm/MC/SectionKind.h"
+#include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/ErrorHandling.h"
-#include "llvm/Support/TargetRegistry.h"
-#include "llvm/Support/raw_ostream.h"
 #include <cassert>
 #include <vector>
+
+namespace llvm {
+class MCInst;
+class MCStreamer;
+class MCSubtargetInfo;
+class Triple;
+} // namespace llvm
 
 using namespace llvm;
 
@@ -48,9 +54,6 @@ private:
   /// need for local relocations. False by default.
   bool LabelSections;
 
-  bool DWARFMustBeAtTheEnd;
-  bool CreatedADWARFSection;
-
   /// HasSectionLabel - map of which sections have already had a non-local
   /// label emitted to them. Used so we don't emit extraneous linker local
   /// labels in the middle of the section.
@@ -58,30 +61,31 @@ private:
 
   void emitInstToData(const MCInst &Inst, const MCSubtargetInfo &STI) override;
 
-  void emitDataRegion(DataRegionData::KindTy Kind);
+  void emitDataRegion(MachO::DataRegionType Kind);
   void emitDataRegionEnd();
 
 public:
   MCMachOStreamer(MCContext &Context, std::unique_ptr<MCAsmBackend> MAB,
                   std::unique_ptr<MCObjectWriter> OW,
-                  std::unique_ptr<MCCodeEmitter> Emitter,
-                  bool DWARFMustBeAtTheEnd, bool label)
+                  std::unique_ptr<MCCodeEmitter> Emitter, bool label)
       : MCObjectStreamer(Context, std::move(MAB), std::move(OW),
                          std::move(Emitter)),
-        LabelSections(label), DWARFMustBeAtTheEnd(DWARFMustBeAtTheEnd),
-        CreatedADWARFSection(false) {}
+        LabelSections(label) {}
 
   /// state management
   void reset() override {
-    CreatedADWARFSection = false;
     HasSectionLabel.clear();
     MCObjectStreamer::reset();
+  }
+
+  MachObjectWriter &getWriter() {
+    return static_cast<MachObjectWriter &>(getAssembler().getWriter());
   }
 
   /// @name MCStreamer Interface
   /// @{
 
-  void changeSection(MCSection *Sect, const MCExpr *Subsect) override;
+  void changeSection(MCSection *Sect, uint32_t Subsection = 0) override;
   void emitLabel(MCSymbol *Symbol, SMLoc Loc = SMLoc()) override;
   void emitAssignment(MCSymbol *Symbol, const MCExpr *Value) override;
   void emitEHSymAttributes(const MCSymbol *Symbol, MCSymbol *EHSymbol) override;
@@ -92,72 +96,48 @@ public:
                       unsigned Update, VersionTuple SDKVersion) override;
   void emitBuildVersion(unsigned Platform, unsigned Major, unsigned Minor,
                         unsigned Update, VersionTuple SDKVersion) override;
+  void emitDarwinTargetVariantBuildVersion(unsigned Platform, unsigned Major,
+                                           unsigned Minor, unsigned Update,
+                                           VersionTuple SDKVersion) override;
   void emitThumbFunc(MCSymbol *Func) override;
   bool emitSymbolAttribute(MCSymbol *Symbol, MCSymbolAttr Attribute) override;
   void emitSymbolDesc(MCSymbol *Symbol, unsigned DescValue) override;
   void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                        unsigned ByteAlignment) override;
+                        Align ByteAlignment) override;
 
   void emitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                             unsigned ByteAlignment) override;
+                             Align ByteAlignment) override;
   void emitZerofill(MCSection *Section, MCSymbol *Symbol = nullptr,
-                    uint64_t Size = 0, unsigned ByteAlignment = 0,
+                    uint64_t Size = 0, Align ByteAlignment = Align(1),
                     SMLoc Loc = SMLoc()) override;
   void emitTBSSSymbol(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
-                      unsigned ByteAlignment = 0) override;
+                      Align ByteAlignment = Align(1)) override;
 
   void emitIdent(StringRef IdentString) override {
     llvm_unreachable("macho doesn't support this directive");
   }
 
   void emitLOHDirective(MCLOHType Kind, const MCLOHArgs &Args) override {
-    getAssembler().getLOHContainer().addDirective(Kind, Args);
+    getWriter().getLOHContainer().addDirective(Kind, Args);
+  }
+  void emitCGProfileEntry(const MCSymbolRefExpr *From,
+                          const MCSymbolRefExpr *To, uint64_t Count) override {
+    if (!From->getSymbol().isTemporary() && !To->getSymbol().isTemporary())
+      getWriter().getCGProfile().push_back({From, To, Count});
   }
 
   void finishImpl() override;
+
+  void finalizeCGProfileEntry(const MCSymbolRefExpr *&SRE);
+  void finalizeCGProfile();
+  void createAddrSigSection();
 };
 
 } // end anonymous namespace.
 
-static bool canGoAfterDWARF(const MCSectionMachO &MSec) {
-  // These sections are created by the assembler itself after the end of
-  // the .s file.
-  StringRef SegName = MSec.getSegmentName();
-  StringRef SecName = MSec.getName();
-
-  if (SegName == "__LD" && SecName == "__compact_unwind")
-    return true;
-
-  if (SegName == "__IMPORT") {
-    if (SecName == "__jump_table")
-      return true;
-
-    if (SecName == "__pointers")
-      return true;
-  }
-
-  if (SegName == "__TEXT" && SecName == "__eh_frame")
-    return true;
-
-  if (SegName == "__DATA" && (SecName == "__nl_symbol_ptr" ||
-                              SecName == "__thread_ptr"))
-    return true;
-
-  return false;
-}
-
-void MCMachOStreamer::changeSection(MCSection *Section,
-                                    const MCExpr *Subsection) {
+void MCMachOStreamer::changeSection(MCSection *Section, uint32_t Subsection) {
   // Change the section normally.
-  bool Created = changeSectionImpl(Section, Subsection);
-  const MCSectionMachO &MSec = *cast<MCSectionMachO>(Section);
-  StringRef SegName = MSec.getSegmentName();
-  if (SegName == "__DWARF")
-    CreatedADWARFSection = true;
-  else if (Created && DWARFMustBeAtTheEnd && !canGoAfterDWARF(MSec))
-    assert((!CreatedADWARFSection ||
-            Section == getContext().getObjectFileInfo()->getStackMapSection())
-           && "Creating regular section after DWARF");
+  changeSectionImpl(Section, Subsection);
 
   // Output a linker-local symbol so we don't need section-relative local
   // relocations. The linker hates us when we do that.
@@ -171,20 +151,21 @@ void MCMachOStreamer::changeSection(MCSection *Section,
 
 void MCMachOStreamer::emitEHSymAttributes(const MCSymbol *Symbol,
                                           MCSymbol *EHSymbol) {
+  auto *Sym = cast<MCSymbolMachO>(Symbol);
   getAssembler().registerSymbol(*Symbol);
   if (Symbol->isExternal())
     emitSymbolAttribute(EHSymbol, MCSA_Global);
-  if (cast<MCSymbolMachO>(Symbol)->isWeakDefinition())
+  if (Sym->isWeakDefinition())
     emitSymbolAttribute(EHSymbol, MCSA_WeakDefinition);
-  if (Symbol->isPrivateExtern())
+  if (Sym->isPrivateExtern())
     emitSymbolAttribute(EHSymbol, MCSA_PrivateExtern);
 }
 
 void MCMachOStreamer::emitLabel(MCSymbol *Symbol, SMLoc Loc) {
   // We have to create a new fragment if this is an atom defining symbol,
   // fragments cannot span atoms.
-  if (getAssembler().isSymbolLinkerVisible(*Symbol))
-    insert(new MCDataFragment());
+  if (cast<MCSymbolMachO>(Symbol)->isSymbolLinkerVisible())
+    insert(getContext().allocFragment<MCDataFragment>());
 
   MCObjectStreamer::emitLabel(Symbol, Loc);
 
@@ -211,20 +192,18 @@ void MCMachOStreamer::emitAssignment(MCSymbol *Symbol, const MCExpr *Value) {
   MCObjectStreamer::emitAssignment(Symbol, Value);
 }
 
-void MCMachOStreamer::emitDataRegion(DataRegionData::KindTy Kind) {
+void MCMachOStreamer::emitDataRegion(MachO::DataRegionType Kind) {
   // Create a temporary label to mark the start of the data region.
   MCSymbol *Start = getContext().createTempSymbol();
   emitLabel(Start);
   // Record the region for the object writer to use.
-  DataRegionData Data = { Kind, Start, nullptr };
-  std::vector<DataRegionData> &Regions = getAssembler().getDataRegions();
-  Regions.push_back(Data);
+  getWriter().getDataRegions().push_back({Kind, Start, nullptr});
 }
 
 void MCMachOStreamer::emitDataRegionEnd() {
-  std::vector<DataRegionData> &Regions = getAssembler().getDataRegions();
+  auto &Regions = getWriter().getDataRegions();
   assert(!Regions.empty() && "Mismatched .end_data_region!");
-  DataRegionData &Data = Regions.back();
+  auto &Data = Regions.back();
   assert(!Data.End && "Mismatched .end_data_region!");
   // Create a temporary label to mark the end of the data region.
   Data.End = getContext().createTempSymbol();
@@ -241,28 +220,28 @@ void MCMachOStreamer::emitAssemblerFlag(MCAssemblerFlag Flag) {
   case MCAF_Code32: return; // Change parsing mode; no-op here.
   case MCAF_Code64: return; // Change parsing mode; no-op here.
   case MCAF_SubsectionsViaSymbols:
-    getAssembler().setSubsectionsViaSymbols(true);
+    getWriter().setSubsectionsViaSymbols(true);
     return;
   }
 }
 
 void MCMachOStreamer::emitLinkerOptions(ArrayRef<std::string> Options) {
-  getAssembler().getLinkerOptions().push_back(Options);
+  getWriter().getLinkerOptions().push_back(Options);
 }
 
 void MCMachOStreamer::emitDataRegion(MCDataRegionType Kind) {
   switch (Kind) {
   case MCDR_DataRegion:
-    emitDataRegion(DataRegionData::Data);
+    emitDataRegion(MachO::DataRegionType::DICE_KIND_DATA);
     return;
   case MCDR_DataRegionJT8:
-    emitDataRegion(DataRegionData::JumpTable8);
+    emitDataRegion(MachO::DataRegionType::DICE_KIND_JUMP_TABLE8);
     return;
   case MCDR_DataRegionJT16:
-    emitDataRegion(DataRegionData::JumpTable16);
+    emitDataRegion(MachO::DataRegionType::DICE_KIND_JUMP_TABLE16);
     return;
   case MCDR_DataRegionJT32:
-    emitDataRegion(DataRegionData::JumpTable32);
+    emitDataRegion(MachO::DataRegionType::DICE_KIND_JUMP_TABLE32);
     return;
   case MCDR_DataRegionEnd:
     emitDataRegionEnd();
@@ -273,14 +252,21 @@ void MCMachOStreamer::emitDataRegion(MCDataRegionType Kind) {
 void MCMachOStreamer::emitVersionMin(MCVersionMinType Kind, unsigned Major,
                                      unsigned Minor, unsigned Update,
                                      VersionTuple SDKVersion) {
-  getAssembler().setVersionMin(Kind, Major, Minor, Update, SDKVersion);
+  getWriter().setVersionMin(Kind, Major, Minor, Update, SDKVersion);
 }
 
 void MCMachOStreamer::emitBuildVersion(unsigned Platform, unsigned Major,
                                        unsigned Minor, unsigned Update,
                                        VersionTuple SDKVersion) {
-  getAssembler().setBuildVersion((MachO::PlatformType)Platform, Major, Minor,
-                                 Update, SDKVersion);
+  getWriter().setBuildVersion((MachO::PlatformType)Platform, Major, Minor,
+                              Update, SDKVersion);
+}
+
+void MCMachOStreamer::emitDarwinTargetVariantBuildVersion(
+    unsigned Platform, unsigned Major, unsigned Minor, unsigned Update,
+    VersionTuple SDKVersion) {
+  getWriter().setTargetVariantBuildVersion((MachO::PlatformType)Platform, Major,
+                                           Minor, Update, SDKVersion);
 }
 
 void MCMachOStreamer::emitThumbFunc(MCSymbol *Symbol) {
@@ -299,10 +285,8 @@ bool MCMachOStreamer::emitSymbolAttribute(MCSymbol *Sym,
   if (Attribute == MCSA_IndirectSymbol) {
     // Note that we intentionally cannot use the symbol data here; this is
     // important for matching the string table that 'as' generates.
-    IndirectSymbolData ISD;
-    ISD.Symbol = Symbol;
-    ISD.Section = getCurrentSectionOnly();
-    getAssembler().getIndirectSymbols().push_back(ISD);
+    getWriter().getIndirectSymbols().push_back(
+        {Symbol, getCurrentSectionOnly()});
     return true;
   }
 
@@ -334,6 +318,9 @@ bool MCMachOStreamer::emitSymbolAttribute(MCSymbol *Sym,
   case MCSA_Weak:
   case MCSA_Local:
   case MCSA_LGlobal:
+  case MCSA_Exported:
+  case MCSA_Memtag:
+  case MCSA_WeakAntiDep:
     return false;
 
   case MCSA_Global:
@@ -406,7 +393,7 @@ void MCMachOStreamer::emitSymbolDesc(MCSymbol *Symbol, unsigned DescValue) {
 }
 
 void MCMachOStreamer::emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                                       unsigned ByteAlignment) {
+                                       Align ByteAlignment) {
   // FIXME: Darwin 'as' does appear to allow redef of a .comm by itself.
   assert(Symbol->isUndefined() && "Cannot define a symbol twice!");
 
@@ -416,14 +403,14 @@ void MCMachOStreamer::emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
 }
 
 void MCMachOStreamer::emitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                                            unsigned ByteAlignment) {
+                                            Align ByteAlignment) {
   // '.lcomm' is equivalent to '.zerofill'.
   return emitZerofill(getContext().getObjectFileInfo()->getDataBSSSection(),
                       Symbol, Size, ByteAlignment);
 }
 
 void MCMachOStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
-                                   uint64_t Size, unsigned ByteAlignment,
+                                   uint64_t Size, Align ByteAlignment,
                                    SMLoc Loc) {
   // On darwin all virtual sections have zerofill type. Disallow the usage of
   // .zerofill in non-virtual functions. If something similar is needed, use
@@ -436,8 +423,8 @@ void MCMachOStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
             // section.
   }
 
-  PushSection();
-  SwitchSection(Section);
+  pushSection();
+  switchSection(Section);
 
   // The symbol may not be present, which only creates the section.
   if (Symbol) {
@@ -445,13 +432,13 @@ void MCMachOStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
     emitLabel(Symbol);
     emitZeros(Size);
   }
-  PopSection();
+  popSection();
 }
 
 // This should always be called with the thread local bss section.  Like the
 // .zerofill directive this doesn't actually switch sections on us.
 void MCMachOStreamer::emitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
-                                     uint64_t Size, unsigned ByteAlignment) {
+                                     uint64_t Size, Align ByteAlignment) {
   emitZerofill(Section, Symbol, Size, ByteAlignment);
 }
 
@@ -461,8 +448,7 @@ void MCMachOStreamer::emitInstToData(const MCInst &Inst,
 
   SmallVector<MCFixup, 4> Fixups;
   SmallString<256> Code;
-  raw_svector_ostream VecOS(Code);
-  getAssembler().getEmitter().encodeInstruction(Inst, VecOS, Fixups, STI);
+  getAssembler().getEmitter().encodeInstruction(Inst, Code, Fixups, STI);
 
   // Add the fixups and data.
   for (MCFixup &Fixup : Fixups) {
@@ -483,8 +469,9 @@ void MCMachOStreamer::finishImpl() {
   // defining symbols.
   DenseMap<const MCFragment *, const MCSymbol *> DefiningSymbolMap;
   for (const MCSymbol &Symbol : getAssembler().symbols()) {
-    if (getAssembler().isSymbolLinkerVisible(Symbol) && Symbol.isInSection() &&
-        !Symbol.isVariable()) {
+    auto &Sym = cast<MCSymbolMachO>(Symbol);
+    if (Sym.isSymbolLinkerVisible() && Sym.isInSection() && !Sym.isVariable() &&
+        !Sym.isAltEntry()) {
       // An atom defining symbol should never be internal to a fragment.
       assert(Symbol.getOffset() == 0 &&
              "Invalid offset in atom defining symbol!");
@@ -495,29 +482,88 @@ void MCMachOStreamer::finishImpl() {
   // Set the fragment atom associations by tracking the last seen atom defining
   // symbol.
   for (MCSection &Sec : getAssembler()) {
+    cast<MCSectionMachO>(Sec).allocAtoms();
     const MCSymbol *CurrentAtom = nullptr;
+    size_t I = 0;
     for (MCFragment &Frag : Sec) {
       if (const MCSymbol *Symbol = DefiningSymbolMap.lookup(&Frag))
         CurrentAtom = Symbol;
-      Frag.setAtom(CurrentAtom);
+      cast<MCSectionMachO>(Sec).setAtom(I++, CurrentAtom);
     }
   }
 
+  finalizeCGProfile();
+
+  createAddrSigSection();
   this->MCObjectStreamer::finishImpl();
+}
+
+void MCMachOStreamer::finalizeCGProfileEntry(const MCSymbolRefExpr *&SRE) {
+  const MCSymbol *S = &SRE->getSymbol();
+  if (getAssembler().registerSymbol(*S))
+    S->setExternal(true);
+}
+
+void MCMachOStreamer::finalizeCGProfile() {
+  MCAssembler &Asm = getAssembler();
+  MCObjectWriter &W = getWriter();
+  if (W.getCGProfile().empty())
+    return;
+  for (auto &E : W.getCGProfile()) {
+    finalizeCGProfileEntry(E.From);
+    finalizeCGProfileEntry(E.To);
+  }
+  // We can't write the section out until symbol indices are finalized which
+  // doesn't happen until after section layout. We need to create the section
+  // and set its size now so that it's accounted for in layout.
+  MCSection *CGProfileSection = Asm.getContext().getMachOSection(
+      "__LLVM", "__cg_profile", 0, SectionKind::getMetadata());
+  changeSection(CGProfileSection);
+  // For each entry, reserve space for 2 32-bit indices and a 64-bit count.
+  size_t SectionBytes =
+      W.getCGProfile().size() * (2 * sizeof(uint32_t) + sizeof(uint64_t));
+  cast<MCDataFragment>(*CGProfileSection->begin())
+      .getContents()
+      .resize(SectionBytes);
 }
 
 MCStreamer *llvm::createMachOStreamer(MCContext &Context,
                                       std::unique_ptr<MCAsmBackend> &&MAB,
                                       std::unique_ptr<MCObjectWriter> &&OW,
                                       std::unique_ptr<MCCodeEmitter> &&CE,
-                                      bool RelaxAll, bool DWARFMustBeAtTheEnd,
+                                      bool DWARFMustBeAtTheEnd,
                                       bool LabelSections) {
-  MCMachOStreamer *S =
-      new MCMachOStreamer(Context, std::move(MAB), std::move(OW), std::move(CE),
-                          DWARFMustBeAtTheEnd, LabelSections);
-  const Triple &Target = Context.getObjectFileInfo()->getTargetTriple();
-  S->emitVersionForTarget(Target, Context.getObjectFileInfo()->getSDKVersion());
-  if (RelaxAll)
-    S->getAssembler().setRelaxAll(true);
+  MCMachOStreamer *S = new MCMachOStreamer(
+      Context, std::move(MAB), std::move(OW), std::move(CE), LabelSections);
+  const Triple &Target = Context.getTargetTriple();
+  S->emitVersionForTarget(
+      Target, Context.getObjectFileInfo()->getSDKVersion(),
+      Context.getObjectFileInfo()->getDarwinTargetVariantTriple(),
+      Context.getObjectFileInfo()->getDarwinTargetVariantSDKVersion());
   return S;
+}
+
+// The AddrSig section uses a series of relocations to refer to the symbols that
+// should be considered address-significant. The only interesting content of
+// these relocations is their symbol; the type, length etc will be ignored by
+// the linker. The reason we are not referring to the symbol indices directly is
+// that those indices will be invalidated by tools that update the symbol table.
+// Symbol relocations OTOH will have their indices updated by e.g. llvm-strip.
+void MCMachOStreamer::createAddrSigSection() {
+  MCAssembler &Asm = getAssembler();
+  MCObjectWriter &writer = Asm.getWriter();
+  if (!writer.getEmitAddrsigSection())
+    return;
+  // Create the AddrSig section and first data fragment here as its layout needs
+  // to be computed immediately after in order for it to be exported correctly.
+  MCSection *AddrSigSection =
+      Asm.getContext().getObjectFileInfo()->getAddrSigSection();
+  changeSection(AddrSigSection);
+  auto *Frag = cast<MCDataFragment>(AddrSigSection->curFragList()->Head);
+  // We will generate a series of pointer-sized symbol relocations at offset
+  // 0x0. Set the section size to be large enough to contain a single pointer
+  // (instead of emitting a zero-sized section) so these relocations are
+  // technically valid, even though we don't expect these relocations to
+  // actually be applied by the linker.
+  Frag->getContents().resize(8);
 }

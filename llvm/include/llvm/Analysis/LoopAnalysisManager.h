@@ -29,13 +29,14 @@
 #ifndef LLVM_ANALYSIS_LOOPANALYSISMANAGER_H
 #define LLVM_ANALYSIS_LOOPANALYSISMANAGER_H
 
-#include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/IR/PassManager.h"
 
 namespace llvm {
 
 class AAResults;
 class AssumptionCache;
+class BlockFrequencyInfo;
+class BranchProbabilityInfo;
 class DominatorTree;
 class Function;
 class Loop;
@@ -47,7 +48,7 @@ class TargetTransformInfo;
 
 /// The adaptor from a function pass to a loop pass computes these analyses and
 /// makes them available to the loop passes "for free". Each loop pass is
-/// expected expected to update these analyses if necessary to ensure they're
+/// expected to update these analyses if necessary to ensure they're
 /// valid after it runs.
 struct LoopStandardAnalysisResults {
   AAResults &AA;
@@ -58,6 +59,7 @@ struct LoopStandardAnalysisResults {
   TargetLibraryInfo &TLI;
   TargetTransformInfo &TTI;
   BlockFrequencyInfo *BFI;
+  BranchProbabilityInfo *BPI;
   MemorySSA *MSSA;
 };
 
@@ -86,7 +88,7 @@ typedef InnerAnalysisManagerProxy<LoopAnalysisManager, Function>
 template <> class LoopAnalysisManagerFunctionProxy::Result {
 public:
   explicit Result(LoopAnalysisManager &InnerAM, LoopInfo &LI)
-      : InnerAM(&InnerAM), LI(&LI), MSSAUsed(false) {}
+      : InnerAM(&InnerAM), LI(&LI) {}
   Result(Result &&Arg)
       : InnerAM(std::move(Arg.InnerAM)), LI(Arg.LI), MSSAUsed(Arg.MSSAUsed) {
     // We have to null out the analysis manager in the moved-from state
@@ -135,7 +137,7 @@ public:
 private:
   LoopAnalysisManager *InnerAM;
   LoopInfo *LI;
-  bool MSSAUsed;
+  bool MSSAUsed = false;
 };
 
 /// Provide a specialized run method for the \c LoopAnalysisManagerFunctionProxy

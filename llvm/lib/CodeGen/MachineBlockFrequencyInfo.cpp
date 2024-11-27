@@ -12,7 +12,6 @@
 
 #include "llvm/CodeGen/MachineBlockFrequencyInfo.h"
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/None.h"
 #include "llvm/ADT/iterator.h"
 #include "llvm/Analysis/BlockFrequencyInfoImpl.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
@@ -23,12 +22,14 @@
 #include "llvm/Pass.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/GraphWriter.h"
+#include <optional>
 #include <string>
 
 using namespace llvm;
 
 #define DEBUG_TYPE "machine-block-freq"
 
+namespace llvm {
 static cl::opt<GVDAGType> ViewMachineBlockFreqPropagationDAG(
     "view-machine-block-freq-propagation-dags", cl::Hidden,
     cl::desc("Pop up a window to show a dag displaying how machine block "
@@ -74,7 +75,8 @@ static cl::opt<bool> PrintMachineBlockFreq(
 
 // Command line option to specify the name of the function for block frequency
 // dump. Defined in Analysis/BlockFrequencyInfo.cpp.
-extern cl::opt<std::string> PrintBlockFreqFuncName;
+extern cl::opt<std::string> PrintBFIFuncName;
+} // namespace llvm
 
 static GVDAGType getGVDT() {
   if (ViewBlockLayoutWithBFI != GVDT_None)
@@ -159,32 +161,69 @@ struct DOTGraphTraits<MachineBlockFrequencyInfo *>
 
 } // end namespace llvm
 
-INITIALIZE_PASS_BEGIN(MachineBlockFrequencyInfo, DEBUG_TYPE,
-                      "Machine Block Frequency Analysis", true, true)
-INITIALIZE_PASS_DEPENDENCY(MachineBranchProbabilityInfo)
-INITIALIZE_PASS_DEPENDENCY(MachineLoopInfo)
-INITIALIZE_PASS_END(MachineBlockFrequencyInfo, DEBUG_TYPE,
-                    "Machine Block Frequency Analysis", true, true)
+AnalysisKey MachineBlockFrequencyAnalysis::Key;
 
-char MachineBlockFrequencyInfo::ID = 0;
-
-MachineBlockFrequencyInfo::MachineBlockFrequencyInfo()
-    : MachineFunctionPass(ID) {
-  initializeMachineBlockFrequencyInfoPass(*PassRegistry::getPassRegistry());
+MachineBlockFrequencyAnalysis::Result
+MachineBlockFrequencyAnalysis::run(MachineFunction &MF,
+                                   MachineFunctionAnalysisManager &MFAM) {
+  auto &MBPI = MFAM.getResult<MachineBranchProbabilityAnalysis>(MF);
+  auto &MLI = MFAM.getResult<MachineLoopAnalysis>(MF);
+  return Result(MF, MBPI, MLI);
 }
 
+PreservedAnalyses
+MachineBlockFrequencyPrinterPass::run(MachineFunction &MF,
+                                      MachineFunctionAnalysisManager &MFAM) {
+  auto &MBFI = MFAM.getResult<MachineBlockFrequencyAnalysis>(MF);
+  OS << "Machine block frequency for machine function: " << MF.getName()
+     << '\n';
+  MBFI.print(OS);
+  return PreservedAnalyses::all();
+}
+
+INITIALIZE_PASS_BEGIN(MachineBlockFrequencyInfoWrapperPass, DEBUG_TYPE,
+                      "Machine Block Frequency Analysis", true, true)
+INITIALIZE_PASS_DEPENDENCY(MachineBranchProbabilityInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(MachineLoopInfoWrapperPass)
+INITIALIZE_PASS_END(MachineBlockFrequencyInfoWrapperPass, DEBUG_TYPE,
+                    "Machine Block Frequency Analysis", true, true)
+
+char MachineBlockFrequencyInfoWrapperPass::ID = 0;
+
+MachineBlockFrequencyInfoWrapperPass::MachineBlockFrequencyInfoWrapperPass()
+    : MachineFunctionPass(ID) {
+  initializeMachineBlockFrequencyInfoWrapperPassPass(
+      *PassRegistry::getPassRegistry());
+}
+
+MachineBlockFrequencyInfo::MachineBlockFrequencyInfo() = default;
+
 MachineBlockFrequencyInfo::MachineBlockFrequencyInfo(
-      MachineFunction &F,
-      MachineBranchProbabilityInfo &MBPI,
-      MachineLoopInfo &MLI) : MachineFunctionPass(ID) {
+    MachineBlockFrequencyInfo &&) = default;
+
+MachineBlockFrequencyInfo::MachineBlockFrequencyInfo(
+    MachineFunction &F, MachineBranchProbabilityInfo &MBPI,
+    MachineLoopInfo &MLI) {
   calculate(F, MBPI, MLI);
 }
 
 MachineBlockFrequencyInfo::~MachineBlockFrequencyInfo() = default;
 
-void MachineBlockFrequencyInfo::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.addRequired<MachineBranchProbabilityInfo>();
-  AU.addRequired<MachineLoopInfo>();
+bool MachineBlockFrequencyInfo::invalidate(
+    MachineFunction &MF, const PreservedAnalyses &PA,
+    MachineFunctionAnalysisManager::Invalidator &) {
+  // Check whether the analysis, all analyses on machine functions, or the
+  // machine function's CFG have been preserved.
+  auto PAC = PA.getChecker<MachineBlockFrequencyAnalysis>();
+  return !PAC.preserved() &&
+         !PAC.preservedSet<AllAnalysesOn<MachineFunction>>() &&
+         !PAC.preservedSet<CFGAnalyses>();
+}
+
+void MachineBlockFrequencyInfoWrapperPass::getAnalysisUsage(
+    AnalysisUsage &AU) const {
+  AU.addRequired<MachineBranchProbabilityInfoWrapperPass>();
+  AU.addRequired<MachineLoopInfoWrapperPass>();
   AU.setPreservesAll();
   MachineFunctionPass::getAnalysisUsage(AU);
 }
@@ -196,24 +235,25 @@ void MachineBlockFrequencyInfo::calculate(
     MBFI.reset(new ImplType);
   MBFI->calculate(F, MBPI, MLI);
   if (ViewMachineBlockFreqPropagationDAG != GVDT_None &&
-      (ViewBlockFreqFuncName.empty() ||
-       F.getName().equals(ViewBlockFreqFuncName))) {
+      (ViewBlockFreqFuncName.empty() || F.getName() == ViewBlockFreqFuncName)) {
     view("MachineBlockFrequencyDAGS." + F.getName());
   }
   if (PrintMachineBlockFreq &&
-      (PrintBlockFreqFuncName.empty() ||
-       F.getName().equals(PrintBlockFreqFuncName))) {
+      (PrintBFIFuncName.empty() || F.getName() == PrintBFIFuncName)) {
     MBFI->print(dbgs());
   }
 }
 
-bool MachineBlockFrequencyInfo::runOnMachineFunction(MachineFunction &F) {
+bool MachineBlockFrequencyInfoWrapperPass::runOnMachineFunction(
+    MachineFunction &F) {
   MachineBranchProbabilityInfo &MBPI =
-      getAnalysis<MachineBranchProbabilityInfo>();
-  MachineLoopInfo &MLI = getAnalysis<MachineLoopInfo>();
-  calculate(F, MBPI, MLI);
+      getAnalysis<MachineBranchProbabilityInfoWrapperPass>().getMBPI();
+  MachineLoopInfo &MLI = getAnalysis<MachineLoopInfoWrapperPass>().getLI();
+  MBFI.calculate(F, MBPI, MLI);
   return false;
 }
+
+void MachineBlockFrequencyInfo::print(raw_ostream &OS) { MBFI->print(OS); }
 
 void MachineBlockFrequencyInfo::releaseMemory() { MBFI.reset(); }
 
@@ -226,19 +266,25 @@ void MachineBlockFrequencyInfo::view(const Twine &Name, bool isSimple) const {
 
 BlockFrequency
 MachineBlockFrequencyInfo::getBlockFreq(const MachineBasicBlock *MBB) const {
-  return MBFI ? MBFI->getBlockFreq(MBB) : 0;
+  return MBFI ? MBFI->getBlockFreq(MBB) : BlockFrequency(0);
 }
 
-Optional<uint64_t> MachineBlockFrequencyInfo::getBlockProfileCount(
+std::optional<uint64_t> MachineBlockFrequencyInfo::getBlockProfileCount(
     const MachineBasicBlock *MBB) const {
+  if (!MBFI)
+    return std::nullopt;
+
   const Function &F = MBFI->getFunction()->getFunction();
-  return MBFI ? MBFI->getBlockProfileCount(F, MBB) : None;
+  return MBFI->getBlockProfileCount(F, MBB);
 }
 
-Optional<uint64_t>
-MachineBlockFrequencyInfo::getProfileCountFromFreq(uint64_t Freq) const {
+std::optional<uint64_t>
+MachineBlockFrequencyInfo::getProfileCountFromFreq(BlockFrequency Freq) const {
+  if (!MBFI)
+    return std::nullopt;
+
   const Function &F = MBFI->getFunction()->getFunction();
-  return MBFI ? MBFI->getProfileCountFromFreq(F, Freq) : None;
+  return MBFI->getProfileCountFromFreq(F, Freq);
 }
 
 bool MachineBlockFrequencyInfo::isIrrLoopHeader(
@@ -255,7 +301,7 @@ void MachineBlockFrequencyInfo::onEdgeSplit(
   auto NewSuccFreq = MBFI->getBlockFreq(&NewPredecessor) *
                      MBPI.getEdgeProbability(&NewPredecessor, &NewSuccessor);
 
-  MBFI->setBlockFreq(&NewSuccessor, NewSuccFreq.getFrequency());
+  MBFI->setBlockFreq(&NewSuccessor, NewSuccFreq);
 }
 
 const MachineFunction *MachineBlockFrequencyInfo::getFunction() const {
@@ -266,18 +312,18 @@ const MachineBranchProbabilityInfo *MachineBlockFrequencyInfo::getMBPI() const {
   return MBFI ? &MBFI->getBPI() : nullptr;
 }
 
-raw_ostream &
-MachineBlockFrequencyInfo::printBlockFreq(raw_ostream &OS,
-                                          const BlockFrequency Freq) const {
-  return MBFI ? MBFI->printBlockFreq(OS, Freq) : OS;
+BlockFrequency MachineBlockFrequencyInfo::getEntryFreq() const {
+  return MBFI ? MBFI->getEntryFreq() : BlockFrequency(0);
 }
 
-raw_ostream &
-MachineBlockFrequencyInfo::printBlockFreq(raw_ostream &OS,
-                                          const MachineBasicBlock *MBB) const {
-  return MBFI ? MBFI->printBlockFreq(OS, MBB) : OS;
+Printable llvm::printBlockFreq(const MachineBlockFrequencyInfo &MBFI,
+                               BlockFrequency Freq) {
+  return Printable([&MBFI, Freq](raw_ostream &OS) {
+    printRelativeBlockFreq(OS, MBFI.getEntryFreq(), Freq);
+  });
 }
 
-uint64_t MachineBlockFrequencyInfo::getEntryFreq() const {
-  return MBFI ? MBFI->getEntryFreq() : 0;
+Printable llvm::printBlockFreq(const MachineBlockFrequencyInfo &MBFI,
+                               const MachineBasicBlock &MBB) {
+  return printBlockFreq(MBFI, MBFI.getBlockFreq(&MBB));
 }

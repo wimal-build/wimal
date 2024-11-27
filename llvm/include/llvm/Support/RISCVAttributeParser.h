@@ -24,12 +24,13 @@ class RISCVAttributeParser : public ELFAttributeParser {
 
   Error unalignedAccess(unsigned tag);
   Error stackAlign(unsigned tag);
+  Error atomicAbi(unsigned tag);
 
 public:
   RISCVAttributeParser(ScopedPrinter *sw)
-      : ELFAttributeParser(sw, RISCVAttrs::RISCVAttributeTags, "riscv") {}
+      : ELFAttributeParser(sw, RISCVAttrs::getRISCVAttributeTags(), "riscv") {}
   RISCVAttributeParser()
-      : ELFAttributeParser(RISCVAttrs::RISCVAttributeTags, "riscv") {}
+      : ELFAttributeParser(RISCVAttrs::getRISCVAttributeTags(), "riscv") {}
 };
 
 } // namespace llvm

@@ -14,15 +14,22 @@
 #ifndef LLVM_OBJECT_MACHOUNIVERSALWRITER_H
 #define LLVM_OBJECT_MACHOUNIVERSALWRITER_H
 
-#include "llvm/Object/Archive.h"
-#include "llvm/Object/Binary.h"
-#include "llvm/Object/MachO.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/Twine.h"
+#include "llvm/BinaryFormat/MachO.h"
+#include "llvm/Support/Error.h"
+#include <cstdint>
+#include <string>
 
 namespace llvm {
 class LLVMContext;
 
 namespace object {
+class Archive;
+class Binary;
 class IRObjectFile;
+class MachOObjectFile;
 
 class Slice {
   const Binary *B;
@@ -90,10 +97,14 @@ public:
   }
 };
 
-Error writeUniversalBinary(ArrayRef<Slice> Slices, StringRef OutputFileName);
+enum class FatHeaderType { FatHeader, Fat64Header };
 
-Expected<std::unique_ptr<MemoryBuffer>>
-writeUniversalBinaryToBuffer(ArrayRef<Slice> Slices);
+Error writeUniversalBinary(ArrayRef<Slice> Slices, StringRef OutputFileName,
+                           FatHeaderType FatHeader = FatHeaderType::FatHeader);
+
+Error writeUniversalBinaryToStream(
+    ArrayRef<Slice> Slices, raw_ostream &Out,
+    FatHeaderType FatHeader = FatHeaderType::FatHeader);
 
 } // end namespace object
 

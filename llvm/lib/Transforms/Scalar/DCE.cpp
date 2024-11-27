@@ -36,39 +36,6 @@ STATISTIC(DCEEliminated, "Number of insts removed");
 DEBUG_COUNTER(DCECounter, "dce-transform",
               "Controls which instructions are eliminated");
 
-//===--------------------------------------------------------------------===//
-// RedundantDbgInstElimination pass implementation
-//
-
-namespace {
-struct RedundantDbgInstElimination : public FunctionPass {
-  static char ID; // Pass identification, replacement for typeid
-  RedundantDbgInstElimination() : FunctionPass(ID) {
-    initializeRedundantDbgInstEliminationPass(*PassRegistry::getPassRegistry());
-  }
-  bool runOnFunction(Function &F) override {
-    if (skipFunction(F))
-      return false;
-    bool Changed = false;
-    for (auto &BB : F)
-      Changed |= RemoveRedundantDbgInstrs(&BB);
-    return Changed;
-  }
-
-  void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.setPreservesCFG();
-  }
-};
-}
-
-char RedundantDbgInstElimination::ID = 0;
-INITIALIZE_PASS(RedundantDbgInstElimination, "redundant-dbg-inst-elim",
-                "Redundant Dbg Instruction Elimination", false, false)
-
-Pass *llvm::createRedundantDbgInstEliminationPass() {
-  return new RedundantDbgInstElimination();
-}
-
 PreservedAnalyses
 RedundantDbgInstEliminationPass::run(Function &F, FunctionAnalysisManager &AM) {
   bool Changed = false;
@@ -125,14 +92,11 @@ static bool eliminateDeadCode(Function &F, TargetLibraryInfo *TLI) {
   // Iterate over the original function, only adding insts to the worklist
   // if they actually need to be revisited. This avoids having to pre-init
   // the worklist with the entire function's worth of instructions.
-  for (inst_iterator FI = inst_begin(F), FE = inst_end(F); FI != FE;) {
-    Instruction *I = &*FI;
-    ++FI;
-
+  for (Instruction &I : llvm::make_early_inc_range(instructions(F))) {
     // We're visiting this instruction now, so make sure it's not in the
     // worklist from an earlier visit.
-    if (!WorkList.count(I))
-      MadeChange |= DCEInstruction(I, WorkList, TLI);
+    if (!WorkList.count(&I))
+      MadeChange |= DCEInstruction(&I, WorkList, TLI);
   }
 
   while (!WorkList.empty()) {

@@ -27,10 +27,10 @@ namespace coverage {
 /// Writer of the filenames section for the instrumentation
 /// based code coverage.
 class CoverageFilenamesSectionWriter {
-  ArrayRef<StringRef> Filenames;
+  ArrayRef<std::string> Filenames;
 
 public:
-  CoverageFilenamesSectionWriter(ArrayRef<StringRef> Filenames);
+  CoverageFilenamesSectionWriter(ArrayRef<std::string> Filenames);
 
   /// Write encoded filenames to the given output stream. If \p Compress is
   /// true, attempt to compress the filenames.
@@ -52,6 +52,27 @@ public:
 
   /// Write encoded coverage mapping data to the given output stream.
   void write(raw_ostream &OS);
+};
+
+/// Writer for the coverage mapping testing format.
+class TestingFormatWriter {
+  uint64_t ProfileNamesAddr;
+  StringRef ProfileNamesData;
+  StringRef CoverageMappingData;
+  StringRef CoverageRecordsData;
+
+public:
+  TestingFormatWriter(uint64_t ProfileNamesAddr, StringRef ProfileNamesData,
+                      StringRef CoverageMappingData,
+                      StringRef CoverageRecordsData)
+      : ProfileNamesAddr(ProfileNamesAddr), ProfileNamesData(ProfileNamesData),
+        CoverageMappingData(CoverageMappingData),
+        CoverageRecordsData(CoverageRecordsData) {}
+
+  /// Encode to the given output stream.
+  void
+  write(raw_ostream &OS,
+        TestingFormatVersion Version = TestingFormatVersion::CurrentVersion);
 };
 
 } // end namespace coverage

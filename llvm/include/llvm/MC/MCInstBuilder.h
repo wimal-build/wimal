@@ -27,6 +27,12 @@ public:
     Inst.setOpcode(Opcode);
   }
 
+  /// Set the location.
+  MCInstBuilder &setLoc(SMLoc SM) {
+    Inst.setLoc(SM);
+    return *this;
+  }
+
   /// Add a new register operand.
   MCInstBuilder &addReg(unsigned Reg) {
     Inst.addOperand(MCOperand::createReg(Reg));
@@ -39,9 +45,15 @@ public:
     return *this;
   }
 
+  /// Add a new single floating point immediate operand.
+  MCInstBuilder &addSFPImm(uint32_t Val) {
+    Inst.addOperand(MCOperand::createSFPImm(Val));
+    return *this;
+  }
+
   /// Add a new floating point immediate operand.
-  MCInstBuilder &addFPImm(double Val) {
-    Inst.addOperand(MCOperand::createFPImm(Val));
+  MCInstBuilder &addDFPImm(uint64_t Val) {
+    Inst.addOperand(MCOperand::createDFPImm(Val));
     return *this;
   }
 

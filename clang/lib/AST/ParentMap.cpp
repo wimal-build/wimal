@@ -33,8 +33,10 @@ static void BuildParentMap(MapTy& M, Stmt* S,
 
   switch (S->getStmtClass()) {
   case Stmt::PseudoObjectExprClass: {
-    assert(OVMode == OV_Transparent && "Should not appear alongside OVEs");
     PseudoObjectExpr *POE = cast<PseudoObjectExpr>(S);
+
+    if (OVMode == OV_Opaque && M[POE->getSyntacticForm()])
+      break;
 
     // If we are rebuilding the map, clear out any existing state.
     if (M[POE->getSyntacticForm()])
@@ -133,12 +135,13 @@ void ParentMap::setParent(const Stmt *S, const Stmt *Parent) {
 
 Stmt* ParentMap::getParent(Stmt* S) const {
   MapTy* M = (MapTy*) Impl;
-  MapTy::iterator I = M->find(S);
-  return I == M->end() ? nullptr : I->second;
+  return M->lookup(S);
 }
 
 Stmt *ParentMap::getParentIgnoreParens(Stmt *S) const {
-  do { S = getParent(S); } while (S && isa<ParenExpr>(S));
+  do {
+    S = getParent(S);
+  } while (isa_and_nonnull<ParenExpr>(S));
   return S;
 }
 
@@ -154,7 +157,8 @@ Stmt *ParentMap::getParentIgnoreParenCasts(Stmt *S) const {
 Stmt *ParentMap::getParentIgnoreParenImpCasts(Stmt *S) const {
   do {
     S = getParent(S);
-  } while (S && isa<Expr>(S) && cast<Expr>(S)->IgnoreParenImpCasts() != S);
+  } while (isa_and_nonnull<Expr>(S) &&
+           cast<Expr>(S)->IgnoreParenImpCasts() != S);
 
   return S;
 }

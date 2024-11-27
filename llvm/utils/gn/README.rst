@@ -63,7 +63,7 @@ before starting the build.
 
 GN has extensive built-in help; try e.g. ``llvm/utils/gn/gn.py help gen`` to see
 the help for the ``gen`` command. The full GN reference is also `available
-online <https://gn.googlesource.com/gn/+/master/docs/reference.md>`_.
+online <https://gn.googlesource.com/gn/+/refs/heads/main/docs/reference.md>`_.
 
 GN has an autoformatter:
 ``git ls-files '*.gn' '*.gni' | xargs llvm/utils/gn/gn.py format``
@@ -131,7 +131,7 @@ configure is used for three classes of feature checks:
 
 For the last two points, it would be nice if LLVM didn't have a single
 ``config.h`` header, but one header per toggle. That way, when e.g.
-``llvm_enable_terminfo`` is toggled, only the 3 files caring about that setting
+``llvm_enable_zlib`` is toggled, only the 3 files caring about that setting
 would need to be rebuilt, instead of everything including ``config.h``.
 
 GN doesn't believe in users setting arbitrary cflags from an environment

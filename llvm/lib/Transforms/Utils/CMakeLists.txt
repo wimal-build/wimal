@@ -14,10 +14,14 @@ add_llvm_component_library(LLVMTransformUtils
   CloneFunction.cpp
   CloneModule.cpp
   CodeExtractor.cpp
+  CodeLayout.cpp
   CodeMoverUtils.cpp
   CtorUtils.cpp
+  CountVisits.cpp
   Debugify.cpp
   DemoteRegToStack.cpp
+  DXILResource.cpp
+  DXILUpgrade.cpp
   EntryExitInstrumenter.cpp
   EscapeEnumerator.cpp
   Evaluator.cpp
@@ -27,6 +31,7 @@ add_llvm_component_library(LLVMTransformUtils
   FunctionImportUtils.cpp
   GlobalStatus.cpp
   GuardUtils.cpp
+  HelloWorld.cpp
   InlineFunction.cpp
   InjectTLIMappings.cpp
   InstructionNamer.cpp
@@ -34,6 +39,7 @@ add_llvm_component_library(LLVMTransformUtils
   LCSSA.cpp
   LibCallsShrinkWrap.cpp
   Local.cpp
+  LoopConstrainer.cpp
   LoopPeel.cpp
   LoopRotationUtils.cpp
   LoopSimplify.cpp
@@ -42,20 +48,31 @@ add_llvm_component_library(LLVMTransformUtils
   LoopUnrollRuntime.cpp
   LoopUtils.cpp
   LoopVersioning.cpp
+  LowerAtomic.cpp
+  LowerGlobalDtors.cpp
+  LowerIFunc.cpp
   LowerInvoke.cpp
   LowerMemIntrinsics.cpp
   LowerSwitch.cpp
   MatrixUtils.cpp
+  MemoryOpRemark.cpp
+  MemoryTaggingSupport.cpp
   Mem2Reg.cpp
   MetaRenamer.cpp
+  MisExpect.cpp
   ModuleUtils.cpp
+  MoveAutoInit.cpp
   NameAnonGlobals.cpp
   PredicateInfo.cpp
   PromoteMemoryToRegister.cpp
+  RelLookupTableConverter.cpp
   ScalarEvolutionExpander.cpp
+  SCCPSolver.cpp
   StripGCRelocates.cpp
   SSAUpdater.cpp
   SSAUpdaterBulk.cpp
+  SampleProfileInference.cpp
+  SampleProfileLoaderBaseUtil.cpp
   SanitizerStats.cpp
   SimplifyCFG.cpp
   SimplifyIndVar.cpp
@@ -66,7 +83,6 @@ add_llvm_component_library(LLVMTransformUtils
   SymbolRewriter.cpp
   UnifyFunctionExitNodes.cpp
   UnifyLoopExits.cpp
-  UniqueInternalLinkageNames.cpp
   Utils.cpp
   ValueMapper.cpp
   VNCoercion.cpp
@@ -82,4 +98,5 @@ add_llvm_component_library(LLVMTransformUtils
   Analysis
   Core
   Support
+  TargetParser
   )

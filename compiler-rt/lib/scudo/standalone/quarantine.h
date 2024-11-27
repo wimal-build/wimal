@@ -12,6 +12,7 @@
 #include "list.h"
 #include "mutex.h"
 #include "string_utils.h"
+#include "thread_annotations.h"
 
 namespace scudo {
 
@@ -64,11 +65,7 @@ static_assert(sizeof(QuarantineBatch) <= (1U << 13), ""); // 8Kb.
 // Per-thread cache of memory blocks.
 template <typename Callback> class QuarantineCache {
 public:
-  void initLinkerInitialized() {}
-  void init() {
-    memset(this, 0, sizeof(*this));
-    initLinkerInitialized();
-  }
+  void init() { DCHECK_EQ(atomic_load_relaxed(&Size), 0U); }
 
   // Total memory used, including internal accounting.
   uptr getSize() const { return atomic_load_relaxed(&Size); }
@@ -161,7 +158,7 @@ public:
 
 private:
   SinglyLinkedList<QuarantineBatch> List;
-  atomic_uptr Size;
+  atomic_uptr Size = {};
 
   void addToSize(uptr add) { atomic_store_relaxed(&Size, getSize() + add); }
   void subFromSize(uptr sub) { atomic_store_relaxed(&Size, getSize() - sub); }
@@ -174,8 +171,13 @@ private:
 template <typename Callback, typename Node> class GlobalQuarantine {
 public:
   typedef QuarantineCache<Callback> CacheT;
+  using ThisT = GlobalQuarantine<Callback, Node>;
 
-  void initLinkerInitialized(uptr Size, uptr CacheSize) {
+  void init(uptr Size, uptr CacheSize) NO_THREAD_SAFETY_ANALYSIS {
+    DCHECK(isAligned(reinterpret_cast<uptr>(this), alignof(ThisT)));
+    DCHECK_EQ(atomic_load_relaxed(&MaxSize), 0U);
+    DCHECK_EQ(atomic_load_relaxed(&MinSize), 0U);
+    DCHECK_EQ(atomic_load_relaxed(&MaxCacheSize), 0U);
     // Thread local quarantine size can be zero only when global quarantine size
     // is zero (it allows us to perform just one atomic read per put() call).
     CHECK((Size == 0 && CacheSize == 0) || CacheSize != 0);
@@ -184,20 +186,17 @@ public:
     atomic_store_relaxed(&MinSize, Size / 10 * 9); // 90% of max size.
     atomic_store_relaxed(&MaxCacheSize, CacheSize);
 
-    Cache.initLinkerInitialized();
-  }
-  void init(uptr Size, uptr CacheSize) {
-    CacheMutex.init();
     Cache.init();
-    RecycleMutex.init();
-    MinSize = {};
-    MaxSize = {};
-    MaxCacheSize = {};
-    initLinkerInitialized(Size, CacheSize);
   }
 
   uptr getMaxSize() const { return atomic_load_relaxed(&MaxSize); }
   uptr getCacheSize() const { return atomic_load_relaxed(&MaxCacheSize); }
+
+  // This is supposed to be used in test only.
+  bool isEmpty() {
+    ScopedLock L(CacheMutex);
+    return Cache.getSize() == 0U;
+  }
 
   void put(CacheT *C, Callback Cb, Node *Ptr, uptr Size) {
     C->enqueue(Cb, Ptr, Size);
@@ -205,16 +204,19 @@ public:
       drain(C, Cb);
   }
 
-  void NOINLINE drain(CacheT *C, Callback Cb) {
+  void NOINLINE drain(CacheT *C, Callback Cb) EXCLUDES(CacheMutex) {
+    bool needRecycle = false;
     {
       ScopedLock L(CacheMutex);
       Cache.transfer(C);
+      needRecycle = Cache.getSize() > getMaxSize();
     }
-    if (Cache.getSize() > getMaxSize() && RecycleMutex.tryLock())
+
+    if (needRecycle && RecycleMutex.tryLock())
       recycle(atomic_load_relaxed(&MinSize), Cb);
   }
 
-  void NOINLINE drainAndRecycle(CacheT *C, Callback Cb) {
+  void NOINLINE drainAndRecycle(CacheT *C, Callback Cb) EXCLUDES(CacheMutex) {
     {
       ScopedLock L(CacheMutex);
       Cache.transfer(C);
@@ -223,20 +225,21 @@ public:
     recycle(0, Cb);
   }
 
-  void getStats(ScopedString *Str) const {
+  void getStats(ScopedString *Str) EXCLUDES(CacheMutex) {
+    ScopedLock L(CacheMutex);
     // It assumes that the world is stopped, just as the allocator's printStats.
     Cache.getStats(Str);
     Str->append("Quarantine limits: global: %zuK; thread local: %zuK\n",
                 getMaxSize() >> 10, getCacheSize() >> 10);
   }
 
-  void disable() {
+  void disable() NO_THREAD_SAFETY_ANALYSIS {
     // RecycleMutex must be locked 1st since we grab CacheMutex within recycle.
     RecycleMutex.lock();
     CacheMutex.lock();
   }
 
-  void enable() {
+  void enable() NO_THREAD_SAFETY_ANALYSIS {
     CacheMutex.unlock();
     RecycleMutex.unlock();
   }
@@ -244,13 +247,14 @@ public:
 private:
   // Read-only data.
   alignas(SCUDO_CACHE_LINE_SIZE) HybridMutex CacheMutex;
-  CacheT Cache;
+  CacheT Cache GUARDED_BY(CacheMutex);
   alignas(SCUDO_CACHE_LINE_SIZE) HybridMutex RecycleMutex;
-  atomic_uptr MinSize;
-  atomic_uptr MaxSize;
-  alignas(SCUDO_CACHE_LINE_SIZE) atomic_uptr MaxCacheSize;
+  atomic_uptr MinSize = {};
+  atomic_uptr MaxSize = {};
+  alignas(SCUDO_CACHE_LINE_SIZE) atomic_uptr MaxCacheSize = {};
 
-  void NOINLINE recycle(uptr MinSize, Callback Cb) {
+  void NOINLINE recycle(uptr MinSize, Callback Cb) RELEASE(RecycleMutex)
+      EXCLUDES(CacheMutex) {
     CacheT Tmp;
     Tmp.init();
     {

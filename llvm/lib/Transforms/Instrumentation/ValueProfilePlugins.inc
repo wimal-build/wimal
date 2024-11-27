@@ -15,6 +15,7 @@
 
 #include "ValueProfileCollector.h"
 #include "llvm/Analysis/IndirectCallVisitor.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/InstVisitor.h"
 
 using namespace llvm;
@@ -42,7 +43,7 @@ public:
   void visitMemIntrinsic(MemIntrinsic &MI) {
     Value *Length = MI.getLength();
     // Not instrument constant length calls.
-    if (dyn_cast<ConstantInt>(Length))
+    if (isa<ConstantInt>(Length))
       return;
 
     Instruction *InsertPt = &MI;
@@ -60,7 +61,7 @@ public:
         (Func == LibFunc_memcmp || Func == LibFunc_bcmp)) {
       Value *Length = CI.getArgOperand(2);
       // Not instrument constant length calls.
-      if (dyn_cast<ConstantInt>(Length))
+      if (isa<ConstantInt>(Length))
         return;
       Instruction *InsertPt = &CI;
       Instruction *AnnotatedInst = &CI;
@@ -89,9 +90,38 @@ public:
   }
 };
 
+///--------------------- VirtualTableValueProfilingPlugin --------------------
+class VTableProfilingPlugin {
+  Function &F;
+
+public:
+  static constexpr InstrProfValueKind Kind = IPVK_VTableTarget;
+
+  VTableProfilingPlugin(Function &Fn, TargetLibraryInfo &TLI) : F(Fn) {}
+
+  void run(std::vector<CandidateInfo> &Candidates) {
+    std::vector<Instruction *> Result = findVTableAddrs(F);
+    for (Instruction *I : Result) {
+      Instruction *InsertPt = I->getNextNonDebugInstruction();
+      // When finding an insertion point, keep PHI and EH pad instructions
+      // before vp intrinsics. This is similar to
+      // `BasicBlock::getFirstInsertionPt`.
+      while (InsertPt && (dyn_cast<PHINode>(InsertPt) || InsertPt->isEHPad()))
+        InsertPt = InsertPt->getNextNonDebugInstruction();
+      // Skip instrumentating the value if InsertPt is the last instruction.
+      // FIXME: Set InsertPt to the end of basic block to instrument the value
+      // if InsertPt is the last instruction.
+      if (InsertPt == nullptr)
+        continue;
+
+      Instruction *AnnotatedInst = I;
+      Candidates.emplace_back(CandidateInfo{I, InsertPt, AnnotatedInst});
+    }
+  }
+};
+
 ///----------------------- Registration of the plugins -------------------------
 /// For now, registering a plugin with the ValueProfileCollector is done by
 /// adding the plugin type to the VP_PLUGIN_LIST macro.
-#define VP_PLUGIN_LIST           \
-    MemIntrinsicPlugin,          \
-    IndirectCallPromotionPlugin
+#define VP_PLUGIN_LIST                                                         \
+  MemIntrinsicPlugin, IndirectCallPromotionPlugin, VTableProfilingPlugin

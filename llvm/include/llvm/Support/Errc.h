@@ -10,7 +10,7 @@
 // some problems with std::errc that can be avoided by using our own
 // enumeration:
 //
-// * std::errc is a namespace in some implementations. That meas that ADL
+// * std::errc is a namespace in some implementations. That means that ADL
 //   doesn't work and it is sometimes necessary to write std::make_error_code
 //   or in templates:
 //   using std::make_error_code;
@@ -22,7 +22,7 @@
 //   the intersection of all the ones we support.
 //
 // * std::errc is just marked with is_error_condition_enum. This means that
-//   common patters like AnErrorCode == errc::no_such_file_or_directory take
+//   common patterns like AnErrorCode == errc::no_such_file_or_directory take
 //   4 virtual calls instead of two comparisons.
 //===----------------------------------------------------------------------===//
 
@@ -38,6 +38,10 @@ enum class errc {
   bad_address = int(std::errc::bad_address),
   bad_file_descriptor = int(std::errc::bad_file_descriptor),
   broken_pipe = int(std::errc::broken_pipe),
+  // There is no delete_pending in std::errc; this error code is negative to
+  // avoid conflicts. This error roughly corresponds with Windows'
+  // STATUS_DELETE_PENDING 0xC0000056.
+  delete_pending = -56,
   device_or_resource_busy = int(std::errc::device_or_resource_busy),
   directory_not_empty = int(std::errc::directory_not_empty),
   executable_format_error = int(std::errc::executable_format_error),

@@ -81,11 +81,6 @@ RecordStreamer::const_iterator RecordStreamer::begin() {
 
 RecordStreamer::const_iterator RecordStreamer::end() { return Symbols.end(); }
 
-void RecordStreamer::emitInstruction(const MCInst &Inst,
-                                     const MCSubtargetInfo &STI) {
-  MCStreamer::emitInstruction(Inst, STI);
-}
-
 void RecordStreamer::emitLabel(MCSymbol *Symbol, SMLoc Loc) {
   MCStreamer::emitLabel(Symbol);
   markDefined(*Symbol);
@@ -106,13 +101,13 @@ bool RecordStreamer::emitSymbolAttribute(MCSymbol *Symbol,
 }
 
 void RecordStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
-                                  uint64_t Size, unsigned ByteAlignment,
+                                  uint64_t Size, Align ByteAlignment,
                                   SMLoc Loc) {
   markDefined(*Symbol);
 }
 
 void RecordStreamer::emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                                      unsigned ByteAlignment) {
+                                      Align ByteAlignment) {
   markDefined(*Symbol);
 }
 
@@ -123,9 +118,10 @@ RecordStreamer::State RecordStreamer::getSymbolState(const MCSymbol *Sym) {
   return SI->second;
 }
 
-void RecordStreamer::emitELFSymverDirective(StringRef AliasName,
-                                            const MCSymbol *Aliasee) {
-  SymverAliasMap[Aliasee].push_back(AliasName);
+void RecordStreamer::emitELFSymverDirective(const MCSymbol *OriginalSym,
+                                            StringRef Name,
+                                            bool KeepOriginalSym) {
+  SymverAliasMap[OriginalSym].push_back(Name);
 }
 
 iterator_range<RecordStreamer::const_symver_iterator>
@@ -210,7 +206,7 @@ void RecordStreamer::flushSymverDirectives() {
     for (auto AliasName : Symver.second) {
       std::pair<StringRef, StringRef> Split = AliasName.split("@@@");
       SmallString<128> NewName;
-      if (!Split.second.empty() && !Split.second.startswith("@")) {
+      if (!Split.second.empty() && !Split.second.starts_with("@")) {
         // Special processing for "@@@" according
         // https://sourceware.org/binutils/docs/as/Symver.html
         const char *Separator = IsDefined ? "@@" : "@";

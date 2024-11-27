@@ -17,6 +17,7 @@
 #include "clang/Lex/Lexer.h"
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Sema/Sema.h"
+#include "clang/Sema/SemaObjC.h"
 
 using namespace clang;
 using namespace arcmt;
@@ -25,9 +26,9 @@ using namespace trans;
 ASTTraverser::~ASTTraverser() { }
 
 bool MigrationPass::CFBridgingFunctionsDefined() {
-  if (!EnableCFBridgeFns.hasValue())
-    EnableCFBridgeFns = SemaRef.isKnownName("CFBridgingRetain") &&
-                        SemaRef.isKnownName("CFBridgingRelease");
+  if (!EnableCFBridgeFns)
+    EnableCFBridgeFns = SemaRef.ObjC().isKnownName("CFBridgingRetain") &&
+                        SemaRef.ObjC().isKnownName("CFBridgingRelease");
   return *EnableCFBridgeFns;
 }
 
@@ -95,11 +96,9 @@ bool trans::isPlusOne(const Expr *E) {
           ento::cocoa::isRefType(callE->getType(), "CF",
                                  FD->getIdentifier()->getName())) {
         StringRef fname = FD->getIdentifier()->getName();
-        if (fname.endswith("Retain") ||
-            fname.find("Create") != StringRef::npos ||
-            fname.find("Copy") != StringRef::npos) {
+        if (fname.ends_with("Retain") || fname.contains("Create") ||
+            fname.contains("Copy"))
           return true;
-        }
       }
     }
   }
@@ -419,7 +418,7 @@ bool MigrationContext::rewritePropertyAttribute(StringRef fromAttr,
   if (tok.is(tok::r_paren))
     return false;
 
-  while (1) {
+  while (true) {
     if (tok.isNot(tok::raw_identifier)) return false;
     if (tok.getRawIdentifier() == fromAttr) {
       if (!toAttr.empty()) {

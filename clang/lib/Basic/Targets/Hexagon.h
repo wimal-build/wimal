@@ -15,8 +15,9 @@
 
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Basic/TargetOptions.h"
-#include "llvm/ADT/Triple.h"
 #include "llvm/Support/Compiler.h"
+#include "llvm/TargetParser/Triple.h"
+#include <optional>
 
 namespace clang {
 namespace targets {
@@ -24,7 +25,6 @@ namespace targets {
 // Hexagon abstract base class
 class LLVM_LIBRARY_VISIBILITY HexagonTargetInfo : public TargetInfo {
 
-  static const Builtin::Info BuiltinInfo[];
   static const char *const GCCRegNames[];
   static const TargetInfo::GCCRegAlias GCCRegAliases[];
   std::string CPU;
@@ -113,9 +113,10 @@ public:
 
   ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override;
 
-  const char *getClobbers() const override { return ""; }
+  std::string_view getClobbers() const override { return ""; }
 
   static const char *getHexagonCPUSuffix(StringRef Name);
+  static std::optional<unsigned> getHexagonCPURev(StringRef Name);
 
   bool isValidCPUName(StringRef Name) const override {
     return getHexagonCPUSuffix(Name);
@@ -139,7 +140,15 @@ public:
     return CPU.find('t') != std::string::npos;
   }
 
-  bool hasExtIntType() const override { return true; }
+  bool hasBitIntType() const override { return true; }
+
+  std::pair<unsigned, unsigned> hardwareInterferenceSizes() const override {
+    std::optional<unsigned> Rev = getHexagonCPURev(CPU);
+
+    // V73 and later have 64-byte cache lines.
+    unsigned CacheLineSizeBytes = Rev >= 73U ? 64 : 32;
+    return std::make_pair(CacheLineSizeBytes, CacheLineSizeBytes);
+  }
 };
 } // namespace targets
 } // namespace clang

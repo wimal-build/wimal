@@ -68,7 +68,7 @@ class SuspendedThreadsListNetBSD final : public SuspendedThreadsList {
 struct TracerThreadArgument {
   StopTheWorldCallback callback;
   void *callback_argument;
-  BlockingMutex mutex;
+  Mutex mutex;
   atomic_uintptr_t done;
   uptr parent_pid;
 };
@@ -158,8 +158,8 @@ static void TracerThreadDieCallback() {
 static void TracerThreadSignalHandler(int signum, __sanitizer_siginfo *siginfo,
                                       void *uctx) {
   SignalContext ctx(siginfo, uctx);
-  Printf("Tracer caught signal %d: addr=0x%zx pc=0x%zx sp=0x%zx\n", signum,
-         ctx.addr, ctx.pc, ctx.sp);
+  Printf("Tracer caught signal %d: addr=%p pc=%p sp=%p\n", signum,
+         (void *)ctx.addr, (void *)ctx.pc, (void *)ctx.sp);
   ThreadSuspender *inst = thread_suspender_instance;
   if (inst) {
     if (signum == SIGABRT)

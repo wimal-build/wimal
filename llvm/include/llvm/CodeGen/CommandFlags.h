@@ -12,20 +12,23 @@
 //
 //===----------------------------------------------------------------------===//
 
+#ifndef LLVM_CODEGEN_COMMANDFLAGS_H
+#define LLVM_CODEGEN_COMMANDFLAGS_H
+
 #include "llvm/ADT/FloatingPointMode.h"
-#include "llvm/ADT/StringExtras.h"
-#include "llvm/ADT/Triple.h"
-#include "llvm/IR/Instructions.h"
-#include "llvm/IR/Intrinsics.h"
-#include "llvm/MC/MCTargetOptionsCommandFlags.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Target/TargetOptions.h"
+#include <optional>
 #include <string>
 #include <vector>
 
 namespace llvm {
 
 class Module;
+class AttrBuilder;
+class Function;
+class Triple;
+class TargetMachine;
 
 namespace codegen {
 
@@ -36,21 +39,23 @@ std::string getMCPU();
 std::vector<std::string> getMAttrs();
 
 Reloc::Model getRelocModel();
-Optional<Reloc::Model> getExplicitRelocModel();
+std::optional<Reloc::Model> getExplicitRelocModel();
 
 ThreadModel::Model getThreadModel();
 
 CodeModel::Model getCodeModel();
-Optional<CodeModel::Model> getExplicitCodeModel();
+std::optional<CodeModel::Model> getExplicitCodeModel();
+
+uint64_t getLargeDataThreshold();
+std::optional<uint64_t> getExplicitLargeDataThreshold();
 
 llvm::ExceptionHandling getExceptionModel();
 
-CodeGenFileType getFileType();
-Optional<CodeGenFileType> getExplicitFileType();
+std::optional<CodeGenFileType> getExplicitFileType();
 
 CodeGenFileType getFileType();
 
-llvm::FramePointer::FP getFramePointerUsage();
+FramePointerKind getFramePointerUsage();
 
 bool getEnableUnsafeFPMath();
 
@@ -59,6 +64,8 @@ bool getEnableNoInfsFPMath();
 bool getEnableNoNaNsFPMath();
 
 bool getEnableNoSignedZerosFPMath();
+
+bool getEnableApproxFuncFPMath();
 
 bool getEnableNoTrappingFPMath();
 
@@ -71,6 +78,8 @@ llvm::FloatABI::ABIType getFloatABIForCalls();
 
 llvm::FPOpFusion::FPOpFusionMode getFuseFPOps();
 
+SwiftAsyncFramePointerMode getSwiftAsyncFramePointer();
+
 bool getDontPlaceZerosInBSS();
 
 bool getEnableGuaranteedTailCallOpt();
@@ -81,21 +90,19 @@ bool getDisableTailCalls();
 
 bool getStackSymbolOrdering();
 
-unsigned getOverrideStackAlignment();
-
 bool getStackRealign();
 
 std::string getTrapFuncName();
 
 bool getUseCtors();
 
-bool getRelaxELFRelocations();
+bool getDisableIntegratedAS();
 
 bool getDataSections();
-Optional<bool> getExplicitDataSections();
+std::optional<bool> getExplicitDataSections();
 
 bool getFunctionSections();
-Optional<bool> getExplicitFunctionSections();
+std::optional<bool> getExplicitFunctionSections();
 
 bool getIgnoreXCOFFVisibility();
 
@@ -103,17 +110,19 @@ bool getXCOFFTracebackTable();
 
 std::string getBBSections();
 
-std::string getStackProtectorGuard();
-unsigned getStackProtectorGuardOffset();
-std::string getStackProtectorGuardReg();
-
 unsigned getTLSSize();
 
 bool getEmulatedTLS();
+std::optional<bool> getExplicitEmulatedTLS();
+
+bool getEnableTLSDESC();
+std::optional<bool> getExplicitEnableTLSDESC();
 
 bool getUniqueSectionNames();
 
 bool getUniqueBasicBlockSectionNames();
+
+bool getSeparateNamedSections();
 
 llvm::EABI getEABIVersion();
 
@@ -129,13 +138,20 @@ bool getEnableMachineFunctionSplitter();
 
 bool getEnableDebugEntryValues();
 
-bool getPseudoProbeForProfiling();
-
 bool getValueTrackingVariableLocations();
+std::optional<bool> getExplicitValueTrackingVariableLocations();
 
 bool getForceDwarfFrameSection();
 
-bool getXRayOmitFunctionIndex();
+bool getXRayFunctionIndex();
+
+bool getDebugStrictDwarf();
+
+unsigned getAlignLoops();
+
+bool getJMCInstrument();
+
+bool getXCOFFReadOnlyPointers();
 
 /// Create this object with static storage to register codegen-related command
 /// line options.
@@ -143,10 +159,9 @@ struct RegisterCodeGenFlags {
   RegisterCodeGenFlags();
 };
 
-llvm::BasicBlockSection getBBSectionsMode(llvm::TargetOptions &Options);
+bool getEnableBBAddrMap();
 
-llvm::StackProtectorGuards
-getStackProtectorGuardMode(llvm::TargetOptions &Options);
+llvm::BasicBlockSection getBBSectionsMode(llvm::TargetOptions &Options);
 
 /// Common utility function tightly tied to the options listed here. Initializes
 /// a TargetOptions object with CodeGen flags and returns it.
@@ -171,5 +186,19 @@ void setFunctionAttributes(StringRef CPU, StringRef Features, Function &F);
 /// Set function attributes of functions in Module M based on CPU,
 /// Features, and command line flags.
 void setFunctionAttributes(StringRef CPU, StringRef Features, Module &M);
+
+/// Should value-tracking variable locations / instruction referencing be
+/// enabled by default for this triple?
+bool getDefaultValueTrackingVariableLocations(const llvm::Triple &T);
+
+/// Creates a TargetMachine instance with the options defined on the command
+/// line. This can be used for tools that do not need further customization of
+/// the TargetOptions.
+Expected<std::unique_ptr<TargetMachine>> createTargetMachineForTriple(
+    StringRef TargetTriple,
+    CodeGenOptLevel OptLevel = CodeGenOptLevel::Default);
+
 } // namespace codegen
 } // namespace llvm
+
+#endif // LLVM_CODEGEN_COMMANDFLAGS_H

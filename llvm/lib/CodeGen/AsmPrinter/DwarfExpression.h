@@ -15,13 +15,12 @@
 
 #include "ByteStreamer.h"
 #include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/None.h"
-#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/IR/DebugInfoMetadata.h"
 #include <cassert>
 #include <cstdint>
 #include <iterator>
+#include <optional>
 
 namespace llvm {
 
@@ -31,67 +30,6 @@ class DwarfCompileUnit;
 class DIELoc;
 class TargetRegisterInfo;
 class MachineLocation;
-
-/// Holds a DIExpression and keeps track of how many operands have been consumed
-/// so far.
-class DIExpressionCursor {
-  DIExpression::expr_op_iterator Start, End;
-
-public:
-  DIExpressionCursor(const DIExpression *Expr) {
-    if (!Expr) {
-      assert(Start == End);
-      return;
-    }
-    Start = Expr->expr_op_begin();
-    End = Expr->expr_op_end();
-  }
-
-  DIExpressionCursor(ArrayRef<uint64_t> Expr)
-      : Start(Expr.begin()), End(Expr.end()) {}
-
-  DIExpressionCursor(const DIExpressionCursor &) = default;
-
-  /// Consume one operation.
-  Optional<DIExpression::ExprOperand> take() {
-    if (Start == End)
-      return None;
-    return *(Start++);
-  }
-
-  /// Consume N operations.
-  void consume(unsigned N) { std::advance(Start, N); }
-
-  /// Return the current operation.
-  Optional<DIExpression::ExprOperand> peek() const {
-    if (Start == End)
-      return None;
-    return *(Start);
-  }
-
-  /// Return the next operation.
-  Optional<DIExpression::ExprOperand> peekNext() const {
-    if (Start == End)
-      return None;
-
-    auto Next = Start.getNext();
-    if (Next == End)
-      return None;
-
-    return *Next;
-  }
-
-  /// Determine whether there are any operations left in this expression.
-  operator bool() const { return Start != End; }
-
-  DIExpression::expr_op_iterator begin() const { return Start; }
-  DIExpression::expr_op_iterator end() const { return End; }
-
-  /// Retrieve the fragment information, if any.
-  Optional<DIExpression::FragmentInfo> getFragmentInfo() const {
-    return DIExpression::getFragmentInfo(Start, End);
-  }
-};
 
 /// Base class containing the logic for constructing DWARF expressions
 /// independently of whether they are emitted into a DIE or into a .debug_loc
@@ -148,6 +86,7 @@ protected:
   enum { EntryValue = 1 << 0, Indirect = 1 << 1, CallSiteParamValue = 1 << 2 };
 
   unsigned LocationKind : 3;
+  unsigned SavedLocationKind : 3;
   unsigned LocationFlags : 3;
   unsigned DwarfVersion : 4;
 
@@ -169,7 +108,7 @@ public:
 
   bool isParameterValue() { return LocationFlags & CallSiteParamValue; }
 
-  Optional<uint8_t> TagOffset;
+  std::optional<uint8_t> TagOffset;
 
 protected:
   /// Push a DW_OP_piece / DW_OP_bit_piece for emitting later, if one is needed
@@ -284,8 +223,8 @@ protected:
 public:
   DwarfExpression(unsigned DwarfVersion, DwarfCompileUnit &CU)
       : CU(CU), SubRegisterSizeInBits(0), SubRegisterOffsetInBits(0),
-        LocationKind(Unknown), LocationFlags(Unknown),
-        DwarfVersion(DwarfVersion) {}
+        LocationKind(Unknown), SavedLocationKind(Unknown),
+        LocationFlags(Unknown), DwarfVersion(DwarfVersion) {}
 
   /// This needs to be called last to commit any pending changes.
   void finalize();
@@ -339,13 +278,17 @@ public:
   /// create one if necessary.
   unsigned getOrCreateBaseType(unsigned BitSize, dwarf::TypeKind Encoding);
 
+  /// Emit all remaining operations in the DIExpressionCursor. The
+  /// cursor must not contain any DW_OP_LLVM_arg operations.
+  void addExpression(DIExpressionCursor &&Expr);
+
   /// Emit all remaining operations in the DIExpressionCursor.
-  ///
-  /// \param FragmentOffsetInBits     If this is one fragment out of multiple
-  ///                                 locations, this is the offset of the
-  ///                                 fragment inside the entire variable.
-  void addExpression(DIExpressionCursor &&Expr,
-                     unsigned FragmentOffsetInBits = 0);
+  /// DW_OP_LLVM_arg operations are resolved by calling (\p InsertArg).
+  //
+  /// \return false if any call to (\p InsertArg) returns false.
+  bool addExpression(
+      DIExpressionCursor &&Expr,
+      llvm::function_ref<bool(unsigned, DIExpressionCursor &)> InsertArg);
 
   /// If applicable, emit an empty DW_OP_piece / DW_OP_bit_piece to advance to
   /// the fragment described by \c Expr.

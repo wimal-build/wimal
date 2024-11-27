@@ -29,13 +29,16 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_ADT_FUNCTION_EXTRAS_H
-#define LLVM_ADT_FUNCTION_EXTRAS_H
+#ifndef LLVM_ADT_FUNCTIONEXTRAS_H
+#define LLVM_ADT_FUNCTIONEXTRAS_H
 
 #include "llvm/ADT/PointerIntPair.h"
 #include "llvm/ADT/PointerUnion.h"
+#include "llvm/ADT/STLForwardCompat.h"
+#include "llvm/Support/Compiler.h"
 #include "llvm/Support/MemAlloc.h"
 #include "llvm/Support/type_traits.h"
+#include <cstring>
 #include <memory>
 #include <type_traits>
 
@@ -57,8 +60,22 @@ namespace detail {
 
 template <typename T>
 using EnableIfTrivial =
-    std::enable_if_t<llvm::is_trivially_move_constructible<T>::value &&
+    std::enable_if_t<std::is_trivially_move_constructible<T>::value &&
                      std::is_trivially_destructible<T>::value>;
+template <typename CallableT, typename ThisT>
+using EnableUnlessSameType =
+    std::enable_if_t<!std::is_same<remove_cvref_t<CallableT>, ThisT>::value>;
+template <typename CallableT, typename Ret, typename... Params>
+using EnableIfCallable = std::enable_if_t<std::disjunction<
+    std::is_void<Ret>,
+    std::is_same<decltype(std::declval<CallableT>()(std::declval<Params>()...)),
+                 Ret>,
+    std::is_same<const decltype(std::declval<CallableT>()(
+                     std::declval<Params>()...)),
+                 Ret>,
+    std::is_convertible<decltype(std::declval<CallableT>()(
+                            std::declval<Params>()...)),
+                        Ret>>::value>;
 
 template <typename ReturnT, typename... ParamTs> class UniqueFunctionBase {
 protected:
@@ -80,13 +97,24 @@ protected:
   // The heuristic used is related to common ABI register passing conventions.
   // It doesn't have to be exact though, and in one way it is more strict
   // because we want to still be able to observe either moves *or* copies.
+  template <typename T> struct AdjustedParamTBase {
+    static_assert(!std::is_reference<T>::value,
+                  "references should be handled by template specialization");
+    using type =
+        std::conditional_t<std::is_trivially_copy_constructible<T>::value &&
+                               std::is_trivially_move_constructible<T>::value &&
+                               IsSizeLessThanThresholdT<T>::value,
+                           T, T &>;
+  };
+
+  // This specialization ensures that 'AdjustedParam<V<T>&>' or
+  // 'AdjustedParam<V<T>&&>' does not trigger a compile-time error when 'T' is
+  // an incomplete type and V a templated type.
+  template <typename T> struct AdjustedParamTBase<T &> { using type = T &; };
+  template <typename T> struct AdjustedParamTBase<T &&> { using type = T &; };
+
   template <typename T>
-  using AdjustedParamT = typename std::conditional<
-      !std::is_reference<T>::value &&
-          llvm::is_trivially_copy_constructible<T>::value &&
-          llvm::is_trivially_move_constructible<T>::value &&
-          IsSizeLessThanThresholdT<T>::value,
-      T, T &>::type;
+  using AdjustedParamT = typename AdjustedParamTBase<T>::type;
 
   // The type of the erased function pointer we use as a callback to dispatch to
   // the stored callable when it is trivial to move and destroy.
@@ -133,9 +161,7 @@ protected:
     // provide three pointers worth of storage here.
     // This is mutable as an inlined `const unique_function<void() const>` may
     // still modify its own mutable members.
-    mutable
-        typename std::aligned_storage<InlineStorageSize, alignof(void *)>::type
-            InlineStorage;
+    alignas(void *) mutable std::byte InlineStorage[InlineStorageSize];
   } StorageUnion;
 
   // A compressed pointer to either our dispatching callback or our table of
@@ -146,16 +172,15 @@ protected:
   bool isInlineStorage() const { return CallbackAndInlineFlag.getInt(); }
 
   bool isTrivialCallback() const {
-    return CallbackAndInlineFlag.getPointer().template is<TrivialCallback *>();
+    return isa<TrivialCallback *>(CallbackAndInlineFlag.getPointer());
   }
 
   CallPtrT getTrivialCallback() const {
-    return CallbackAndInlineFlag.getPointer().template get<TrivialCallback *>()->CallPtr;
+    return cast<TrivialCallback *>(CallbackAndInlineFlag.getPointer())->CallPtr;
   }
 
   NonTrivialCallbacks *getNonTrivialCallbacks() const {
-    return CallbackAndInlineFlag.getPointer()
-        .template get<NonTrivialCallbacks *>();
+    return cast<NonTrivialCallbacks *>(CallbackAndInlineFlag.getPointer());
   }
 
   CallPtrT getCallPtr() const {
@@ -292,8 +317,10 @@ protected:
     // Clear the old callback and inline flag to get back to as-if-null.
     RHS.CallbackAndInlineFlag = {};
 
-#ifndef NDEBUG
-    // In debug builds, we also scribble across the rest of the storage.
+#if !defined(NDEBUG) && !LLVM_ADDRESS_SANITIZER_BUILD
+    // In debug builds without ASan, we also scribble across the rest of the
+    // storage. Scribbling under AddressSanitizer (ASan) is disabled to prevent
+    // overwriting poisoned objects (e.g., annotated short strings).
     memset(RHS.getInlineStorage(), 0xAD, InlineStorageSize);
 #endif
   }
@@ -346,7 +373,10 @@ public:
   unique_function &operator=(const unique_function &) = delete;
 
   template <typename CallableT>
-  unique_function(CallableT Callable)
+  unique_function(
+      CallableT Callable,
+      detail::EnableUnlessSameType<CallableT, unique_function> * = nullptr,
+      detail::EnableIfCallable<CallableT, R, P...> * = nullptr)
       : Base(std::forward<CallableT>(Callable),
              typename Base::template CalledAs<CallableT>{}) {}
 
@@ -369,7 +399,10 @@ public:
   unique_function &operator=(const unique_function &) = delete;
 
   template <typename CallableT>
-  unique_function(CallableT Callable)
+  unique_function(
+      CallableT Callable,
+      detail::EnableUnlessSameType<CallableT, unique_function> * = nullptr,
+      detail::EnableIfCallable<const CallableT, R, P...> * = nullptr)
       : Base(std::forward<CallableT>(Callable),
              typename Base::template CalledAs<const CallableT>{}) {}
 
@@ -380,4 +413,4 @@ public:
 
 } // end namespace llvm
 
-#endif // LLVM_ADT_FUNCTION_H
+#endif // LLVM_ADT_FUNCTIONEXTRAS_H

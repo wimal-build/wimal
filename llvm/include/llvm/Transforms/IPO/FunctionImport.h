@@ -10,7 +10,6 @@
 #define LLVM_TRANSFORMS_IPO_FUNCTIONIMPORT_H
 
 #include "llvm/ADT/DenseSet.h"
-#include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/ModuleSummaryIndex.h"
@@ -21,6 +20,7 @@
 #include <memory>
 #include <string>
 #include <system_error>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 
@@ -32,9 +32,13 @@ class Module;
 /// based on the provided summary informations.
 class FunctionImporter {
 public:
-  /// Set of functions to import from a source module. Each entry is a set
-  /// containing all the GUIDs of all functions to import for a source module.
-  using FunctionsToImportTy = std::unordered_set<GlobalValue::GUID>;
+  /// The functions to import from a source module and their import type.
+  /// Note we choose unordered_map over (Small)DenseMap. The number of imports
+  /// from a source module could be small but DenseMap size grows to 64 quickly
+  /// and not memory efficient (see
+  /// https://llvm.org/docs/ProgrammersManual.html#llvm-adt-densemap-h)
+  using FunctionsToImportTy =
+      std::unordered_map<GlobalValue::GUID, GlobalValueSummary::ImportKind>;
 
   /// The different reasons selectCallee will chose not to import a
   /// candidate.
@@ -94,10 +98,15 @@ public:
 
   /// The map contains an entry for every module to import from, the key being
   /// the module identifier to pass to the ModuleLoader. The value is the set of
-  /// functions to import.
-  using ImportMapTy = StringMap<FunctionsToImportTy>;
+  /// functions to import. The module identifier strings must be owned
+  /// elsewhere, typically by the in-memory ModuleSummaryIndex the importing
+  /// decisions are made from (the module path for each summary is owned by the
+  /// index's module path string table).
+  using ImportMapTy = DenseMap<StringRef, FunctionsToImportTy>;
 
-  /// The set contains an entry for every global value the module exports.
+  /// The set contains an entry for every global value that the module exports.
+  /// Depending on the user context, this container is allowed to contain
+  /// definitions, declarations or a mix of both.
   using ExportSetTy = DenseSet<ValueInfo>;
 
   /// A function of this type is used to load modules referenced by the index.
@@ -136,6 +145,10 @@ public:
 /// \p ModuleToDefinedGVSummaries contains for each Module a map
 /// (GUID -> Summary) for every global defined in the module.
 ///
+/// \p isPrevailing is a callback that will be called with a global value's GUID
+/// and summary and should return whether the module corresponding to the
+/// summary contains the linker-prevailing copy of that value.
+///
 /// \p ImportLists will be populated with an entry for every Module we are
 /// importing into. This entry is itself a map that can be passed to
 /// FunctionImporter::importFunctions() above (see description there).
@@ -143,40 +156,38 @@ public:
 /// \p ExportLists contains for each Module the set of globals (GUID) that will
 /// be imported by another module, or referenced by such a function. I.e. this
 /// is the set of globals that need to be promoted/renamed appropriately.
+///
+/// The module identifier strings that are the keys of the above two maps
+/// are owned by the in-memory ModuleSummaryIndex the importing decisions
+/// are made from (the module path for each summary is owned by the index's
+/// module path string table).
 void ComputeCrossModuleImport(
     const ModuleSummaryIndex &Index,
-    const StringMap<GVSummaryMapTy> &ModuleToDefinedGVSummaries,
-    StringMap<FunctionImporter::ImportMapTy> &ImportLists,
-    StringMap<FunctionImporter::ExportSetTy> &ExportLists);
-
-/// Compute all the imports for the given module using the Index.
-///
-/// \p ImportList will be populated with a map that can be passed to
-/// FunctionImporter::importFunctions() above (see description there).
-void ComputeCrossModuleImportForModule(
-    StringRef ModulePath, const ModuleSummaryIndex &Index,
-    FunctionImporter::ImportMapTy &ImportList);
-
-/// Mark all external summaries in \p Index for import into the given module.
-/// Used for distributed builds using a distributed index.
-///
-/// \p ImportList will be populated with a map that can be passed to
-/// FunctionImporter::importFunctions() above (see description there).
-void ComputeCrossModuleImportForModuleFromIndex(
-    StringRef ModulePath, const ModuleSummaryIndex &Index,
-    FunctionImporter::ImportMapTy &ImportList);
+    const DenseMap<StringRef, GVSummaryMapTy> &ModuleToDefinedGVSummaries,
+    function_ref<bool(GlobalValue::GUID, const GlobalValueSummary *)>
+        isPrevailing,
+    DenseMap<StringRef, FunctionImporter::ImportMapTy> &ImportLists,
+    DenseMap<StringRef, FunctionImporter::ExportSetTy> &ExportLists);
 
 /// PrevailingType enum used as a return type of callback passed
-/// to computeDeadSymbols. Yes and No values used when status explicitly
-/// set by symbols resolution, otherwise status is Unknown.
+/// to computeDeadSymbolsAndUpdateIndirectCalls. Yes and No values used when
+/// status explicitly set by symbols resolution, otherwise status is Unknown.
 enum class PrevailingType { Yes, No, Unknown };
+
+/// Update call edges for indirect calls to local functions added from
+/// SamplePGO when needed. Normally this is done during
+/// computeDeadSymbolsAndUpdateIndirectCalls, but can be called standalone
+/// when that is not called (e.g. during testing).
+void updateIndirectCalls(ModuleSummaryIndex &Index);
 
 /// Compute all the symbols that are "dead": i.e these that can't be reached
 /// in the graph from any of the given symbols listed in
 /// \p GUIDPreservedSymbols. Non-prevailing symbols are symbols without a
 /// prevailing copy anywhere in IR and are normally dead, \p isPrevailing
 /// predicate returns status of symbol.
-void computeDeadSymbols(
+/// Also update call edges for indirect calls to local functions added from
+/// SamplePGO when needed.
+void computeDeadSymbolsAndUpdateIndirectCalls(
     ModuleSummaryIndex &Index,
     const DenseSet<GlobalValue::GUID> &GUIDPreservedSymbols,
     function_ref<PrevailingType(GlobalValue::GUID)> isPrevailing);
@@ -203,21 +214,30 @@ bool convertToDeclaration(GlobalValue &GV);
 /// \p ModuleToSummariesForIndex will be populated with the needed summaries
 /// from each required module path. Use a std::map instead of StringMap to get
 /// stable order for bitcode emission.
+///
+/// \p DecSummaries will be popluated with the subset of of summary pointers
+/// that have 'declaration' import type among all summaries the module need.
 void gatherImportedSummariesForModule(
     StringRef ModulePath,
-    const StringMap<GVSummaryMapTy> &ModuleToDefinedGVSummaries,
+    const DenseMap<StringRef, GVSummaryMapTy> &ModuleToDefinedGVSummaries,
     const FunctionImporter::ImportMapTy &ImportList,
-    std::map<std::string, GVSummaryMapTy> &ModuleToSummariesForIndex);
+    std::map<std::string, GVSummaryMapTy> &ModuleToSummariesForIndex,
+    GVSummaryPtrSet &DecSummaries);
 
 /// Emit into \p OutputFilename the files module \p ModulePath will import from.
 std::error_code EmitImportsFiles(
     StringRef ModulePath, StringRef OutputFilename,
     const std::map<std::string, GVSummaryMapTy> &ModuleToSummariesForIndex);
 
-/// Resolve prevailing symbol linkages in \p TheModule based on the information
-/// recorded in the summaries during global summary-based analysis.
-void thinLTOResolvePrevailingInModule(Module &TheModule,
-                                      const GVSummaryMapTy &DefinedGlobals);
+/// Based on the information recorded in the summaries during global
+/// summary-based analysis:
+/// 1. Resolve prevailing symbol linkages and constrain visibility (CanAutoHide
+///    and consider visibility from other definitions for ELF) in \p TheModule
+/// 2. (optional) Apply propagated function attributes to \p TheModule if
+///    PropagateAttrs is true
+void thinLTOFinalizeInModule(Module &TheModule,
+                             const GVSummaryMapTy &DefinedGlobals,
+                             bool PropagateAttrs);
 
 /// Internalize \p TheModule based on the information recorded in the summaries
 /// during global summary-based analysis.

@@ -18,11 +18,8 @@
 #define LLVM_CLANG_LIB_FORMAT_BREAKABLETOKEN_H
 
 #include "Encoding.h"
-#include "TokenAnnotator.h"
 #include "WhitespaceManager.h"
 #include "llvm/ADT/StringSet.h"
-#include "llvm/Support/Regex.h"
-#include <utility>
 
 namespace clang {
 namespace format {
@@ -230,6 +227,11 @@ public:
   /// as a unit and is responsible for the formatting of the them.
   virtual void updateNextToken(LineState &State) const {}
 
+  /// Adds replacements that are needed when the token is broken. Such as
+  /// wrapping a JavaScript string in parentheses after it gets broken with plus
+  /// signs.
+  virtual void updateAfterBroken(WhitespaceManager &Whitespaces) const {}
+
 protected:
   BreakableToken(const FormatToken &Tok, bool InPPDirective,
                  encoding::Encoding Encoding, const FormatStyle &Style)
@@ -281,6 +283,45 @@ protected:
   // Length of the sequence of tokens after this string literal that cannot
   // contain line breaks.
   unsigned UnbreakableTailLength;
+};
+
+class BreakableStringLiteralUsingOperators : public BreakableStringLiteral {
+public:
+  enum QuoteStyleType {
+    DoubleQuotes,   // The string is quoted with double quotes.
+    SingleQuotes,   // The JavaScript string is quoted with single quotes.
+    AtDoubleQuotes, // The C# verbatim string is quoted with the at sign and
+                    // double quotes.
+  };
+  /// Creates a breakable token for a single line string literal for C#, Java,
+  /// JavaScript, or Verilog.
+  ///
+  /// \p StartColumn specifies the column in which the token will start
+  /// after formatting.
+  BreakableStringLiteralUsingOperators(
+      const FormatToken &Tok, QuoteStyleType QuoteStyle, bool UnindentPlus,
+      unsigned StartColumn, unsigned UnbreakableTailLength, bool InPPDirective,
+      encoding::Encoding Encoding, const FormatStyle &Style);
+  unsigned getRemainingLength(unsigned LineIndex, unsigned Offset,
+                              unsigned StartColumn) const override;
+  unsigned getContentStartColumn(unsigned LineIndex, bool Break) const override;
+  void insertBreak(unsigned LineIndex, unsigned TailOffset, Split Split,
+                   unsigned ContentIndent,
+                   WhitespaceManager &Whitespaces) const override;
+  void updateAfterBroken(WhitespaceManager &Whitespaces) const override;
+
+protected:
+  // Whether braces or parentheses should be inserted around the string to form
+  // a concatenation.
+  bool BracesNeeded;
+  QuoteStyleType QuoteStyle;
+  // The braces or parentheses along with the first character which they
+  // replace, either a quote or at sign.
+  StringRef LeftBraceQuote;
+  StringRef RightBraceQuote;
+  // Width added to the left due to the added brace or parenthesis. Does not
+  // apply to the first line.
+  int ContinuationIndent;
 };
 
 class BreakableComment : public BreakableToken {
@@ -465,15 +506,23 @@ private:
   // then the original prefix is "// ".
   SmallVector<StringRef, 16> OriginalPrefix;
 
-  // Prefix[i] contains the intended leading "//" with trailing spaces to
-  // account for the indentation of content within the comment at line i after
-  // formatting. It can be different than the original prefix when the original
-  // line starts like this:
-  // //content
-  // Then the original prefix is "//", but the prefix is "// ".
-  SmallVector<StringRef, 16> Prefix;
+  /// Prefix[i] + SpacesToAdd[i] contains the intended leading "//" with
+  /// trailing spaces to account for the indentation of content within the
+  /// comment at line i after formatting. It can be different than the original
+  /// prefix.
+  /// When the original line starts like this:
+  /// //content
+  /// Then the OriginalPrefix[i] is "//", but the Prefix[i] is "// " in the LLVM
+  /// style.
+  /// When the line starts like:
+  /// // content
+  /// And we want to remove the spaces the OriginalPrefix[i] is "// " and
+  /// Prefix[i] is "//".
+  SmallVector<std::string, 16> Prefix;
 
-  SmallVector<unsigned, 16> OriginalContentColumn;
+  /// How many spaces are added or removed from the OriginalPrefix to form
+  /// Prefix.
+  SmallVector<int, 16> PrefixSpaceChange;
 
   /// The token to which the last line of this breakable token belongs
   /// to; nullptr if that token is the initial token.

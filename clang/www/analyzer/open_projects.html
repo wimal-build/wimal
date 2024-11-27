@@ -47,22 +47,6 @@ mailing list</a> to notify other members of the community.</p>
       <a href="https://en.wikipedia.org/wiki/Taint_checking">tainted</a> index values.
       <p><i>(Difficulty: Medium)</i></p></p>
       </li>
-
-      <li><code>alpha.unix.StreamChecker</code>
-        <p>A SimpleStreamChecker has been presented in the Building a Checker in 24
-        Hours talk
-        (<a href="https://llvm.org/devmtg/2012-11/Zaks-Rose-Checker24Hours.pdf">slides</a>
-        <a href="https://youtu.be/kdxlsP5QVPw">video</a>).</p>
-
-        <p>This alpha checker is an attempt to write a production grade stream checker.
-        However, it was found to have an unacceptably high false positive rate.
-        One of the found problems was that eagerly splitting the state
-        based on whether the system call may fail leads to too many reports.
-        A <em>delayed</em> split where the implication is stored in the state
-        (similarly to nullability implications in <code>TrustNonnullChecker</code>)
-        may produce much better results.</p>
-        <p><i>(Difficulty: Medium)</i></p>
-      </li>
     </ul>
   </li>
 
@@ -83,7 +67,7 @@ mailing list</a> to notify other members of the community.</p>
       One can start untangling this problem by trying to replace the
       current ad-hoc <code><a href="https://clang.llvm.org/doxygen/classclang_1_1ParentMap.html">
       ParentMap</a></code> lookup in <a href="https://clang.llvm.org/doxygen/ExprEngineCXX_8cpp_source.html#l00430">
-      <code>CXXConstructExpr::CK_NonVirtualBase</code></a> branch of
+      <code>CXXConstructionKind::NonVirtualBase</code></a> branch of
       <code>ExprEngine::VisitCXXConstructExpr()</code>
       with proper support for the feature.
       <p><i>(Difficulty: Medium) </i></p></p>
@@ -96,7 +80,7 @@ mailing list</a> to notify other members of the community.</p>
          We should model (potentially some of) such evaluations,
          and the same applies for destructors called from
          <code>operator delete[]</code>.
-         See tests cases in <a href="https://github.com/llvm/llvm-project/tree/master/clang/test/Analysis/handle_constructors_with_new_array.cpp">handle_constructors_with_new_array.cpp</a>.
+         See tests cases in <a href="https://github.com/llvm/llvm-project/tree/main/clang/test/Analysis/handle_constructors_with_new_array.cpp">handle_constructors_with_new_array.cpp</a>.
       </p>
       <p>
       Constructing an array requires invoking multiple (potentially unknown)
@@ -135,7 +119,7 @@ mailing list</a> to notify other members of the community.</p>
     <li>Handle constructors for default arguments
       <p>Default arguments in C++ are recomputed at every call,
          and are therefore local, and not static, variables.
-         See tests cases in <a href="https://github.com/llvm/llvm-project/tree/master/clang/test/Analysis/handle_constructors_for_default_arguments.cpp">handle_constructors_for_default_arguments.cpp</a>.
+         See tests cases in <a href="https://github.com/llvm/llvm-project/tree/main/clang/test/Analysis/handle_constructors_for_default_arguments.cpp">handle_constructors_for_default_arguments.cpp</a>.
       </p>
       <p>
       Default arguments are annoying because the initializer expression is

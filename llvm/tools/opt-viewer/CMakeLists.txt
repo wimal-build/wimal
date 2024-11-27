@@ -8,11 +8,12 @@ set (files
 
 foreach (file ${files})
   install(PROGRAMS ${file}
-    DESTINATION share/opt-viewer
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/opt-viewer"
     COMPONENT opt-viewer)
 endforeach (file)
 
 add_custom_target(opt-viewer DEPENDS ${files})
+set_target_properties(opt-viewer PROPERTIES FOLDER "LLVM/Tools")
 if(NOT LLVM_ENABLE_IDE)
   add_llvm_install_targets("install-opt-viewer"
                            DEPENDS opt-viewer

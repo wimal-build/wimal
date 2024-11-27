@@ -41,7 +41,6 @@ namespace llvm {
 
 class MemoryBuffer;
 class Module;
-class ModulePass;
 
 namespace yaml {
 
@@ -114,9 +113,6 @@ private:
 
 } // end namespace SymbolRewriter
 
-ModulePass *createRewriteSymbolsPass();
-ModulePass *createRewriteSymbolsPass(SymbolRewriter::RewriteDescriptorList &);
-
 class RewriteSymbolPass : public PassInfoMixin<RewriteSymbolPass> {
 public:
   RewriteSymbolPass() { loadAndParseMapFiles(); }
@@ -138,4 +134,4 @@ private:
 
 } // end namespace llvm
 
-#endif //LLVM_TRANSFORMS_UTILS_SYMBOLREWRITER_H
+#endif // LLVM_TRANSFORMS_UTILS_SYMBOLREWRITER_H

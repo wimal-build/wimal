@@ -19,6 +19,7 @@
 
 namespace llvm {
 
+class ConstantRange;
 class APInt;
 
 /// This is an important base class in LLVM. It provides the common facilities
@@ -111,13 +112,13 @@ public:
   /// elements.
   bool containsPoisonElement() const;
 
+  /// Return true if this is a vector constant that includes any strictly undef
+  /// (not poison) elements.
+  bool containsUndefElement() const;
+
   /// Return true if this is a fixed width vector constant that includes
   /// any constant expressions.
   bool containsConstantExpression() const;
-
-  /// Return true if evaluation of this constant could trap. This is true for
-  /// things like constant expressions that could divide by zero.
-  bool canTrap() const;
 
   /// Return true if the value can vary between threads.
   bool isThreadDependent() const;
@@ -130,11 +131,13 @@ public:
   bool isConstantUsed() const;
 
   /// This method classifies the entry according to whether or not it may
-  /// generate a relocation entry.  This must be conservative, so if it might
-  /// codegen to a relocatable entry, it should say so.
+  /// generate a relocation entry (either static or dynamic). This must be
+  /// conservative, so if it might codegen to a relocatable entry, it should say
+  /// so.
   ///
   /// FIXME: This really should not be in IR.
   bool needsRelocation() const;
+  bool needsDynamicRelocation() const;
 
   /// For aggregates (struct/array/vector) return the constant that corresponds
   /// to the specified element if possible, or null if not. This can return null
@@ -144,13 +147,17 @@ public:
   Constant *getAggregateElement(Constant *Elt) const;
 
   /// If all elements of the vector constant have the same value, return that
-  /// value. Otherwise, return nullptr. Ignore undefined elements by setting
-  /// AllowUndefs to true.
-  Constant *getSplatValue(bool AllowUndefs = false) const;
+  /// value. Otherwise, return nullptr. Ignore poison elements by setting
+  /// AllowPoison to true.
+  Constant *getSplatValue(bool AllowPoison = false) const;
 
   /// If C is a constant integer then return its value, otherwise C must be a
   /// vector of constant integers, all equal, and the common value is returned.
   const APInt &getUniqueInteger() const;
+
+  /// Convert constant to an approximate constant range. For vectors, the
+  /// range is the union over the element ranges. Poison elements are ignored.
+  ConstantRange toConstantRange() const;
 
   /// Called if some element of this constant is no longer valid.
   /// At this point only other constants may be on the use_list for this
@@ -196,6 +203,18 @@ public:
   /// hanging off of the globals.
   void removeDeadConstantUsers() const;
 
+  /// Return true if the constant has exactly one live use.
+  ///
+  /// This returns the same result as calling Value::hasOneUse after
+  /// Constant::removeDeadConstantUsers, but doesn't remove dead constants.
+  bool hasOneLiveUse() const;
+
+  /// Return true if the constant has no live uses.
+  ///
+  /// This returns the same result as calling Value::use_empty after
+  /// Constant::removeDeadConstantUsers, but doesn't remove dead constants.
+  bool hasZeroLiveUses() const;
+
   const Constant *stripPointerCasts() const {
     return cast<Constant>(Value::stripPointerCasts());
   }
@@ -214,6 +233,30 @@ public:
   /// both must either be scalars or vectors with the same element count. If no
   /// changes are made, the constant C is returned.
   static Constant *mergeUndefsWith(Constant *C, Constant *Other);
+
+  /// Return true if a constant is ConstantData or a ConstantAggregate or
+  /// ConstantExpr that contain only ConstantData.
+  bool isManifestConstant() const;
+
+private:
+  enum PossibleRelocationsTy {
+    /// This constant requires no relocations. That is, it holds simple
+    /// constants (like integrals).
+    NoRelocation = 0,
+
+    /// This constant holds static relocations that can be resolved by the
+    /// static linker.
+    LocalRelocation = 1,
+
+    /// This constant holds dynamic relocations that the dynamic linker will
+    /// need to resolve.
+    GlobalRelocation = 2,
+  };
+
+  /// Determine what potential relocations may be needed by this constant.
+  PossibleRelocationsTy getRelocationInfo() const;
+
+  bool hasNLiveUses(unsigned N) const;
 };
 
 } // end namespace llvm

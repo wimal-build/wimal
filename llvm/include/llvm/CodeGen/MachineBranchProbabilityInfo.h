@@ -14,16 +14,13 @@
 #define LLVM_CODEGEN_MACHINEBRANCHPROBABILITYINFO_H
 
 #include "llvm/CodeGen/MachineBasicBlock.h"
+#include "llvm/CodeGen/MachinePassManager.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/BranchProbability.h"
-#include <climits>
-#include <numeric>
 
 namespace llvm {
 
-class MachineBranchProbabilityInfo : public ImmutablePass {
-  virtual void anchor();
-
+class MachineBranchProbabilityInfo {
   // Default weight value. Used when we don't have information about the edge.
   // TODO: DEFAULT_WEIGHT makes sense during static predication, when none of
   // the successors have a weight yet. But it doesn't make sense when providing
@@ -33,13 +30,8 @@ class MachineBranchProbabilityInfo : public ImmutablePass {
   static const uint32_t DEFAULT_WEIGHT = 16;
 
 public:
-  static char ID;
-
-  MachineBranchProbabilityInfo();
-
-  void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.setPreservesAll();
-  }
+  bool invalidate(MachineFunction &, const PreservedAnalyses &PA,
+                  MachineFunctionAnalysisManager::Invalidator &);
 
   // Return edge probability.
   BranchProbability getEdgeProbability(const MachineBasicBlock *Src,
@@ -55,10 +47,6 @@ public:
   bool isEdgeHot(const MachineBasicBlock *Src,
                  const MachineBasicBlock *Dst) const;
 
-  // Return a hot successor for the block BB or null if there isn't one.
-  // NB: This routine's complexity is linear on the number of successors.
-  MachineBasicBlock *getHotSucc(MachineBasicBlock *MBB) const;
-
   // Print value between 0 (0% probability) and 1 (100% probability),
   // however the value is never equal to 0, and can be 1 only iff SRC block
   // has only one successor.
@@ -67,6 +55,45 @@ public:
                                     const MachineBasicBlock *Dst) const;
 };
 
+class MachineBranchProbabilityAnalysis
+    : public AnalysisInfoMixin<MachineBranchProbabilityAnalysis> {
+  friend AnalysisInfoMixin<MachineBranchProbabilityAnalysis>;
+
+  static AnalysisKey Key;
+
+public:
+  using Result = MachineBranchProbabilityInfo;
+
+  Result run(MachineFunction &, MachineFunctionAnalysisManager &);
+};
+
+class MachineBranchProbabilityPrinterPass
+    : public PassInfoMixin<MachineBranchProbabilityPrinterPass> {
+  raw_ostream &OS;
+
+public:
+  MachineBranchProbabilityPrinterPass(raw_ostream &OS) : OS(OS) {}
+  PreservedAnalyses run(MachineFunction &MF,
+                        MachineFunctionAnalysisManager &MFAM);
+};
+
+class MachineBranchProbabilityInfoWrapperPass : public ImmutablePass {
+  virtual void anchor();
+
+  MachineBranchProbabilityInfo MBPI;
+
+public:
+  static char ID;
+
+  MachineBranchProbabilityInfoWrapperPass();
+
+  void getAnalysisUsage(AnalysisUsage &AU) const override {
+    AU.setPreservesAll();
+  }
+
+  MachineBranchProbabilityInfo &getMBPI() { return MBPI; }
+  const MachineBranchProbabilityInfo &getMBPI() const { return MBPI; }
+};
 }
 
 

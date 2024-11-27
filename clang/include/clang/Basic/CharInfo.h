@@ -28,8 +28,7 @@ namespace charinfo {
     CHAR_LOWER    = 0x0040,  // a-z
     CHAR_UNDER    = 0x0080,  // _
     CHAR_PERIOD   = 0x0100,  // .
-    CHAR_RAWDEL   = 0x0200,  // {}[]#<>%:;?*+-/^&|~!=,"'
-    CHAR_PUNCT    = 0x0400   // `$@()
+    CHAR_PUNCT    = 0x0200,  // {}[]#<>%:;?*+-/^&|~!=,"'`$@()
   };
 
   enum {
@@ -38,27 +37,49 @@ namespace charinfo {
   };
 } // end namespace charinfo
 
-/// Returns true if this is an ASCII character.
+/// Returns true if a byte is an ASCII character.
 LLVM_READNONE inline bool isASCII(char c) {
   return static_cast<unsigned char>(c) <= 127;
 }
 
+LLVM_READNONE inline bool isASCII(unsigned char c) { return c <= 127; }
+
+/// Returns true if a codepoint is an ASCII character.
+LLVM_READNONE inline bool isASCII(uint32_t c) { return c <= 127; }
+LLVM_READNONE inline bool isASCII(int64_t c) { return 0 <= c && c <= 127; }
+
 /// Returns true if this is a valid first character of a C identifier,
 /// which is [a-zA-Z_].
-LLVM_READONLY inline bool isIdentifierHead(unsigned char c,
-                                           bool AllowDollar = false) {
+LLVM_READONLY inline bool isAsciiIdentifierStart(unsigned char c,
+                                                 bool AllowDollar = false) {
   using namespace charinfo;
   if (InfoTable[c] & (CHAR_UPPER|CHAR_LOWER|CHAR_UNDER))
     return true;
   return AllowDollar && c == '$';
 }
 
+LLVM_READONLY inline bool isAsciiIdentifierContinue(unsigned char c) {
+  // Precomputed CHAR_UPPER|CHAR_LOWER|CHAR_DIGIT|CHAR_UNDER
+  static constexpr unsigned char IDContinue[256] = {
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1,
+      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1,
+      0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+      1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  return IDContinue[c];
+}
+
 /// Returns true if this is a body character of a C identifier,
 /// which is [a-zA-Z0-9_].
-LLVM_READONLY inline bool isIdentifierBody(unsigned char c,
-                                           bool AllowDollar = false) {
-  using namespace charinfo;
-  if (InfoTable[c] & (CHAR_UPPER|CHAR_LOWER|CHAR_DIGIT|CHAR_UNDER))
+LLVM_READONLY inline bool isAsciiIdentifierContinue(unsigned char c,
+                                                    bool AllowDollar) {
+  if (isAsciiIdentifierContinue(c))
     return true;
   return AllowDollar && c == '$';
 }
@@ -130,7 +151,7 @@ LLVM_READONLY inline bool isHexDigit(unsigned char c) {
 /// Note that '_' is both a punctuation character and an identifier character!
 LLVM_READONLY inline bool isPunctuation(unsigned char c) {
   using namespace charinfo;
-  return (InfoTable[c] & (CHAR_UNDER|CHAR_PERIOD|CHAR_RAWDEL|CHAR_PUNCT)) != 0;
+  return (InfoTable[c] & (CHAR_UNDER | CHAR_PERIOD | CHAR_PUNCT)) != 0;
 }
 
 /// Return true if this character is an ASCII printable character; that is, a
@@ -138,8 +159,8 @@ LLVM_READONLY inline bool isPunctuation(unsigned char c) {
 /// terminal.
 LLVM_READONLY inline bool isPrintable(unsigned char c) {
   using namespace charinfo;
-  return (InfoTable[c] & (CHAR_UPPER|CHAR_LOWER|CHAR_PERIOD|CHAR_PUNCT|
-                          CHAR_DIGIT|CHAR_UNDER|CHAR_RAWDEL|CHAR_SPACE)) != 0;
+  return (InfoTable[c] & (CHAR_UPPER | CHAR_LOWER | CHAR_PERIOD | CHAR_PUNCT |
+                          CHAR_DIGIT | CHAR_UNDER | CHAR_SPACE)) != 0;
 }
 
 /// Return true if this is the body character of a C preprocessing number,
@@ -153,10 +174,49 @@ LLVM_READONLY inline bool isPreprocessingNumberBody(unsigned char c) {
 /// Return true if this is the body character of a C++ raw string delimiter.
 LLVM_READONLY inline bool isRawStringDelimBody(unsigned char c) {
   using namespace charinfo;
-  return (InfoTable[c] & (CHAR_UPPER|CHAR_LOWER|CHAR_PERIOD|
-                          CHAR_DIGIT|CHAR_UNDER|CHAR_RAWDEL)) != 0;
+  return (InfoTable[c] & (CHAR_UPPER | CHAR_LOWER | CHAR_PERIOD | CHAR_DIGIT |
+                          CHAR_UNDER | CHAR_PUNCT)) != 0 &&
+         c != '(' && c != ')' && c != '\\';
 }
 
+enum class EscapeChar {
+  Single = 1,
+  Double = 2,
+  SingleAndDouble = static_cast<int>(Single) | static_cast<int>(Double),
+};
+
+/// Return C-style escaped string for special characters, or an empty string if
+/// there is no such mapping.
+template <EscapeChar Opt, class CharT>
+LLVM_READONLY inline auto escapeCStyle(CharT Ch) -> StringRef {
+  switch (Ch) {
+  case '\\':
+    return "\\\\";
+  case '\'':
+    if ((static_cast<int>(Opt) & static_cast<int>(EscapeChar::Single)) == 0)
+      break;
+    return "\\'";
+  case '"':
+    if ((static_cast<int>(Opt) & static_cast<int>(EscapeChar::Double)) == 0)
+      break;
+    return "\\\"";
+  case '\a':
+    return "\\a";
+  case '\b':
+    return "\\b";
+  case '\f':
+    return "\\f";
+  case '\n':
+    return "\\n";
+  case '\r':
+    return "\\r";
+  case '\t':
+    return "\\t";
+  case '\v':
+    return "\\v";
+  }
+  return {};
+}
 
 /// Converts the given ASCII character to its lowercase equivalent.
 ///
@@ -181,13 +241,13 @@ LLVM_READONLY inline char toUppercase(char c) {
 ///
 /// Note that this is a very simple check; it does not accept UCNs as valid
 /// identifier characters.
-LLVM_READONLY inline bool isValidIdentifier(StringRef S,
-                                            bool AllowDollar = false) {
-  if (S.empty() || !isIdentifierHead(S[0], AllowDollar))
+LLVM_READONLY inline bool isValidAsciiIdentifier(StringRef S,
+                                                 bool AllowDollar = false) {
+  if (S.empty() || !isAsciiIdentifierStart(S[0], AllowDollar))
     return false;
 
   for (StringRef::iterator I = S.begin(), E = S.end(); I != E; ++I)
-    if (!isIdentifierBody(*I, AllowDollar))
+    if (!isAsciiIdentifierContinue(*I, AllowDollar))
       return false;
 
   return true;

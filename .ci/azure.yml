@@ -13,6 +13,11 @@ jobs:
       - task: PythonScript@0
         inputs:
           scriptSource: "filePath"
+          scriptPath: "$(Build.SourcesDirectory)/sysroot/emscripten.py"
+        displayName: "Create emscripten sysroot"
+      - task: PythonScript@0
+        inputs:
+          scriptSource: "filePath"
           scriptPath: "$(Build.SourcesDirectory)/sysroot/android.py"
         displayName: "Create android sysroot"
       - task: PythonScript@0
@@ -79,7 +84,7 @@ jobs:
           install-builtins-stripped
           install-compiler-rt-headers-stripped
           --
-        displayName: "(a64-linux) Build project"
+        displayName: "(x64-linux) Build project"
       - script: cmake -E chdir cmake-build/a64-linux
           cmake ../../compiler-rt
           -GNinja
@@ -105,7 +110,7 @@ jobs:
           install-builtins-stripped
           install-compiler-rt-headers-stripped
           --
-        displayName: "(x64-linux) Build project"
+        displayName: "(a64-linux) Build project"
       - script: cmake -E chdir cmake-build/arm-android
           cmake ../../compiler-rt
           -GNinja

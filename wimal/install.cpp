@@ -31,19 +31,21 @@ void Install::Run(const Context *context, std::vector<std::string> extraArgs) {
         {"llvm-ranlib", "ranlib"},
         {"llvm-readelf", "readelf"},
         {"llvm-strip", "strip"},
+        {"llvm-otool", "otool"},
     };
     static const std::vector<link> cctools = {
-        {"llvm-ar", "ar"},
-        {"apple-install-name-tool", "install_name_tool"},
-        {"apple-ld", "ld"},
-        {"apple-lipo", "lipo"},
-        {"apple-nm", "nm"},
-        {"llvm-ranlib", "ranlib"},
-        {"llvm-readelf", "readelf"},
-        {"apple-strip", "strip"},
         {"dsymutil", "dsymutil"},
+        {"lld", "ld"},
+        {"llvm-ar", "ar"},
+        {"llvm-install-name-tool", "install_name_tool"},
+        {"llvm-lipo", "lipo"},
+        {"llvm-nm", "nm"},
         {"llvm-objcopy", "objcopy"},
         {"llvm-objdump", "objdump"},
+        {"llvm-otool", "otool"},
+        {"llvm-ranlib", "ranlib"},
+        {"llvm-readelf", "readelf"},
+        {"llvm-strip", "strip"},
     };
     for (std::size_t i = 0; i < context->targets.size(); ++i) {
         auto &target = context->targets[i];

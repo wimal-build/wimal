@@ -6,9 +6,9 @@
 namespace wimal {
 
 class Bear : public Action {
-    void Run(const Context *context, std::vector<std::string> extraArgs) override;
+  void Run(const Context *context, std::vector<std::string> extraArgs) override;
 };
 
-}
+} // namespace wimal
 
 #endif // WIMAL_BEAR_HPP

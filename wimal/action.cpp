@@ -33,32 +33,32 @@ Action::Action() = default;
 Action::~Action() = default;
 
 void Action::Run(const char *action, const Context *context) {
-    if (strcmp(action, "install") == 0) {
-        Install install;
-        ((Action &) install).Run(context, {});
-        return;
-    }
-    auto it = actions.find(action);
-    if (it != actions.end()) {
-        it->second->Run(context, {});
-    } else {
-        Action help;
-        help.Run(context, {});
-    }
+  if (strcmp(action, "install") == 0) {
+    Install install;
+    ((Action &) install).Run(context, {});
+    return;
+  }
+  auto it = actions.find(action);
+  if (it != actions.end()) {
+    it->second->Run(context, {});
+  } else {
+    Action help;
+    help.Run(context, {});
+  }
 }
 
 void Action::Run(const Context *context, std::vector<std::string> extraArgs) {
-    extraArgs.clear();
+  extraArgs.clear();
 
-    std::cout << "Targets:" << std::endl;
-    for (auto &target : context->targets) {
-        std::cout << "- " << target << std::endl;
-    }
-    std::cout << std::endl;
-    std::cout << "Actions:" << std::endl;
-    for (auto &action : actions) {
-        std::cout << "- " << action.first << std::endl;
-    }
+  std::cout << "Targets:" << std::endl;
+  for (auto &target : context->targets) {
+    std::cout << "- " << target << std::endl;
+  }
+  std::cout << std::endl;
+  std::cout << "Actions:" << std::endl;
+  for (auto &action : actions) {
+    std::cout << "- " << action.first << std::endl;
+  }
 }
 
-}
+} // namespace wimal

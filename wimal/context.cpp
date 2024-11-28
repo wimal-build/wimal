@@ -1,6 +1,8 @@
 #include "context.hpp"
 
-#include <iostream>
+#include <unordered_set>
+
+#include "filesystem.hpp"
 
 namespace wimal {
 
@@ -34,8 +36,7 @@ const std::vector<std::string> Context::triples = {
     "arm64-apple-darwin",
     "i386-apple-darwin",
     "x86_64-apple-darwin",
-    "unsupported"
-};
+    "unsupported"};
 
 const std::vector<std::string> Context::hosts = {
     "x86_64-linux-gnu",
@@ -51,34 +52,55 @@ const std::vector<std::string> Context::hosts = {
     "arm64-apple-darwin",
     "i386-apple-darwin",
     "x86_64-apple-darwin",
-    "unsupported"
+    "unsupported"};
+
+const std::unordered_set<std::string> Context::toolchains = {
+    "dsymutil",
+    "ld",
+    "ar",
+    "install_name_tool",
+    "lipo",
+    "nm",
+    "objcopy",
+    "objdump",
+    "ranlib",
+    "readelf",
+    "strip",
+    "otool",
 };
 
 Context::Context(int argc, char **argv) {
-    for (int i = 1; i < argc; ++i) {
-        args.emplace_back(argv[i]);
-    }
-    cwd = ghc::filesystem::current_path();
-    auto path = ghc::filesystem::path(argv[0]);
-    tool = path.filename().string();
-    path = ghc::filesystem::canonical(path);
-    bin = path.parent_path();
-    wimal = bin.parent_path();
-    clang = wimal;
-    if (tool == "wimal" && !args.empty()) {
-        tool = args[0];
-        args.erase(args.begin());
-    }
-    target = tool.substr(0, tool.find_last_of('-'));
-    action = tool.substr(tool.find_last_of('-') + 1);
-    sysroot = wimal / "sysroot" / target;
-    toolchain = wimal / "toolchain" / target;
-    auto it = std::find(targets.begin(), targets.end(), target.data());
-    machine = it == targets.end() ? MACHINE_UNSUPPORTED : (Machine) (it - targets.begin());
+  for (int i = 1; i < argc; ++i) {
+    args.emplace_back(argv[i]);
+  }
+  cwd = ghc::filesystem::current_path();
+  auto path = ghc::filesystem::path(argv[0]);
+  tool = path.filename().string();
+  path = ghc::filesystem::absolute(path);
+  if (toolchains.find(tool) != toolchains.end()) {
+    path = ghc::filesystem::absolute(path);
+    target = path.parent_path().filename().string();
+    tool = target + "-" + tool;
+  }
+  path = ghc::filesystem::canonical(path);
+  bin = path.parent_path();
+  wimal = bin.parent_path();
+  clang = wimal;
+  if (tool == "wimal" && !args.empty()) {
+    tool = args[0];
+    args.erase(args.begin());
+  }
+  target = tool.substr(0, tool.find_last_of('-'));
+  action = tool.substr(tool.find_last_of('-') + 1);
+  sysroot = wimal / "sysroot" / target;
+  toolchain = wimal / "toolchain" / target;
+  auto it = std::find(targets.begin(), targets.end(), target.data());
+  machine = it == targets.end() ? MACHINE_UNSUPPORTED :
+                                  (Machine) (it - targets.begin());
 
-    triple = triples[machine];
-    host = hosts[machine];
+  triple = triples[machine];
+  host = hosts[machine];
 }
 
 Context::~Context() = default;
-}
+} // namespace wimal

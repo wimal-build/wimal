@@ -7,6 +7,6 @@ class Context;
 
 extern void Export(const Context *context);
 
-}
+} // namespace wimal
 
 #endif // WIMAL_EXPORT_HPP

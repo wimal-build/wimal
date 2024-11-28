@@ -12,19 +12,19 @@ class Context;
 
 class Action {
 public:
-    Action();
-    virtual ~Action();
+  Action();
+  virtual ~Action();
 
 public:
-    static void Run(const char *action, const Context *context);
+  static void Run(const char *action, const Context *context);
 
 protected:
-    virtual void Run(const Context *context, std::vector<std::string> extraArgs);
+  virtual void Run(const Context *context, std::vector<std::string> extraArgs);
 
 protected:
-    static const std::unordered_map<std::string, std::shared_ptr<Action>> actions;
+  static const std::unordered_map<std::string, std::shared_ptr<Action>> actions;
 };
 
-}
+} // namespace wimal
 
 #endif // WIMAL_ACTION_HPP

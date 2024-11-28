@@ -35,7 +35,7 @@ void Install::Run(const Context *context, std::vector<std::string> extraArgs) {
     };
     static const std::vector<link> cctools = {
         {"dsymutil", "dsymutil"},
-        {"lld", "ld"},
+        {"lld", "ld64.lld"},
         {"llvm-ar", "ar"},
         {"llvm-install-name-tool", "install_name_tool"},
         {"llvm-lipo", "lipo"},
@@ -49,7 +49,6 @@ void Install::Run(const Context *context, std::vector<std::string> extraArgs) {
     };
     for (std::size_t i = 0; i < context->targets.size(); ++i) {
         auto &target = context->targets[i];
-        auto &triple = context->triples[i];
         auto toolchain = context->wimal / "toolchain";
         bool apple = target.find("-ios") != target.npos || target.find("-macos") != target.npos;
         if (!ghc::filesystem::is_directory(toolchain)) {

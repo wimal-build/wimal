@@ -63,7 +63,7 @@ jobs:
           cmake ../../compiler-rt
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
+          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/19"
           -DCMAKE_TOOLCHAIN_FILE=../../wimal-cmake/MeToolchain.cmake
           -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=x86_64-linux-gnu
           -DWIMAL_TARGET=x64-linux
@@ -89,7 +89,7 @@ jobs:
           cmake ../../compiler-rt
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
+          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/19"
           -DCMAKE_TOOLCHAIN_FILE=../../wimal-cmake/MeToolchain.cmake
           -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=aarch64-linux-gnu
           -DWIMAL_TARGET=a64-linux
@@ -115,7 +115,7 @@ jobs:
           cmake ../../compiler-rt
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
+          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/19"
           -DCMAKE_TOOLCHAIN_FILE=../../wimal-cmake/MeToolchain.cmake
           -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=armv7-none-linux-androideabi
           -DWIMAL_TARGET=arm-android
@@ -141,7 +141,7 @@ jobs:
           cmake ../../compiler-rt
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
+          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/19"
           -DCMAKE_TOOLCHAIN_FILE=../../wimal-cmake/MeToolchain.cmake
           -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=aarch64-none-linux-android
           -DWIMAL_TARGET=a64-android
@@ -167,7 +167,7 @@ jobs:
           cmake ../../compiler-rt
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
+          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/19"
           -DCMAKE_TOOLCHAIN_FILE=../../wimal-cmake/MeToolchain.cmake
           -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=i686-none-linux-android
           -DWIMAL_TARGET=x86-android
@@ -193,7 +193,7 @@ jobs:
           cmake ../../compiler-rt
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
+          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/19"
           -DCMAKE_TOOLCHAIN_FILE=../../wimal-cmake/MeToolchain.cmake
           -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=x86_64-none-linux-android
           -DWIMAL_TARGET=x64-android
@@ -219,7 +219,7 @@ jobs:
           cmake ../../compiler-rt
           -GNinja
           -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/12.0.0"
+          -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal/lib/clang/19"
           -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=x86_64-apple-darwin
           -DCOMPILER_RT_BUILD_BUILTINS=ON
           -DCOMPILER_RT_BUILD_CRT=OFF

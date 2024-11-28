@@ -114,3 +114,10 @@ __pycache__/
 
 ### binaryen
 /binaryen/test
+
+### VSCode
+.vscode/
+
+### CMake
+/build/
+/cmake-build*/

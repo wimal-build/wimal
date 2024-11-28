@@ -232,27 +232,28 @@ add_llvm_install_targets(
 add_custom_target(
   installation
   DEPENDS
-    install-binaryen-stripped
     install-LLVM-stripped
     install-LLVMgold-stripped
-    install-wimal-stripped
+    install-LTO-stripped
+    install-binaryen-stripped
+    install-clang-resource-headers-stripped
+    install-clang-stripped
+    install-cxx-headers-stripped
+    install-dsymutil-stripped
+    install-lld-stripped
     install-llvm-ar-stripped
+    install-llvm-ifs-stripped
+    install-llvm-install-name-tool-stripped
+    install-llvm-libtool-darwin
+    install-llvm-lipo-stripped
     install-llvm-nm-stripped
     install-llvm-objcopy-stripped
     install-llvm-objdump-stripped
+    install-llvm-otool-stripped
     install-llvm-ranlib-stripped
+    install-llvm-rc-stripped
     install-llvm-readelf-stripped
     install-llvm-strip-stripped
-    install-llvm-rc-stripped
     install-llvm-symbolizer-stripped
-    install-dsymutil-stripped
-    install-llvm-lipo-stripped
-    install-llvm-otool-stripped
-    install-llvm-install-name-tool-stripped
-    install-cxx-headers-stripped
-    install-clang-stripped
-    install-clang-resource-headers-stripped
-    install-lld-stripped
-    install-LTO-stripped
-    install-llvm-ifs-stripped
+    install-wimal-stripped
 )

@@ -78,6 +78,8 @@ jobs:
           -DCOMPILER_RT_SANITIZERS_TO_BUILD=asan
           -DCOMPILER_RT_BUILD_SHARED_ASAN=ON
           -DLLVM_USE_SANITIZER=OFF
+        env:
+          WIMAL_GITHUB_TOKEN: $(WIMAL_GITHUB_TOKEN)
         displayName: "(x64-linux) Configure project"
       - script: cmake --build cmake-build/x64-linux --target
           install-asan-stripped
@@ -104,6 +106,8 @@ jobs:
           -DCOMPILER_RT_SANITIZERS_TO_BUILD=asan
           -DCOMPILER_RT_BUILD_SHARED_ASAN=ON
           -DLLVM_USE_SANITIZER=OFF
+        env:
+          WIMAL_GITHUB_TOKEN: $(WIMAL_GITHUB_TOKEN)
         displayName: "(a64-linux) Configure project"
       - script: cmake --build cmake-build/a64-linux --target
           install-asan-stripped
@@ -130,6 +134,8 @@ jobs:
           -DCOMPILER_RT_SANITIZERS_TO_BUILD=asan
           -DCOMPILER_RT_BUILD_SHARED_ASAN=ON
           -DLLVM_USE_SANITIZER=OFF
+        env:
+          WIMAL_GITHUB_TOKEN: $(WIMAL_GITHUB_TOKEN)
         displayName: "(arm-android) Configure project"
       - script: cmake --build cmake-build/arm-android --target
           install-asan-stripped
@@ -156,6 +162,8 @@ jobs:
           -DCOMPILER_RT_SANITIZERS_TO_BUILD=asan
           -DCOMPILER_RT_BUILD_SHARED_ASAN=ON
           -DLLVM_USE_SANITIZER=OFF
+        env:
+          WIMAL_GITHUB_TOKEN: $(WIMAL_GITHUB_TOKEN)
         displayName: "(a64-android) Configure project"
       - script: cmake --build cmake-build/a64-android --target
           install-asan-stripped
@@ -182,6 +190,8 @@ jobs:
           -DCOMPILER_RT_SANITIZERS_TO_BUILD=asan
           -DCOMPILER_RT_BUILD_SHARED_ASAN=ON
           -DLLVM_USE_SANITIZER=OFF
+        env:
+          WIMAL_GITHUB_TOKEN: $(WIMAL_GITHUB_TOKEN)
         displayName: "(x86-android) Configure project"
       - script: cmake --build cmake-build/x86-android --target
           install-asan-stripped
@@ -208,6 +218,8 @@ jobs:
           -DCOMPILER_RT_SANITIZERS_TO_BUILD=asan
           -DCOMPILER_RT_BUILD_SHARED_ASAN=ON
           -DLLVM_USE_SANITIZER=OFF
+        env:
+          WIMAL_GITHUB_TOKEN: $(WIMAL_GITHUB_TOKEN)
         displayName: "(x64-android) Configure project"
       - script: cmake --build cmake-build/x64-android --target
           install-asan-stripped
@@ -286,6 +298,8 @@ jobs:
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
           -DLLVM_TABLEGEN=$(Build.SourcesDirectory)/install/bin/llvm-tblgen
           -DCLANG_TABLEGEN=$(Build.SourcesDirectory)/install/bin/clang-tblgen
+        env:
+          WIMAL_GITHUB_TOKEN: $(WIMAL_GITHUB_TOKEN)
         displayName: "Configure project"
       - script: cmake --build cmake-build-azure --target install-apple-codesign installation --
         displayName: "Build project"
@@ -336,6 +350,8 @@ jobs:
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
           -DLLVM_TABLEGEN=$(Build.SourcesDirectory)/install/bin/llvm-tblgen
           -DCLANG_TABLEGEN=$(Build.SourcesDirectory)/install/bin/clang-tblgen
+        env:
+          WIMAL_GITHUB_TOKEN: $(WIMAL_GITHUB_TOKEN)
         displayName: "Configure project"
       - script: cmake --build cmake-build-azure --target install-apple-codesign installation --
         displayName: "Build project"
@@ -386,6 +402,8 @@ jobs:
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
           -DLLVM_TABLEGEN=$(Build.SourcesDirectory)/install/bin/llvm-tblgen
           -DCLANG_TABLEGEN=$(Build.SourcesDirectory)/install/bin/clang-tblgen
+        env:
+          WIMAL_GITHUB_TOKEN: $(WIMAL_GITHUB_TOKEN)
         displayName: "Configure project"
       - script: cmake --build cmake-build-azure --target install-apple-codesign installation --
         displayName: "Build project"
@@ -436,6 +454,8 @@ jobs:
           -DCMAKE_INSTALL_PREFIX="$(Build.BinariesDirectory)/wimal"
           -DLLVM_TABLEGEN=$(Build.SourcesDirectory)/install/bin/llvm-tblgen
           -DCLANG_TABLEGEN=$(Build.SourcesDirectory)/install/bin/clang-tblgen
+        env:
+          WIMAL_GITHUB_TOKEN: $(WIMAL_GITHUB_TOKEN)
         displayName: "Configure project"
       - script: cmake --build cmake-build-azure --target install-apple-codesign installation --
         displayName: "Build project"

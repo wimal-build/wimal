@@ -262,6 +262,20 @@ void Cc::Run(const Context *context, std::vector<std::string> extraArgs) {
       break;
     }
   }
+  // Fix the linker version for darwin targets.
+  switch (context->machine) {
+    case Context::MACHINE_X64_MACOS:
+    case Context::MACHINE_A64_MACOS:
+    case Context::MACHINE_ARM_IOS:
+    case Context::MACHINE_A64_IOS:
+    case Context::MACHINE_X86_IOS:
+    case Context::MACHINE_X64_IOS:
+      args.emplace_back("-mlinker-version=305");
+      break;
+    default: {
+      break;
+    }
+  }
   // Fix the compilation error: "_Float16 is not supported on this target".
   // See: https://clang.llvm.org/docs/LanguageExtensions.html#half-precision-floating-point
   switch (context->machine) {

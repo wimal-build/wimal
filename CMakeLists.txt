@@ -82,7 +82,11 @@ set(LLVM_INCLUDE_BENCHMARKS OFF CACHE BOOL LLVM_INCLUDE_BENCHMARKS)
 set(LLVM_INCLUDE_DOCS OFF CACHE BOOL LLVM_INCLUDE_DOCS)
 set(LLVM_INCLUDE_RUNTIMES OFF CACHE BOOL LLVM_INCLUDE_RUNTIMES)
 set(LLVM_INCLUDE_TESTS OFF CACHE BOOL LLVM_INCLUDE_TESTS)
-set(LLVM_INCLUDE_UTILS OFF CACHE BOOL LLVM_INCLUDE_UTILS)
+
+# Enable FileCheck
+set(LLVM_INCLUDE_UTILS ON CACHE BOOL LLVM_INCLUDE_UTILS)
+set(LLVM_INSTALL_UTILS ON CACHE BOOL LLVM_INSTALL_UTILS)
+set(LLVM_TOOLCHAIN_UTILITIES FileCheck CACHE STRING LLVM_TOOLCHAIN_UTILITIES)
 
 # Skip unnecessary builds
 set(LLVM_BUILD_EXAMPLES OFF CACHE BOOL LLVM_BUILD_EXAMPLES)
@@ -232,6 +236,7 @@ add_llvm_install_targets(
 add_custom_target(
   installation
   DEPENDS
+    install-FileCheck-stripped
     install-LLVM-stripped
     install-LLVMgold-stripped
     install-LTO-stripped
@@ -242,6 +247,8 @@ add_custom_target(
     install-dsymutil-stripped
     install-lld-stripped
     install-llvm-ar-stripped
+    install-llvm-config-stripped
+    install-llvm-headers-stripped
     install-llvm-ifs-stripped
     install-llvm-install-name-tool-stripped
     install-llvm-libtool-darwin

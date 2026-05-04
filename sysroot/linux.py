@@ -164,7 +164,7 @@ class Apt:
         elif file.endswith(b".bz2"):
             data = bz2.decompress(data)
         tar = tarfile.open(fileobj=io.BytesIO(data))
-        tar.extractall(path=path)
+        tar.extractall(path=path, filter="tar")
         tar.close()
 
     @staticmethod

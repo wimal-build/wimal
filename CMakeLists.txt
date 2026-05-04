@@ -184,6 +184,13 @@ set(
   CACHE BOOL LINKER_SUPPORTS_COLOR_DIAGNOSTICS
 )
 
+# Pass flags to the NATIVE sub-build (CrossCompile.cmake)
+set(
+  CROSS_TOOLCHAIN_FLAGS_LLVM_NATIVE
+  "-DLLVM_INCLUDE_DOCS=OFF;-DLIBCXX_INCLUDE_BENCHMARKS=OFF;-DLIBCXX_INCLUDE_DOCS=OFF;-DCLANG_INCLUDE_DOCS=OFF"
+  CACHE STRING "Extra flags for LLVM NATIVE cross-compile build"
+)
+
 # Add LLVM
 add_subdirectory(llvm)
 

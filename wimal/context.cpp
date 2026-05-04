@@ -20,6 +20,7 @@ const std::vector<std::string> Context::targets = {
     "a64-ios",
     "x86-ios",
     "x64-ios",
+    "a64-sim",
 };
 
 const std::vector<std::string> Context::triples = {
@@ -36,6 +37,7 @@ const std::vector<std::string> Context::triples = {
     "arm64-apple-darwin",
     "i386-apple-darwin",
     "x86_64-apple-darwin",
+    "arm64-apple-darwin",
     "unsupported"};
 
 const std::vector<std::string> Context::hosts = {
@@ -52,6 +54,7 @@ const std::vector<std::string> Context::hosts = {
     "arm64-apple-darwin",
     "i386-apple-darwin",
     "x86_64-apple-darwin",
+    "arm64-apple-darwin",
     "unsupported"};
 
 const std::unordered_set<std::string> Context::toolchains = {

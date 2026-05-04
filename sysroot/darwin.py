@@ -6,7 +6,7 @@ import json
 
 sdk_versions = {
     "iPhoneOS": "12.0",
-    "iPhoneSimulator": "12.0",
+    "iPhoneSimulator": "14.0",
     "MacOSX": "11.1",
 }
 
@@ -105,5 +105,6 @@ copy_sdk(
 
 os.symlink("a64-ios", os.path.join(sysroot, "arm-ios"))
 os.symlink("x64-ios", os.path.join(sysroot, "x86-ios"))
+os.symlink("x64-ios", os.path.join(sysroot, "a64-sim"))
 os.symlink("x64-macos", os.path.join(sysroot, "x86-macos"))
 os.symlink("x64-macos", os.path.join(sysroot, "a64-macos"))

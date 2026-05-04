@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.10)
 
 project(wimal)
 
+if(LLVM_TARGET_IS_CROSSCOMPILE_HOST)
+  return()
+endif()
+
 set(CMAKE_CXX_STANDARD 11)
 
 get_target_property(

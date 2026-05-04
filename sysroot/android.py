@@ -56,8 +56,18 @@ ndk_download_link = (
 if not os.path.isfile(ndk_zip):
     print("Downloading the Android NDK...")
     response = requests.get(ndk_download_link, stream=True)
-    with open(ndk_zip, "wb") as file:
-        shutil.copyfileobj(response.raw, file)
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"Failed to download Android NDK from {ndk_download_link} "
+            f"(HTTP {response.status_code})"
+        )
+    try:
+        with open(ndk_zip, "wb") as file:
+            for chunk in response.iter_content(chunk_size=8192):
+                file.write(chunk)
+    except Exception:
+        remove_file(ndk_zip)
+        raise
     del response
 
 # Extract the ndk zip

@@ -18,8 +18,8 @@ const std::vector<std::string> Context::targets = {
     "x64-android",
     "arm-ios",
     "a64-ios",
-    "x86-ios",
-    "x64-ios",
+    "x86-sim",
+    "x64-sim",
     "a64-sim",
 };
 

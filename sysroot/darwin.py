@@ -73,7 +73,7 @@ sysroot = os.path.join(output, "sysroot")
 sysroot = os.getenv("WIMAL_SYSROOT", sysroot)
 
 retrieve_sdk("iPhoneOS", os.path.join(output, "a64-ios"))
-retrieve_sdk("iPhoneSimulator", os.path.join(output, "x64-ios"))
+retrieve_sdk("iPhoneSimulator", os.path.join(output, "x64-sim"))
 retrieve_sdk("MacOSX", os.path.join(output, "x64-macos"))
 
 copy_sdk(
@@ -87,12 +87,12 @@ copy_sdk(
 copy_sdk(
     os.path.join(
         output,
-        "x64-ios",
+        "x64-sim",
         sdk_folder_name_format.format(
             "iPhoneSimulator", sdk_versions["iPhoneSimulator"]
         ),
     ),
-    os.path.join(sysroot, "x64-ios"),
+    os.path.join(sysroot, "x64-sim"),
 )
 copy_sdk(
     os.path.join(
@@ -104,7 +104,7 @@ copy_sdk(
 )
 
 os.symlink("a64-ios", os.path.join(sysroot, "arm-ios"))
-os.symlink("x64-ios", os.path.join(sysroot, "x86-ios"))
-os.symlink("x64-ios", os.path.join(sysroot, "a64-sim"))
+os.symlink("x64-sim", os.path.join(sysroot, "x86-sim"))
+os.symlink("x64-sim", os.path.join(sysroot, "a64-sim"))
 os.symlink("x64-macos", os.path.join(sysroot, "x86-macos"))
 os.symlink("x64-macos", os.path.join(sysroot, "a64-macos"))

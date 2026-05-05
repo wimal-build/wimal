@@ -254,8 +254,8 @@ void Cc::Run(const Context *context, std::vector<std::string> extraArgs) {
     case Context::MACHINE_A64_IOS:
       args.emplace_back("-miphoneos-version-min=9.0");
       break;
-    case Context::MACHINE_X86_IOS:
-    case Context::MACHINE_X64_IOS:
+    case Context::MACHINE_X86_SIM:
+    case Context::MACHINE_X64_SIM:
     case Context::MACHINE_A64_SIM:
       args.emplace_back("-mios-simulator-version-min=9.0");
       break;
@@ -269,8 +269,8 @@ void Cc::Run(const Context *context, std::vector<std::string> extraArgs) {
     case Context::MACHINE_A64_MACOS:
     case Context::MACHINE_ARM_IOS:
     case Context::MACHINE_A64_IOS:
-    case Context::MACHINE_X86_IOS:
-    case Context::MACHINE_X64_IOS:
+    case Context::MACHINE_X86_SIM:
+    case Context::MACHINE_X64_SIM:
     case Context::MACHINE_A64_SIM:
       args.emplace_back("-mlinker-version=305");
       break;

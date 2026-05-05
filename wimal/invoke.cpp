@@ -21,8 +21,8 @@ static const std::unordered_map<std::string, std::string> commandLinks = {
     {"otool", "llvm-otool"},
     {"arm-ios-ld", "ld64.lld"},
     {"a64-ios-ld", "ld64.lld"},
-    {"x86-ios-ld", "ld64.lld"},
-    {"x64-ios-ld", "ld64.lld"},
+    {"x86-sim-ld", "ld64.lld"},
+    {"x64-sim-ld", "ld64.lld"},
     {"a64-macos-ld", "ld64.lld"},
     {"x64-macos-ld", "ld64.lld"},
 };

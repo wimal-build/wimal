@@ -63,12 +63,18 @@ add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/bin/rcodesign
   COMMAND ${CMAKE_COMMAND} -E env ${RUSTUP_ENV} ${RUSTUP} component add rust-src
   COMMAND
-    ${CMAKE_COMMAND} -E env ${RUSTUP_ENV} "TARGET_CC=${CMAKE_C_COMPILER}"
+    ${CMAKE_COMMAND} -E env ${RUSTUP_ENV}
+    "CC_${CARGO_TARGET}=${CMAKE_C_COMPILER}"
+    "CXX_${CARGO_TARGET}=${CMAKE_CXX_COMPILER}"
+    "AR_${CARGO_TARGET}=${CMAKE_AR}"
+    "TARGET_CC=${CMAKE_C_COMPILER}"
+    "TARGET_CXX=${CMAKE_CXX_COMPILER}"
+    "TARGET_AR=${CMAKE_AR}"
     "CARGO_TARGET_DIR=${CMAKE_CURRENT_BINARY_DIR}/build"
     "CARGO_INSTALL_ROOT=${CMAKE_CURRENT_BINARY_DIR}"
     "CARGO_TARGET_${CARGO_TARGET_ENV}_LINKER=${CMAKE_C_COMPILER}"
     "RUSTC_BOOTSTRAP=1" ${RUSTUP} run stable cargo install -Z build-std --bin
-    rcodesign apple-codesign --target ${CARGO_TARGET} --force
+    rcodesign --path apple-codesign --target ${CARGO_TARGET} --force
   DEPENDS ${CARGO_SOURCES}
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   VERBATIM

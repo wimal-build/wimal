@@ -245,13 +245,17 @@ def build_sdk(platform, machine, toolchain):
         os.path.join(target, "usr", "lib", "llvm-7", "lib", "libc++.a"),
         os.path.join(libdir, "libc++_static.a"),
     )
+    copy_file(
+        os.path.join(target, "usr", "lib", "llvm-7", "lib", "libc++fs.a"),
+        os.path.join(libdir, "libc++fs.a"),
+    )
 
     try:
         os.remove(os.path.join(libdir, "libc++.so"))
     except FileNotFoundError:
         pass
     file = open(os.path.join(libdir, "libc++.so"), "w")
-    file.write("INPUT(-lc++_static -lc++abi_static -lpthread)")
+    file.write("INPUT(-lc++fs -lc++_static -lc++abi_static -lpthread)")
     file.close()
 
     try:

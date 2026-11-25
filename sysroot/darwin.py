@@ -7,7 +7,7 @@ import json
 sdk_versions = {
     "iPhoneOS": "12.0",
     "iPhoneSimulator": "14.0",
-    "MacOSX": "11.1",
+    "MacOSX": "12.3",
 }
 
 sdk_url_format = (

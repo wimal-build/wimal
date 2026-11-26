@@ -248,7 +248,7 @@ void Cc::Run(const Context *context, std::vector<std::string> extraArgs) {
       break;
     case Context::MACHINE_X64_MACOS:
     case Context::MACHINE_A64_MACOS:
-      args.emplace_back("-mmacosx-version-min=10.10");
+      args.emplace_back("-mmacosx-version-min=11.0");
       break;
     case Context::MACHINE_ARM_IOS:
     case Context::MACHINE_A64_IOS:
